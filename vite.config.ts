@@ -6,12 +6,13 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
+    base: './',
     plugins: [
       react(), 
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        injectRegister: 'script',
+        injectRegister: 'auto',
         includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
         devOptions: {
           enabled: true
@@ -29,8 +30,8 @@ export default defineConfig(() => {
           theme_color: '#FF4D00',
           background_color: '#0F0F0F',
           display: 'standalone',
-          start_url: '/',
-          scope: '/',
+          start_url: '.',
+          scope: './',
           icons: [
             {
               src: 'icon-192.png',
