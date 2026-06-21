@@ -687,7 +687,7 @@ async function startServer() {
       
       let currentUserName = "Membro da Equipe";
       if (userEmail) {
-        if (userEmail.toLowerCase().includes('@batistaftw')) {
+        if (userEmail.toLowerCase().includes('giovani@leadium.com')) {
           currentUserName = "Giovani";
         } else {
           currentUserName = "Junior";
