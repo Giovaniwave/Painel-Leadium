@@ -46,7 +46,16 @@ export default function LoginView({ onLogin }: LoginViewProps) {
         body: JSON.stringify({ email, password })
       });
       
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseError) {
+        // If the server didn't return JSON, it's likely a 404 or 503 from Hostinger
+        console.error('Failed to parse API response. The server may not be running or is returning HTML.', parseError);
+        setError('Servidor backend indisponível. Verifique se o Node.js está rodando (Hostinger).');
+        setIsLoading(false);
+        return;
+      }
       
       if (!res.ok) {
         setError(data.error || 'Erro ao autenticar. Tente novamente.');
