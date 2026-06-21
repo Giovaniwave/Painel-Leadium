@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Leadium",
+  "description": "A refined and modern financial budgeting dashboard with live transaction tracking, goal allocations, and beautiful HUD styling.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,311 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-serif: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* Theme Colors - Artistic Flair / The New Ethos style */
+  --color-bg-obsidian: #0D0D0D;
+  --color-surface-obsidian: #141414;
+  --color-surface-card: rgba(22, 22, 22, 0.75);
+  --color-glass-border: rgba(255, 255, 255, 0.08);
+  --color-glass-border-focus: rgba(255, 255, 255, 0.35);
+  
+  --color-leadium-orange: #FFFFFF;
+  --color-leadium-orange-dim: rgba(255, 255, 255, 0.08);
+  --color-ai-blue: #3B82F6;
+  --color-ai-blue-dim: rgba(59, 130, 246, 0.12);
+  
+  --color-obsidian-text-primary: #E5E5E5;
+  --color-obsidian-text-secondary: #999999;
+  --color-obsidian-text-tertiary: #666666;
+}
+
+/* Redefine elegant layout and typography limits to maintain readable and presentable text flow */
+.font-serif {
+  font-family: var(--font-sans) !important;
+  font-style: normal !important;
+}
+
+/* Custom layout utility classes for glassmorphism with Artistic Flair */
+.glass-container {
+  background-color: var(--color-surface-card);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--color-glass-border);
+  border-radius: 24px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.glass-container:hover {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.glass-pill {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.hud-line {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.02) 50%, rgba(255, 255, 255, 0.1) 100%);
+}
+
+.gauge-transition {
+  transition: stroke-dashoffset 1.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Custom scrollbars matching minimal theme */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(13, 13, 13, 0.5);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* White/Light Theme (Tema Branco) System Specifications */
+.light-theme {
+  --bg-obsidian: #F9FAFB;
+  --surface-obsidian: #FFFFFF;
+  --surface-card: rgba(255, 255, 255, 0.95);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-border-focus: rgba(0, 0, 0, 0.25);
+  
+  --obsidian-text-primary: #111827;
+  --obsidian-text-secondary: #4B5563;
+  --obsidian-text-tertiary: #9CA3AF;
+
+  background-color: #F9FAFB !important;
+  color: #1F2937 !important;
+}
+
+.light-theme .glass-container {
+  background-color: #FFFFFF !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.light-theme .glass-container:hover {
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+.light-theme #main-sidebar {
+  background-color: #FFFFFF !important;
+  border-right-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.light-theme #app-header {
+  background-color: rgba(249, 250, 251, 0.95) !important;
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.light-theme #mobile-bottom-tabs {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-top-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.light-theme #mobile-bottom-tabs button {
+  color: #6B7280 !important;
+}
+
+.light-theme #mobile-bottom-tabs button[id*="mobile-tab-"] {
+  color: #6B7280 !important;
+}
+
+.light-theme #mobile-bottom-tabs button.text-white {
+  color: #111827 !important;
+}
+
+.light-theme #mobile-bottom-tabs button.text-white span.bg-white {
+  background-color: #111827 !important;
+}
+
+/* Specific class level mappings to avoid inline/utility variance */
+.light-theme .bg-\[\#0F0F0F\] {
+  background-color: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.light-theme .bg-black\/85 {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+.light-theme .bg-\[\#0D0D0D\] {
+  background-color: #F9FAFB !important;
+}
+
+.light-theme .bg-\[\#141414\] {
+  background-color: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: #111827 !important;
+}
+
+.light-theme .bg-\[\#111111\] {
+  background-color: #F3F4F6 !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.light-theme .bg-\[\#161616\] {
+  background-color: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.light-theme .bg-\[\#12141C\]\/50 {
+  background-color: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.light-theme .bg-gradient-to-r {
+  background-image: none !important;
+  background-color: #FFFFFF !important;
+}
+
+.light-theme .text-white:not(.keep-white):not(.text-keep-white) {
+  color: #111827 !important;
+}
+
+.keep-white,
+.text-keep-white,
+.light-theme .keep-white,
+.light-theme .text-keep-white,
+.light-theme .bg-black.text-white,
+.light-theme button.bg-black.text-white,
+.light-theme button.keep-white,
+.light-theme .bg-emerald-500 text-black,
+.light-theme .bg-emerald-500 .text-black,
+.light-theme .active-tab-light-fix {
+  color: #FFFFFF !important;
+}
+
+.light-theme .text-gray-400 {
+  color: #4B5563 !important;
+}
+
+.light-theme .text-gray-500 {
+  color: #6B7280 !important;
+}
+
+.light-theme .text-\[\#999999\] {
+  color: #4B5563 !important;
+}
+
+.light-theme .text-\[\#E2E2EB\] {
+  color: #1F2937 !important;
+}
+
+.light-theme .text-\[\#666666\] {
+  color: #6B7280 !important;
+}
+
+.light-theme .border-white\/10 {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.light-theme .border-white\/5 {
+  border-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+.light-theme .divide-white\/5 > * + * {
+  border-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+.light-theme .bg-white\/5 {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+.light-theme .bg-white\/10 {
+  background-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.light-theme .hover\:bg-white\/5:hover {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+.light-theme .text-gray-300 {
+  color: #374151 !important;
+}
+
+.light-theme select {
+  background-color: #FFFFFF !important;
+  color: #111827 !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+.light-theme select option {
+  background-color: #FFFFFF !important;
+  color: #111827 !important;
+}
+
+.light-theme input {
+  background-color: #FFFFFF !important;
+  color: #111827 !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+.light-theme input::placeholder {
+  color: #9CA3AF !important;
+}
+
+.light-theme circle[stroke="#222222"] {
+  stroke: #E5E7EB !important;
+}
+
+/* Removed legacy aggressive !important button styles */
+
+/* ==========================================================
+   Interactive Minimalist Metric Cards (Dark & White Themes)
+   ========================================================== */
+.metric-card-interactive {
+  position: relative !important;
+  overflow: hidden !important;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Subtle accent background line on hover */
+.metric-card-interactive::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0%;
+  height: 3px;
+  background: var(--card-highlight, #FFFFFF);
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 99px 99px 0 0;
+  z-index: 10;
+}
+
+.metric-card-interactive:hover::after {
+  width: 100%;
+}
+
+.metric-card-interactive:hover {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Light / White Theme Metric Interaction overrides */
+.light-theme .metric-card-interactive {
+  background-color: #FFFFFF !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02) !important;
+}
+
+.light-theme .metric-card-interactive:hover {
+  background-color: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+/* Ensure that black buttons in light mode keep white text */
+.light-theme button.bg-black {
+  color: #FFFFFF !important;
+}
