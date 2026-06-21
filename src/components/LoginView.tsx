@@ -66,7 +66,7 @@ export default function LoginView({ onLogin }: LoginViewProps) {
       }
     } catch (err) {
       console.error('Login request failed:', err);
-      setError('Problema de comunicação com o servidor.');
+      setError('Problema de comunicação com o servidor. Verifique a conexão ou a URL do backend na sua hospedagem.');
     } finally {
       setIsLoading(false);
     }

@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { Search, Bell, MessageSquare, Info, Menu, Sun, Moon, LogOut, Settings } from 'lucide-react';
+import InstallAppButton from './InstallAppButton';
 
 interface HeaderProps {
   title: string;
@@ -76,6 +77,10 @@ export default function Header({
         {/* Action Controls */}
         <div className="flex items-center gap-4">
           
+          <div className="hidden sm:block">
+            <InstallAppButton />
+          </div>
+
           {/* Theme Mode Toggle (Sun/Moon Switcher) */}
           <button
             id="header-theme-toggle"
@@ -192,6 +197,10 @@ export default function Header({
                 </button>
 
                 <div className="border-t border-white/5 my-1" />
+                
+                <div className="sm:hidden px-2 mb-2 mt-2">
+                  <InstallAppButton />
+                </div>
 
                 {/* LOGOUT Option */}
                 <button
