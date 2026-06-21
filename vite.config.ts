@@ -11,7 +11,17 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icon.svg'],
+        injectRegister: 'script',
+        includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
+        devOptions: {
+          enabled: true
+        },
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+          navigateFallback: 'index.html',
+          navigateFallbackDenylist: [/^\/api/]
+        },
+        manifestFilename: 'manifest.json',
         manifest: {
           name: 'CRM - Agência Leadium',
           short_name: 'Leadium CRM',
@@ -19,21 +29,23 @@ export default defineConfig(() => {
           theme_color: '#FF4D00',
           background_color: '#0F0F0F',
           display: 'standalone',
+          start_url: '/',
+          scope: '/',
           icons: [
             {
-              src: 'icon.svg',
+              src: 'icon-192.png',
               sizes: '192x192',
-              type: 'image/svg+xml'
+              type: 'image/png'
             },
             {
-              src: 'icon.svg',
+              src: 'icon-512.png',
               sizes: '512x512',
-              type: 'image/svg+xml'
+              type: 'image/png'
             },
             {
-              src: 'icon.svg',
+              src: 'icon-512.png',
               sizes: '512x512',
-              type: 'image/svg+xml',
+              type: 'image/png',
               purpose: 'any maskable'
             }
           ]

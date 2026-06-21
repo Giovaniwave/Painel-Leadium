@@ -1051,7 +1051,7 @@ export default function ClientsView({
                              className={`w-full py-2.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all cursor-pointer ${
                                isDark 
                                  ? 'bg-white text-black hover:bg-gray-200' 
-                                 : 'bg-black text-white hover:bg-gray-800 !text-white'
+                                 : 'bg-black !text-white hover:bg-gray-800'
                              }`}
                            >
                              {isRecordingPayment ? 'Registrando...' : 'Registrar e Creditar LTV'}
@@ -1452,8 +1452,8 @@ export default function ClientsView({
                                         className={`w-full py-1.5 rounded text-[10px] uppercase font-bold tracking-wider transition-all cursor-pointer ${
                                           isDark 
                                             ? 'bg-white text-black hover:bg-gray-200' 
-                                            : 'bg-black text-white hover:bg-gray-800 !text-white'
-                                        } !text-white`}
+                                            : 'bg-black !text-white hover:bg-gray-800'
+                                        }`}
                                       >
                                         {isRecordingPayment ? 'Registrando...' : 'Registrar e Creditar LTV'}
                                       </button>

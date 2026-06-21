@@ -851,7 +851,16 @@ Lembre-se: Você é o Kairos, membro do time Leadium. Converse como um profissio
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    // Robust dist path resolution
+    let distPath = path.join(process.cwd(), 'dist');
+    if (!fs.existsSync(path.join(distPath, 'index.html'))) {
+      if (fs.existsSync(path.join(process.cwd(), 'index.html'))) {
+        distPath = process.cwd(); // Hosted from root (e.g., Hostinger public_html)
+      } else if (fs.existsSync(path.join(__dirname, 'index.html'))) {
+        distPath = __dirname; // Relative to server.cjs
+      }
+    }
+
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
