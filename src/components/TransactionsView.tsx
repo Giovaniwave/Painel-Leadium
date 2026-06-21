@@ -192,13 +192,12 @@ export default function TransactionsView({
               <tr className={`${isDark ? 'bg-[#141414] border-white/10 text-[#999999]' : 'bg-gray-50 border-gray-200 text-gray-500'} border-b text-[9px] uppercase tracking-[0.25em] font-bold`}>
                 <th className="py-4 px-6 text-left">Favorecido</th>
                 <th className="py-4 px-6 text-center">Tipo</th>
-                <th className="py-4 px-6 text-right">Ação</th>
               </tr>
             </thead>
             <tbody className={`divide-y ${isDark ? 'divide-white/5' : 'divide-gray-100'}`}>
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="py-12 text-center text-xs text-gray-500">
+                  <td colSpan={2} className="py-12 text-center text-xs text-gray-500">
                     Nenhuma transação financeira correspondente encontrada. Ajuste os filtros ou critérios de busca.
                   </td>
                 </tr>
@@ -258,22 +257,12 @@ export default function TransactionsView({
                             {isIncome ? 'Entrada' : 'Saída'}
                           </span>
                         </td>
-
-                        {/* Column 3: Interactive View trigger */}
-                        <td className="py-4 px-6 text-right text-xs">
-                          <span className={`inline-flex items-center gap-1.5 transition-all ${
-                            isDark ? 'text-gray-400 group-hover:text-white' : 'text-gray-500 group-hover:text-black'
-                          }`}>
-                            <span>{isExpanded ? 'Ocultar' : 'Ver Detalhes'}</span>
-                            <ChevronDown className={`w-3.5 h-3.5 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                          </span>
-                        </td>
                       </tr>
 
                       {/* Expanded Subrow detail panel */}
                       {isExpanded && (
                         <tr className={isDark ? 'bg-white/[0.015]' : 'bg-gray-50/50'}>
-                          <td colSpan={3} className="py-4 px-6 border-l-2 border-[#FF4D00]">
+                          <td colSpan={2} className="py-4 px-6 border-l-2 border-[#FF4D00]">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left py-2 animate-fadeIn">
                               
                               {/* Option A: Description details */}
