@@ -608,11 +608,91 @@ async function startServer() {
     }
   });
 
+  app.post('/api/login', async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      if (!supabaseClient) {
+        return res.status(500).json({ error: 'Serviço de autenticação não configurado.' });
+      }
+
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        return res.status(401).json({ error: 'Credenciais inválidas. Verifique seu e-mail e senha.' });
+      }
+
+      if (data && data.user) {
+        res.json({ success: true, email: data.user.email });
+      } else {
+        res.status(401).json({ error: 'Não foi possível autenticar o usuário.' });
+      }
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Erro interno ao autenticar.' });
+    }
+  });
+
+  app.get('/api/user-profile', async (req, res) => {
+    try {
+      const email = req.query.email as string;
+      if (!email || !supabaseClient) {
+        return res.status(400).json({ error: 'E-mail não fornecido ou cliente Supabase inválido.' });
+      }
+      
+      const { data, error } = await supabaseClient
+        .from('leadium_users')
+        .select('*')
+        .eq('email', email)
+        .single();
+        
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+      
+      res.json(data || null);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/user-profile', async (req, res) => {
+    try {
+      if (!supabaseClient) {
+        return res.status(500).json({ error: 'Cliente Supabase inválido.' });
+      }
+      const { email, name, avatar_url } = req.body;
+      
+      const { data, error } = await supabaseClient
+        .from('leadium_users')
+        .upsert({ email, name, avatar_url, created_at: new Date().toISOString() }, { onConflict: 'email' })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Secure Gemini (Kairos) chat integration endpoint using gemini-3.5-flash with OpenAI fallback
   app.post('/api/gemini/chat', async (req, res) => {
     try {
-      const { prompt, currentDate = new Date().toISOString().substring(0, 10) } = req.body;
+      const { prompt, currentDate = new Date().toISOString().substring(0, 10), userEmail } = req.body;
       
+      let currentUserName = "Membro da Equipe";
+      if (userEmail) {
+        if (userEmail.toLowerCase().includes('batistaftw')) {
+          currentUserName = "Giovani";
+        } else {
+          currentUserName = "Junior";
+        }
+      }
+
       // Load current absolute database context for the AI agent (Kairos)
       const transactionsContext = await loadTransactions();
       const budgetGoalsContext = await loadGoals();
@@ -679,6 +759,8 @@ async function startServer() {
       const systemInstruction = 
         `Você é o Kairos, um consultor financeiro de verdade, de carne e osso, e um colaborador integrado da equipe Leadium (plataforma Leadiumfy). 
 Trabalhe de forma extremamente humana, amigável, informal e empática na conversa — fale exatamente como um colega de trabalho próximo e parceiro de negócios, e não como uma inteligência artificial tradicional.
+O usuário com quem você está conversando agora é: ${currentUserName}.
+Chame-o pelo nome (ex: "Fala Giovani!", "E aí Junior, tudo beleza?") nas conversas, de maneira natural, mas não precisa exagerar usando todas as vezes.
 
 DIRETRIZES FUNDAMENTAIS PARA PARECER UM HUMANO DE VERDADE:
 

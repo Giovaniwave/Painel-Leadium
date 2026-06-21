@@ -14,9 +14,11 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  MessageSquare
+  MessageSquare,
+  DownloadCloud
 } from 'lucide-react';
 import { ActiveTab } from '../types';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -39,6 +41,8 @@ export default function Sidebar({
   onOpenAssistant,
   theme
 }: SidebarProps) {
+  const { isInstallable, promptInstall } = usePWAInstall();
+
   const logoUrl = theme === 'light'
     ? "https://i.ibb.co/M5kWMmTJ/logo-para-versao-white-removebg-preview.png"
     : "https://i.ibb.co/k245JhFM/logotipooficialleadium.png";
@@ -223,6 +227,24 @@ export default function Sidebar({
             <MessageSquare className="w-4 h-4 text-[#FF4D00] animate-pulse transition-transform duration-300 group-hover:scale-110" />
             {(!isCollapsed || isOpenMobile) && <span>Assistente Kairos</span>}
           </button>
+
+          {/* Optional Install PWA App Button */}
+          {isInstallable && (
+            <button
+              onClick={() => {
+                promptInstall();
+              }}
+              className={`w-full group flex items-center gap-4 py-3.5 text-xs text-[#FF4D00] uppercase tracking-[0.14em] font-medium rounded-xl transition-all duration-300 cursor-pointer ${
+                (isCollapsed && !isOpenMobile)
+                  ? 'justify-center px-0 w-12 h-12' 
+                  : 'px-5'
+              } hover:bg-[#FF4D00]/10 border border-transparent hover:border-[#FF4D00]/20`}
+              title={(isCollapsed && !isOpenMobile) ? "Instalar App" : undefined}
+            >
+              <DownloadCloud className="w-4 h-4 text-[#FF4D00] transition-transform duration-300 group-hover:scale-110" />
+              {(!isCollapsed || isOpenMobile) && <span>Instalar App</span>}
+            </button>
+          )}
         </div>
       </aside>
     </>

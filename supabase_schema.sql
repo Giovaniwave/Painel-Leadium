@@ -36,6 +36,14 @@ CREATE TABLE IF NOT EXISTS system_settings (
   value JSONB NOT NULL
 );
 
+-- 4. Tabela de Usuários para salvar o Perfil / Avatar (leadium_users)
+CREATE TABLE IF NOT EXISTS leadium_users (
+  email TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  avatar_url TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+);
+
 -- ==========================================
 -- SEED INITIAL DATA (DADOS INICIAIS)
 -- ==========================================
@@ -60,6 +68,7 @@ ON CONFLICT (key) DO NOTHING;
 ALTER TABLE leadium_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE leadium_budget_goals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE leadium_users ENABLE ROW LEVEL SECURITY;
 
 -- Remover políticas existentes para evitar erros de duplicidade ao re-executar
 DROP POLICY IF EXISTS "Allow public select on leadium_transactions" ON leadium_transactions;
@@ -77,6 +86,11 @@ DROP POLICY IF EXISTS "Allow public insert on system_settings" ON system_setting
 DROP POLICY IF EXISTS "Allow public update on system_settings" ON system_settings;
 DROP POLICY IF EXISTS "Allow public delete on system_settings" ON system_settings;
 
+DROP POLICY IF EXISTS "Allow public select on leadium_users" ON leadium_users;
+DROP POLICY IF EXISTS "Allow public insert on leadium_users" ON leadium_users;
+DROP POLICY IF EXISTS "Allow public update on leadium_users" ON leadium_users;
+DROP POLICY IF EXISTS "Allow public delete on leadium_users" ON leadium_users;
+
 -- Criar políticas de acesso irrestrito para anon / public nas tabelas novas
 CREATE POLICY "Allow public select on leadium_transactions" ON leadium_transactions FOR SELECT TO public USING (true);
 CREATE POLICY "Allow public insert on leadium_transactions" ON leadium_transactions FOR INSERT TO public WITH CHECK (true);
@@ -92,3 +106,8 @@ CREATE POLICY "Allow public select on system_settings" ON system_settings FOR SE
 CREATE POLICY "Allow public insert on system_settings" ON system_settings FOR INSERT TO public WITH CHECK (true);
 CREATE POLICY "Allow public update on system_settings" ON system_settings FOR UPDATE TO public WITH CHECK (true);
 CREATE POLICY "Allow public delete on system_settings" ON system_settings FOR DELETE TO public USING (true);
+
+CREATE POLICY "Allow public select on leadium_users" ON leadium_users FOR SELECT TO public USING (true);
+CREATE POLICY "Allow public insert on leadium_users" ON leadium_users FOR INSERT TO public WITH CHECK (true);
+CREATE POLICY "Allow public update on leadium_users" ON leadium_users FOR UPDATE TO public WITH CHECK (true);
+CREATE POLICY "Allow public delete on leadium_users" ON leadium_users FOR DELETE TO public USING (true);

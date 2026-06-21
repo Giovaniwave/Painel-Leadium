@@ -18,6 +18,7 @@ interface FinanceAssistantProps {
   transactions: Transaction[];
   budgetGoals: BudgetGoal[];
   theme?: 'dark' | 'light';
+  userEmail?: string;
 }
 
 export default function FinanceAssistant({ 
@@ -25,7 +26,8 @@ export default function FinanceAssistant({
   onClose, 
   transactions, 
   budgetGoals, 
-  theme = 'dark' 
+  theme = 'dark',
+  userEmail
 }: FinanceAssistantProps) {
   const [messages, setMessages] = useState<Message[]>([
     { 
@@ -64,7 +66,8 @@ export default function FinanceAssistant({
           prompt: textToSend,
           transactionsContext: transactions,
           budgetGoalsContext: budgetGoals,
-          currentDate: new Date().toISOString().substring(0, 10)
+          currentDate: new Date().toISOString().substring(0, 10),
+          userEmail
         })
       });
 

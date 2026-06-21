@@ -48,9 +48,9 @@ export default function App() {
       } catch (e) {}
     }
     return {
-      name: 'Alex Rivera',
-      avatarUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAoypG04YahjDXe5psIT-V3O8JMRA8BPodT-pmRoMft9C07uF7BQZIMvnWx3CkB6bv5LhGgF1QxN6fYooQy2Tmq9BRE83yvBkC0_HsyOS4BWoXptVkjxTnYTWOyLT3fNa12-_q6p06v3JPoLe3bpDwYQSbSM6SREr5pZB-jtVnMcRcAZiIVArQpUePTwKp3V17D2gaS-LJS0gatmePoEAkCf_VegcHMELKKMD04wRGCDLwq8DdoBv3W2jWp8HFZvgTrLsgE24bDbY5g',
-      email: 'YouGodBye@gmail.com'
+      name: 'Nome do Titular',
+      avatarUrl: '',
+      email: ''
     };
   });
 
@@ -61,6 +61,31 @@ export default function App() {
   const [budgetGoals, setBudgetGoals] = useState<BudgetGoal[]>(DEFAULT_GOALS);
 
   const [revenueGoal, setRevenueGoal] = useState<number>(100000);
+
+  // Sync user profile from db when email is present
+  useEffect(() => {
+    async function fetchUserProfile() {
+      if (!userEmail) return;
+      try {
+        const res = await fetch(`/api/user-profile?email=${encodeURIComponent(userEmail)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.name) {
+            const profile = {
+              name: data.name,
+              avatarUrl: data.avatar_url || '',
+              email: data.email
+            };
+            setUserProfile(profile);
+            localStorage.setItem('leadiumfy_user_profile_v2', JSON.stringify(profile));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load user profile from server:', err);
+      }
+    }
+    fetchUserProfile();
+  }, [userEmail]);
 
   const handleUpdateRevenueGoal = async (val: number) => {
     setRevenueGoal(val);
@@ -518,9 +543,22 @@ export default function App() {
                 onUpdateGoal={handleUpdateGoal}
                 onResetAllData={handleResetAllData}
                 userProfile={userProfile}
-                onUpdateProfile={(updatedProfile) => {
+                onUpdateProfile={async (updatedProfile) => {
                   setUserProfile(updatedProfile);
                   localStorage.setItem('leadiumfy_user_profile_v2', JSON.stringify(updatedProfile));
+                  try {
+                    await fetch('/api/user-profile', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        email: updatedProfile.email,
+                        name: updatedProfile.name,
+                        avatar_url: updatedProfile.avatarUrl
+                      })
+                    });
+                  } catch (err) {
+                    console.error('Failed to sync profile updates to server', err);
+                  }
                 }}
                 theme={theme}
                 setTheme={setTheme}
@@ -661,6 +699,7 @@ export default function App() {
         transactions={transactions}
         budgetGoals={budgetGoals}
         theme={theme}
+        userEmail={userEmail}
       />
     </div>
   );

@@ -16,7 +16,7 @@ export default function LoginView({ onLogin }: LoginViewProps) {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -39,11 +39,28 @@ export default function LoginView({ onLogin }: LoginViewProps) {
 
     setIsLoading(true);
 
-    // Simulate clean login response matching Supabase email integration structure
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        setError(data.error || 'Erro ao autenticar. Tente novamente.');
+      } else if (data.success && data.email) {
+        onLogin(data.email);
+      } else {
+        setError('Erro desconhecido ao autenticar.');
+      }
+    } catch (err) {
+      console.error('Login request failed:', err);
+      setError('Problema de comunicação com o servidor.');
+    } finally {
       setIsLoading(false);
-      onLogin(email);
-    }, 1000);
+    }
   };
 
   return (
