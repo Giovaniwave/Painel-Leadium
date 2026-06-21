@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { ActiveTab } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import IOSPwaPrompt from './IOSPWAPrompt';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -41,7 +42,7 @@ export default function Sidebar({
   onOpenAssistant,
   theme
 }: SidebarProps) {
-  const { isInstallable, promptInstall } = usePWAInstall();
+  const { isInstallable, promptInstall, showIOSPrompt, closeIOSPrompt } = usePWAInstall();
 
   const logoUrl = theme === 'light'
     ? "https://i.ibb.co/M5kWMmTJ/logo-para-versao-white-removebg-preview.png"
@@ -247,6 +248,7 @@ export default function Sidebar({
           )}
         </div>
       </aside>
+      <IOSPwaPrompt isOpen={showIOSPrompt} onClose={closeIOSPrompt} theme={theme} />
     </>
   );
 }

@@ -3,14 +3,28 @@ import { useState, useEffect } from 'react';
 export function usePWAInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [showIOSPrompt, setShowIOSPrompt] = useState(false);
 
   useEffect(() => {
+    // Check if we are on iOS
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
+    setIsIOS(isIOSDevice);
+
+    // Check if we are already in standalone mode (installed)
+    const isStandaloneMode = ('standalone' in window.navigator && (window.navigator as any).standalone) || 
+                             window.matchMedia('(display-mode: standalone)').matches;
+    setIsStandalone(isStandaloneMode);
+
+    if (isIOSDevice && !isStandaloneMode) {
+      setIsInstallable(true);
+    }
+
     const handleBeforeInstallPrompt = (e: any) => {
-      // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
-      // Stash the event so it can be triggered later.
       setDeferredPrompt(e);
-      // Update UI notify the user they can install the PWA
       setIsInstallable(true);
     };
 
@@ -22,22 +36,28 @@ export function usePWAInstall() {
   }, []);
 
   const promptInstall = async () => {
+    if (isIOS && !isStandalone) {
+      setShowIOSPrompt(true);
+      return;
+    }
+
     if (!deferredPrompt) {
       return;
     }
-    // Show the install prompt
     deferredPrompt.prompt();
-    // Wait for the user to respond to the prompt
     const { outcome } = await deferredPrompt.userChoice;
+    
     if (outcome === 'accepted') {
       console.log('User accepted the install prompt');
-    } else {
-      console.log('User dismissed the install prompt');
     }
-    // We've used the prompt, and can't use it again, throw it away
+    
     setDeferredPrompt(null);
     setIsInstallable(false);
   };
 
-  return { isInstallable, promptInstall };
+  const closeIOSPrompt = () => {
+    setShowIOSPrompt(false);
+  };
+
+  return { isInstallable, promptInstall, isIOS, showIOSPrompt, closeIOSPrompt };
 }

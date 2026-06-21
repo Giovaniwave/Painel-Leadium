@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { Search, Bell, MessageSquare, Info, Menu, Sun, Moon, LogOut, Settings, DownloadCloud } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import IOSPwaPrompt from './IOSPWAPrompt';
 
 interface HeaderProps {
   title: string;
@@ -36,7 +37,7 @@ export default function Header({
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const { isInstallable, promptInstall } = usePWAInstall();
+  const { isInstallable, promptInstall, showIOSPrompt, closeIOSPrompt } = usePWAInstall();
   
   const notifications = [
     { id: 1, text: 'Alerta: Você consumiu 84% do limite do seu Orçamento Principal.', time: '1 hora atrás', urgent: true },
@@ -226,6 +227,7 @@ export default function Header({
           </div>
         </div>
       </div>
+      <IOSPwaPrompt isOpen={showIOSPrompt} onClose={closeIOSPrompt} theme={theme} />
     </header>
   );
 }
