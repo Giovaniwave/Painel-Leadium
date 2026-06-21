@@ -4,9 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Search, Bell, MessageSquare, Info, Menu, Sun, Moon, LogOut, Settings, DownloadCloud } from 'lucide-react';
-import { usePWAInstall } from '../hooks/usePWAInstall';
-import IOSPwaPrompt from './IOSPWAPrompt';
+import { Search, Bell, MessageSquare, Info, Menu, Sun, Moon, LogOut, Settings } from 'lucide-react';
 
 interface HeaderProps {
   title: string;
@@ -37,7 +35,6 @@ export default function Header({
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const { isInstallable, promptInstall, showIOSPrompt, closeIOSPrompt } = usePWAInstall();
   
   const notifications = [
     { id: 1, text: 'Alerta: Você consumiu 84% do limite do seu Orçamento Principal.', time: '1 hora atrás', urgent: true },
@@ -194,20 +191,6 @@ export default function Header({
                   <span>Assistente Kairos</span>
                 </button>
 
-                {isInstallable && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowUserDropdown(false);
-                      promptInstall();
-                    }}
-                    className="w-full flex items-center gap-2.5 px-4 py-3 text-left text-[#FF4D00] hover:bg-[#FF4D00]/10 transition-colors cursor-pointer"
-                  >
-                    <DownloadCloud className="w-4 h-4 shrink-0" />
-                    <span>Instalar App</span>
-                  </button>
-                )}
-
                 <div className="border-t border-white/5 my-1" />
 
                 {/* LOGOUT Option */}
@@ -227,7 +210,6 @@ export default function Header({
           </div>
         </div>
       </div>
-      <IOSPwaPrompt isOpen={showIOSPrompt} onClose={closeIOSPrompt} theme={theme} />
     </header>
   );
 }
