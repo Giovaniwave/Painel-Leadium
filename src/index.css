@@ -60,6 +60,13 @@
   width: 5px;
   height: 5px;
 }
+
+/* Prevent viewport zooming when focusing input fields on mobile */
+@media (max-width: 767px) {
+  input, select, textarea, [contenteditable="true"] {
+    font-size: 16px !important;
+  }
+}
 ::-webkit-scrollbar-track {
   background: rgba(13, 13, 13, 0.5);
 }

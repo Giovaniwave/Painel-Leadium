@@ -17,7 +17,7 @@ dotenv.config();
 async function startServer() {
   const app = express();
   // Vercel, Hostinger node instances, or Heroku define process.env.PORT. AI Studio uses 3000 implicitly based on internal proxy.
-  const PORT = process.env.PORT || 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json());
 
