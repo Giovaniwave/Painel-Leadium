@@ -450,9 +450,9 @@ export default function BudgetingView({
                   className="p-4 flex items-center justify-between hover:bg-white/2 transition-colors group"
                 >
                   <div className="flex items-center gap-4">
-                    {tx.avatarUrl ? (
+                    {tx.avatarUrl && tx.avatarUrl.trim() !== '' ? (
                       <img 
-                        src={tx.avatarUrl} 
+                        src={tx.avatarUrl || null} 
                         alt={tx.sender || 'Sender'} 
                         className="w-10 h-10 rounded-lg object-cover bg-white/5"
                         referrerPolicy="no-referrer"

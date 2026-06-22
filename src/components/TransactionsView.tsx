@@ -219,9 +219,9 @@ export default function TransactionsView({
                         {/* Column 1: Favorecido info */}
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-3">
-                            {tx.avatarUrl ? (
+                            {tx.avatarUrl && tx.avatarUrl.trim() !== '' ? (
                               <img
-                                src={tx.avatarUrl}
+                                src={tx.avatarUrl || null}
                                 alt={tx.sender || 'Sender'}
                                 className="w-10 h-10 rounded-lg object-cover bg-white/5 border border-white/5 grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-300"
                                 referrerPolicy="no-referrer"

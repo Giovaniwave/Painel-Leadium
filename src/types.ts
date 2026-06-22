@@ -37,7 +37,7 @@ export interface Client {
   notes?: string;
 }
 
-export type ActiveTab = 'dashboard' | 'budgeting' | 'transactions' | 'clients' | 'settings' | 'help';
+export type ActiveTab = 'dashboard' | 'budgeting' | 'transactions' | 'clients' | 'settings' | 'help' | 'expenses';
 
 export interface BudgetFilters {
   account: string;

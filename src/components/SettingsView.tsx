@@ -27,6 +27,12 @@ export default function SettingsView({
   
   const [tempName, setTempName] = useState(userProfile.name);
   const [avatarPreview, setAvatarPreview] = useState(userProfile.avatarUrl);
+  
+  // Sync state if userProfile changes from parent component (e.g. after database load)
+  React.useEffect(() => {
+    setTempName(userProfile.name);
+    setAvatarPreview(userProfile.avatarUrl);
+  }, [userProfile.name, userProfile.avatarUrl]);
   const [dragActive, setDragActive] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   
@@ -166,7 +172,7 @@ export default function SettingsView({
                   {/* Current Preview Avatar */}
                   <div className="relative group shrink-0">
                     <img 
-                      src={avatarPreview} 
+                      src={avatarPreview || null} 
                       alt="Avatar Preview" 
                       className={`w-24 h-24 rounded-full border-2 object-cover ${
                         isDark ? 'border-[#FF4D00]/50 bg-black' : 'border-[#FF4D00] bg-gray-50 shadow-sm'

@@ -11,13 +11,14 @@ import BudgetingView from './components/BudgetingView';
 import TransactionsView from './components/TransactionsView';
 import ClientsView from './components/ClientsView';
 import SettingsView from './components/SettingsView';
+import ExpensesView from './components/ExpensesView';
 import AddTransactionModal from './components/AddTransactionModal';
 import FinanceAssistant from './components/FinanceAssistant';
 import LoginView from './components/LoginView';
 
 import { ActiveTab, Transaction, BudgetGoal, Client } from './types';
 import { INITIAL_TRANSACTIONS } from './data/seedData';
-import { LayoutDashboard, Wallet, ArrowLeftRight, Settings as SettingsIcon, MessageSquare, X, Users } from 'lucide-react';
+import { LayoutDashboard, Wallet, ArrowLeftRight, Settings as SettingsIcon, MessageSquare, X, Users, Receipt } from 'lucide-react';
 
 // Default "Caixinha" budget goals limits config
 const DEFAULT_GOALS: BudgetGoal[] = [
@@ -432,6 +433,7 @@ export default function App() {
       case 'dashboard': return 'Painel Financeiro';
       case 'budgeting': return 'Plano de Carteira';
       case 'transactions': return 'Transações';
+      case 'expenses': return 'Controle de Despesas';
       case 'clients': return 'Gestão de Clientes';
       case 'settings': return 'Configurações do Sistema';
       default: return 'Gestão Leadium';
@@ -537,6 +539,9 @@ export default function App() {
                 theme={theme}
               />
             )}
+            {activeTab === 'expenses' && (
+              <ExpensesView theme={theme} />
+            )}
             {activeTab === 'settings' && (
               <SettingsView 
                 budgetGoals={budgetGoals}
@@ -618,6 +623,18 @@ export default function App() {
         >
           <ArrowLeftRight className="w-5 h-5" />
           <span className="text-[9px] uppercase tracking-wider font-semibold font-sans">Transações</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('expenses')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3.5 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'expenses' 
+              ? 'text-[#FF4D00] bg-[#FF4D00]/10 border border-[#FF4D00]/20 font-semibold scale-105' 
+              : 'text-gray-500 hover:text-gray-400 border border-transparent'
+          }`}
+        >
+          <Receipt className="w-5 h-5" />
+          <span className="text-[9px] uppercase tracking-wider font-semibold font-sans">Despesas</span>
         </button>
         <button
           type="button"

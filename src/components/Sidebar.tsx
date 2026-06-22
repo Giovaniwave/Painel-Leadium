@@ -14,7 +14,8 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  MessageSquare
+  MessageSquare,
+  Receipt
 } from 'lucide-react';
 import { ActiveTab } from '../types';
 
@@ -47,6 +48,7 @@ export default function Sidebar({
     { id: 'dashboard' as ActiveTab, label: 'Painel', icon: LayoutDashboard },
     { id: 'budgeting' as ActiveTab, label: 'Carteira', icon: Wallet },
     { id: 'transactions' as ActiveTab, label: 'Transações', icon: ArrowLeftRight },
+    { id: 'expenses' as ActiveTab, label: 'Despesas', icon: Receipt },
     { id: 'clients' as ActiveTab, label: 'Clientes', icon: Users },
   ];
 

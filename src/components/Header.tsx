@@ -18,7 +18,7 @@ interface HeaderProps {
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
   onLogout: () => void;
-  onNavigateToTab: (tab: 'dashboard' | 'budgeting' | 'transactions' | 'clients' | 'settings') => void;
+  onNavigateToTab: (tab: 'dashboard' | 'budgeting' | 'transactions' | 'clients' | 'settings' | 'expenses') => void;
 }
 
 export default function Header({ 
@@ -149,7 +149,7 @@ export default function Header({
             >
               <img
                 id="user-profile-avatar"
-                src={userProfile.avatarUrl}
+                src={userProfile.avatarUrl || null}
                 alt={userProfile.name}
                 className="w-8 h-8 rounded-full border border-white/10 object-cover group-hover:border-white transition-all duration-300 shadow-md hover:scale-[1.05]"
                 referrerPolicy="no-referrer"
