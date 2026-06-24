@@ -143,7 +143,13 @@ export default function Header({
           {/* User Profile display with Dropdown */}
           <div className="relative">
             <button 
-              onClick={() => setShowUserDropdown(!showUserDropdown)}
+              onClick={() => {
+                if (window.innerWidth < 768) {
+                  onToggleMobileMenu();
+                } else {
+                  setShowUserDropdown(!showUserDropdown);
+                }
+              }}
               className="flex items-center gap-3 pl-2 group cursor-pointer text-left focus:outline-none"
               title={userProfile.name}
             >

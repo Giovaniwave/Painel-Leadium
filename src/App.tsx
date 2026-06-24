@@ -12,9 +12,11 @@ import TransactionsView from './components/TransactionsView';
 import ClientsView from './components/ClientsView';
 import SettingsView from './components/SettingsView';
 import ExpensesView from './components/ExpensesView';
+import GeneralExpensesView from './components/GeneralExpensesView';
 import AddTransactionModal from './components/AddTransactionModal';
 import FinanceAssistant from './components/FinanceAssistant';
 import LoginView from './components/LoginView';
+import MobileNav from './components/MobileNav';
 
 import { ActiveTab, Transaction, BudgetGoal, Client } from './types';
 import { INITIAL_TRANSACTIONS } from './data/seedData';
@@ -433,7 +435,7 @@ export default function App() {
       case 'dashboard': return 'Painel Financeiro';
       case 'budgeting': return 'Plano de Carteira';
       case 'transactions': return 'Transações';
-      case 'expenses': return 'Controle de Despesas';
+      case 'expenses': return 'Controle de Frota';
       case 'clients': return 'Gestão de Clientes';
       case 'settings': return 'Configurações do Sistema';
       default: return 'Gestão Leadium';
@@ -542,6 +544,9 @@ export default function App() {
             {activeTab === 'expenses' && (
               <ExpensesView theme={theme} />
             )}
+            {activeTab === 'general_expenses' && (
+              <GeneralExpensesView theme={theme} clients={clients} />
+            )}
             {activeTab === 'settings' && (
               <SettingsView 
                 budgetGoals={budgetGoals}
@@ -581,72 +586,48 @@ export default function App() {
 
       {/* Mobile Bottom Navigation Menu */}
       <div 
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-45 flex justify-around items-center py-2 px-1 safe-bottom border-t shadow-2xl transition-all ${
+        className={`md:hidden fixed bottom-6 left-6 right-6 z-45 flex justify-around items-center py-2 px-2 rounded-2xl shadow-2xl transition-all ${
           theme === 'light' 
-            ? 'bg-[#FFFFFF]/90 backdrop-blur-md border-[#E5E7EB]' 
-            : 'bg-[#0F0F0F]/90 backdrop-blur-md border-white/10'
+            ? 'bg-[#FFFFFF]/95 backdrop-blur-md border border-[#E5E7EB]' 
+            : 'bg-[#1A1A1A]/95 backdrop-blur-md border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.5)]'
         }`}
         id="mobile-bottom-tabs"
       >
         <button
           type="button"
           onClick={() => setActiveTab('dashboard')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3.5 rounded-xl transition-all cursor-pointer ${
+          className={`flex flex-col items-center gap-1 py-1.5 px-4 rounded-xl transition-all cursor-pointer active:scale-95 ${
             activeTab === 'dashboard' 
-              ? 'text-[#FF4D00] bg-[#FF4D00]/10 border border-[#FF4D00]/20 font-semibold scale-105' 
+              ? 'text-[#FF4D00] bg-[#FF4D00]/10 border border-[#FF4D00]/20 font-bold scale-105 shadow-sm' 
               : 'text-gray-500 hover:text-gray-400 border border-transparent'
           }`}
         >
-          <LayoutDashboard className="w-5 h-5" />
+          <LayoutDashboard className="w-[22px] h-[22px]" />
           <span className="text-[9px] uppercase tracking-wider font-semibold font-sans">Painel</span>
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('budgeting')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3.5 rounded-xl transition-all cursor-pointer ${
+          className={`flex flex-col items-center gap-1 py-1.5 px-4 rounded-xl transition-all cursor-pointer active:scale-95 ${
             activeTab === 'budgeting' 
-              ? 'text-[#FF4D00] bg-[#FF4D00]/10 border border-[#FF4D00]/20 font-semibold scale-105' 
+              ? 'text-[#FF4D00] bg-[#FF4D00]/10 border border-[#FF4D00]/20 font-bold scale-105 shadow-sm' 
               : 'text-gray-500 hover:text-gray-400 border border-transparent'
           }`}
         >
-          <Wallet className="w-5 h-5" />
+          <Wallet className="w-[22px] h-[22px]" />
           <span className="text-[9px] uppercase tracking-wider font-semibold font-sans">Carteira</span>
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('transactions')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3.5 rounded-xl transition-all cursor-pointer ${
+          className={`flex flex-col items-center gap-1 py-1.5 px-4 rounded-xl transition-all cursor-pointer active:scale-95 ${
             activeTab === 'transactions' 
-              ? 'text-[#FF4D00] bg-[#FF4D00]/10 border border-[#FF4D00]/20 font-semibold scale-105' 
+              ? 'text-[#FF4D00] bg-[#FF4D00]/10 border border-[#FF4D00]/20 font-bold scale-105 shadow-sm' 
               : 'text-gray-500 hover:text-gray-400 border border-transparent'
           }`}
         >
-          <ArrowLeftRight className="w-5 h-5" />
+          <ArrowLeftRight className="w-[22px] h-[22px]" />
           <span className="text-[9px] uppercase tracking-wider font-semibold font-sans">Transações</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('expenses')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3.5 rounded-xl transition-all cursor-pointer ${
-            activeTab === 'expenses' 
-              ? 'text-[#FF4D00] bg-[#FF4D00]/10 border border-[#FF4D00]/20 font-semibold scale-105' 
-              : 'text-gray-500 hover:text-gray-400 border border-transparent'
-          }`}
-        >
-          <Receipt className="w-5 h-5" />
-          <span className="text-[9px] uppercase tracking-wider font-semibold font-sans">Despesas</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('clients')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3.5 rounded-xl transition-all cursor-pointer ${
-            activeTab === 'clients' 
-              ? 'text-[#FF4D00] bg-[#FF4D00]/10 border border-[#FF4D00]/20 font-semibold scale-105' 
-              : 'text-gray-500 hover:text-gray-400 border border-transparent'
-          }`}
-        >
-          <Users className="w-5 h-5" />
-          <span className="text-[9px] uppercase tracking-wider font-semibold font-sans">Cliente</span>
         </button>
       </div>
 
@@ -660,12 +641,18 @@ export default function App() {
             onMouseDown={handleFloatMouseDown}
             onTouchStart={handleFloatTouchStart}
             onClick={() => setShowFloatingMenu(!showFloatingMenu)}
-            className="w-11 h-11 bg-[#AD4F25] hover:bg-[#923D19] text-white keep-white rounded-full flex items-center justify-center shadow-md border border-white/5 relative transition-colors duration-200 cursor-pointer"
+            className={`w-11 h-11 rounded-full flex items-center justify-center shadow-md border relative transition-colors duration-200 cursor-pointer ${
+              theme === 'light' ? 'bg-[#18181B] hover:bg-[#27272A] border-black/10' : 'bg-white hover:bg-gray-100 border-white/10'
+            }`}
             title="Clique para abrir opções"
           >
-            <MessageSquare className="w-4.5 h-4.5 text-white/90 keep-white" />
+            <img 
+              src={theme === 'light' ? 'https://i.ibb.co/k245JhFM/logotipooficialleadium.png' : 'https://i.ibb.co/M5kWMmTJ/logo-para-versao-white-removebg-preview.png'} 
+              alt="Leadium" 
+              className="w-5 h-5 object-contain" 
+            />
             {hasUnreadMessage && (
-              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-[#AD4F25] rounded-full flex items-center justify-center border border-white/25 border-amber-600"></span>
+              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-[#FF4D00] rounded-full flex items-center justify-center border border-white/25"></span>
             )}
           </div>
 
@@ -699,6 +686,13 @@ export default function App() {
           )}
         </div>
       )}
+
+      {/* Mobile Navigation Bar */}
+      <MobileNav 
+        activeTab={activeTab} 
+        onTabChange={setActiveTab} 
+        theme={theme} 
+      />
 
       {/* Manual Addition Trigger Modal overlay Form */}
       <AddTransactionModal 

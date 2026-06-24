@@ -4,7 +4,7 @@ import { formatSystemDate } from '../utils/date';
 import { 
   Plus, Users, Search, Edit2, CheckCircle2, XCircle, ChevronDown, ChevronRight, 
   Activity, Mail, Phone, Briefcase, Calendar, FileText, Check, Link, 
-  TrendingUp, Sparkles, DollarSign, ArrowUpRight, Building2, HelpCircle, FileCheck2, Trash2, Sliders
+  TrendingUp, Sparkles, DollarSign, ArrowUpRight, Building2, HelpCircle, FileCheck2, Trash2, Sliders, Image, X
 } from 'lucide-react';
 
 interface ClientsViewProps {
@@ -51,6 +51,21 @@ export default function ClientsView({
   const [quickDate, setQuickDate] = useState(new Date().toISOString().substring(0, 10));
   const [isRecordingPayment, setIsRecordingPayment] = useState(false);
 
+  const [generalExpenses, setGeneralExpenses] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchExpenses = async () => {
+      try {
+        const res = await fetch('/api/general-expenses');
+        if (res.ok) {
+          const data = await res.json();
+          setGeneralExpenses(data);
+        }
+      } catch (err) {}
+    };
+    fetchExpenses();
+  }, []);
+
   // CRM Metadata Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -61,7 +76,9 @@ export default function ClientsView({
     phone: '',
     segment: '',
     start_date: new Date().toISOString().substring(0, 10),
-    notes: ''
+    notes: '',
+    nextPaymentDate: '',
+    logo: ''
   });
 
   const isDark = theme === 'dark';
@@ -85,7 +102,9 @@ export default function ClientsView({
         phone: c.phone || localData.phone || '',
         segment: c.segment || localData.segment || '',
         start_date: c.start_date || localData.start_date || new Date().toISOString().substring(0, 10),
-        notes: c.notes || localData.notes || ''
+        notes: c.notes || localData.notes || '',
+        nextPaymentDate: c.nextPaymentDate || localData.nextPaymentDate || '',
+        logo: c.logo || localData.logo || ''
       };
     });
   };
@@ -102,7 +121,9 @@ export default function ClientsView({
       phone: '',
       segment: '',
       start_date: new Date().toISOString().substring(0, 10),
-      notes: ''
+      notes: '',
+      nextPaymentDate: '',
+      logo: ''
     });
     setIsAdding(false);
     setEditingId(null);
@@ -123,7 +144,9 @@ export default function ClientsView({
       phone: formData.phone.trim(),
       segment: formData.segment.trim(),
       start_date: formData.start_date,
-      notes: formData.notes.trim()
+      notes: formData.notes.trim(),
+      nextPaymentDate: formData.nextPaymentDate,
+      logo: formData.logo
     };
     
     if (editingId) {
@@ -168,7 +191,9 @@ export default function ClientsView({
       phone: c.phone || '', 
       segment: c.segment || '', 
       start_date: c.start_date || new Date().toISOString().substring(0, 10), 
-      notes: c.notes || '' 
+      notes: c.notes || '',
+      nextPaymentDate: c.nextPaymentDate || '',
+      logo: c.logo || ''
     };
     
     if (!cachedMeta.email || !cachedMeta.phone || !cachedMeta.segment || !cachedMeta.notes) {
@@ -182,7 +207,9 @@ export default function ClientsView({
             phone: cachedMeta.phone || parsed.phone || '',
             segment: cachedMeta.segment || parsed.segment || '',
             start_date: cachedMeta.start_date || parsed.start_date || new Date().toISOString().substring(0, 10),
-            notes: cachedMeta.notes || parsed.notes || ''
+            notes: cachedMeta.notes || parsed.notes || '',
+            nextPaymentDate: cachedMeta.nextPaymentDate || parsed.nextPaymentDate || '',
+            logo: cachedMeta.logo || parsed.logo || ''
           };
         } catch (e) {}
       }
@@ -197,7 +224,9 @@ export default function ClientsView({
       phone: cachedMeta.phone,
       segment: cachedMeta.segment,
       start_date: cachedMeta.start_date,
-      notes: cachedMeta.notes
+      notes: cachedMeta.notes,
+      nextPaymentDate: c.nextPaymentDate || cachedMeta.nextPaymentDate || '',
+      logo: cachedMeta.logo
     });
     setEditingId(c.id);
     setIsAdding(true);
@@ -367,11 +396,7 @@ export default function ClientsView({
         </div>
         <button
           onClick={() => setIsAdding(true)}
-          className={`px-6 py-2.5 font-medium rounded-lg transition-all cursor-pointer text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] active:scale-[0.98] ${
-            theme === 'light'
-              ? 'bg-black text-[#FFFFFF] hover:bg-gray-800'
-              : 'bg-white text-black hover:bg-gray-200'
-          }`}
+          className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border-[1.58px] px-5 py-3 font-medium shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-xs font-bold uppercase tracking-wider ${theme === 'dark' ? 'bg-white border-zinc-200 text-zinc-950' : 'bg-zinc-950 border-zinc-600 text-slate-200'}`}
           id="btn-new-client"
         >
           Novo Cliente
@@ -382,7 +407,7 @@ export default function ClientsView({
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4" id="clients-kpi-hud">
         {/* Card 1: MRR */}
         <div 
-          className="metric-card-interactive p-4 rounded-xl border shadow-sm flex flex-col justify-between relative overflow-hidden group cursor-pointer"
+          className="metric-card-interactive p-4 rounded-xl border dark:border-transparent shadow-sm flex flex-col justify-between relative overflow-hidden group cursor-pointer"
           style={{ 
             '--card-highlight': '#10B981', 
             '--card-glow': 'rgba(16, 185, 129, 0.15)' 
@@ -403,7 +428,7 @@ export default function ClientsView({
 
         {/* Card 2: ARR */}
         <div 
-          className="metric-card-interactive p-4 rounded-xl border shadow-sm flex flex-col justify-between relative overflow-hidden group cursor-pointer"
+          className="metric-card-interactive p-4 rounded-xl border dark:border-transparent shadow-sm flex flex-col justify-between relative overflow-hidden group cursor-pointer"
           style={{ 
             '--card-highlight': '#3B82F6', 
             '--card-glow': 'rgba(59, 130, 246, 0.15)' 
@@ -424,7 +449,7 @@ export default function ClientsView({
 
         {/* Card 3: LTV Acumulado */}
         <div 
-          className="metric-card-interactive p-4 rounded-xl border shadow-sm flex flex-col justify-between relative overflow-hidden group cursor-pointer"
+          className="metric-card-interactive p-4 rounded-xl border dark:border-transparent shadow-sm flex flex-col justify-between relative overflow-hidden group cursor-pointer"
           style={{ 
             '--card-highlight': '#F59E0B', 
             '--card-glow': 'rgba(245, 158, 11, 0.15)' 
@@ -445,7 +470,7 @@ export default function ClientsView({
 
         {/* Card 4: Ticket Médio */}
         <div 
-          className="metric-card-interactive p-4 rounded-xl border shadow-sm flex flex-col justify-between relative overflow-hidden group cursor-pointer"
+          className="metric-card-interactive p-4 rounded-xl border dark:border-transparent shadow-sm flex flex-col justify-between relative overflow-hidden group cursor-pointer"
           style={{ 
             '--card-highlight': '#8B5CF6', 
             '--card-glow': 'rgba(139, 92, 246, 0.15)' 
@@ -466,7 +491,7 @@ export default function ClientsView({
 
         {/* Card 5: Clientes Ativos */}
         <div 
-          className="metric-card-interactive p-4 rounded-xl border shadow-sm flex flex-col justify-between relative overflow-hidden group cursor-pointer"
+          className="metric-card-interactive p-4 rounded-xl border dark:border-transparent shadow-sm flex flex-col justify-between relative overflow-hidden group cursor-pointer"
           style={{ 
             '--card-highlight': '#F59E0B', 
             '--card-glow': 'rgba(245, 158, 11, 0.15)' 
@@ -487,7 +512,7 @@ export default function ClientsView({
 
         {/* Card 6: Churn Rate */}
         <div 
-          className="metric-card-interactive p-4 rounded-xl border shadow-sm flex flex-col justify-between relative overflow-hidden group cursor-pointer"
+          className="metric-card-interactive p-4 rounded-xl border dark:border-transparent shadow-sm flex flex-col justify-between relative overflow-hidden group cursor-pointer"
           style={{ 
             '--card-highlight': '#EF4444', 
             '--card-glow': 'rgba(239, 68, 68, 0.15)' 
@@ -706,16 +731,29 @@ export default function ClientsView({
                 />
               </div>
 
-              <div>
-                <label className={`block text-[9px] uppercase font-bold tracking-wider mb-1 opacity-70 ${isDark ? 'text-white' : 'text-gray-900'}`}>Data de início de contrato</label>
-                <input
-                  type="date"
-                  value={formData.start_date}
-                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                  className={`w-full px-3 py-2 rounded-lg text-sm border focus:ring-1 focus:ring-amber-500 outline-none ${
-                    isDark ? 'bg-[#161616] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'
-                  }`}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={`block text-[9px] uppercase font-bold tracking-wider mb-1 opacity-70 ${isDark ? 'text-white' : 'text-gray-900'}`}>Data de início</label>
+                  <input
+                    type="date"
+                    value={formData.start_date}
+                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                    className={`w-full px-3 py-2 rounded-lg text-sm border focus:ring-1 focus:ring-amber-500 outline-none ${
+                      isDark ? 'bg-[#161616] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className={`block text-[9px] uppercase font-bold tracking-wider mb-1 opacity-70 ${isDark ? 'text-white' : 'text-gray-900'}`}>Data de Vencimento</label>
+                  <input
+                    type="date"
+                    value={formData.nextPaymentDate}
+                    onChange={(e) => setFormData({ ...formData, nextPaymentDate: e.target.value })}
+                    className={`w-full px-3 py-2 rounded-lg text-sm border focus:ring-1 focus:ring-amber-500 outline-none ${
+                      isDark ? 'bg-[#161616] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                  />
+                </div>
               </div>
 
               <div>
@@ -730,6 +768,55 @@ export default function ClientsView({
                   <option value="active">Ativo (Na Base de Operações)</option>
                   <option value="churned">Cancelado (Ex-Cliente / Churn)</option>
                 </select>
+              </div>
+
+              <div>
+                <label className={`block text-[9px] uppercase font-bold tracking-wider mb-1 opacity-70 ${isDark ? 'text-white' : 'text-gray-900'}`}>Logotipo do Cliente</label>
+                {formData.logo ? (
+                  <div className="relative inline-block">
+                    <img src={formData.logo} alt="Logo" className="h-10 w-10 object-contain rounded border border-neutral-300 dark:border-neutral-800 bg-white/5" />
+                    <button 
+                      onClick={() => setFormData({ ...formData, logo: '' })}
+                      className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className={`w-full flex items-center justify-center p-2 border border-dashed rounded-lg cursor-pointer transition ${isDark ? 'border-white/20 hover:border-white/40' : 'border-gray-300 hover:border-gray-500'}`}>
+                    <label className="cursor-pointer text-xs flex items-center gap-1.5">
+                      <Image className="w-3.5 h-3.5" />
+                      <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>Fazer upload (Opcional)</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={(e: any) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = async (event) => {
+                              if (event.target?.result) {
+                                try {
+                                  const res = await fetch('/api/upload', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ image: event.target.result as string })
+                                  });
+                                  const data = await res.json();
+                                  if (data.url) setFormData({ ...formData, logo: data.url });
+                                } catch (err) {
+                                  console.error(err);
+                                }
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }} 
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -784,6 +871,15 @@ export default function ClientsView({
             const shareOfLtv = totalHistoricalRevenue > 0 
               ? (totalPaidAmount / totalHistoricalRevenue) * 100 
               : 0;
+            
+            let paymentDaysLeft: number | null = null;
+            if (c.nextPaymentDate) {
+              const target = new Date(c.nextPaymentDate);
+              target.setHours(0,0,0,0);
+              const now = new Date();
+              now.setHours(0,0,0,0);
+              paymentDaysLeft = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            }
 
             return (
               <div 
@@ -800,12 +896,16 @@ export default function ClientsView({
                   onClick={() => setExpandedClientId(isExpanded ? null : c.id)}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-mono font-bold text-xs shrink-0 ${
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-mono font-bold text-xs shrink-0 overflow-hidden ${
                       c.status === 'active'
                         ? 'bg-amber-500/10 text-amber-500'
                         : 'bg-gray-500/10 text-gray-500'
                     }`}>
-                      {c.name.slice(0, 2).toUpperCase()}
+                      {c.logo ? (
+                        <img src={c.logo} alt={c.name} className="w-full h-full object-cover" />
+                      ) : (
+                        c.name.slice(0, 2).toUpperCase()
+                      )}
                     </div>
                     <div>
                       <h4 className={`font-semibold tracking-tight ${isDark ? 'text-white' : 'text-gray-900 text-sm'}`}>
@@ -859,6 +959,28 @@ export default function ClientsView({
                       {clientPayments.length} recebimentos
                     </div>
                   </div>
+
+                  {paymentDaysLeft !== null && (
+                    <div className="col-span-2 pt-2 border-t border-dashed border-white/5" style={{ borderColor: !isDark ? 'rgba(0,0,0,0.06)' : '' }}>
+                      <div className="flex justify-between items-center">
+                        <span className={`text-[8.5px] uppercase tracking-wider font-extrabold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                          Data de Pagamento:
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-mono font-bold ${
+                            paymentDaysLeft < 0 ? 'text-red-500' : paymentDaysLeft <= 5 ? 'text-orange-500' : (isDark ? 'text-gray-300' : 'text-gray-700')
+                          }`}>
+                            {new Date(c.nextPaymentDate!).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                          </span>
+                          <span className={`text-[9px] uppercase font-bold tracking-wider ${
+                            paymentDaysLeft < 0 ? 'text-red-500/70' : paymentDaysLeft <= 5 ? 'text-orange-500/70' : 'text-gray-500'
+                          }`}>
+                            {paymentDaysLeft < 0 ? `Vencido há ${Math.abs(paymentDaysLeft)} d` : paymentDaysLeft === 0 ? 'Vence Hoje' : `Em ${paymentDaysLeft} d`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Touch Tap targets for Client Sheet Drawer */}
@@ -1118,8 +1240,9 @@ export default function ClientsView({
               <tr>
                 <th className="py-3.5 px-4 font-extrabold uppercase tracking-widest text-[9px]">Cliente / Setor</th>
                 <th className="py-3.5 px-4 font-extrabold uppercase tracking-widest text-[9px]">Status</th>
+                <th className="py-3.5 px-4 font-extrabold uppercase tracking-widest text-[9px]">Data Pgto</th>
                 <th className="py-3.5 px-4 font-extrabold uppercase tracking-widest text-[9px]">Valor Contrato</th>
-                <th className="py-3.5 px-4 font-extrabold uppercase tracking-widest text-[9px]">Total Pago (LTV R$)</th>
+                <th className="py-3.5 px-4 font-extrabold uppercase tracking-widest text-[9px]">LTV (R$)</th>
                 <th className="py-3.5 px-4 font-extrabold uppercase tracking-widest text-[9px] text-center">Faturas</th>
                 <th className="py-3.5 px-4 text-right font-extrabold uppercase tracking-widest text-[9px]">Ação</th>
               </tr>
@@ -1139,6 +1262,15 @@ export default function ClientsView({
                   ? (totalPaidAmount / totalHistoricalRevenue) * 100 
                   : 0;
 
+                let paymentDaysLeft: number | null = null;
+                if (c.nextPaymentDate) {
+                  const target = new Date(c.nextPaymentDate);
+                  target.setHours(0,0,0,0);
+                  const now = new Date();
+                  now.setHours(0,0,0,0);
+                  paymentDaysLeft = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                }
+
                 return (
                   <React.Fragment key={c.id}>
                     <tr 
@@ -1152,12 +1284,16 @@ export default function ClientsView({
                       {/* Name Col */}
                       <td className="py-4 px-4 font-medium">
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono font-bold text-xs ${
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono font-bold text-xs overflow-hidden ${
                             c.status === 'active'
                               ? 'bg-amber-500/10 text-amber-500'
                               : 'bg-gray-500/10 text-gray-500'
                           }`}>
-                            {c.name.slice(0, 2).toUpperCase()}
+                            {c.logo ? (
+                              <img src={c.logo} alt={c.name} className="w-full h-full object-cover" />
+                            ) : (
+                              c.name.slice(0, 2).toUpperCase()
+                            )}
                           </div>
                           <div>
                             <div className="flex items-center gap-1.5">
@@ -1194,6 +1330,26 @@ export default function ClientsView({
                           <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider bg-red-500/10 text-red-500">
                             Cancelado (Churn)
                           </span>
+                        )}
+                      </td>
+
+                      {/* Payment Date Col */}
+                      <td className="py-4 px-4">
+                        {paymentDaysLeft !== null ? (
+                          <div className="flex flex-col">
+                            <span className={`text-[10px] font-mono font-bold ${
+                              paymentDaysLeft < 0 ? 'text-red-500' : paymentDaysLeft <= 5 ? 'text-orange-500' : (isDark ? 'text-gray-300' : 'text-gray-700')
+                            }`}>
+                              {new Date(c.nextPaymentDate!).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                            </span>
+                            <span className={`text-[9px] uppercase font-bold tracking-wider ${
+                              paymentDaysLeft < 0 ? 'text-red-500/70' : paymentDaysLeft <= 5 ? 'text-orange-500/70' : 'text-gray-500'
+                            }`}>
+                              {paymentDaysLeft < 0 ? `Vencido há ${Math.abs(paymentDaysLeft)} d` : paymentDaysLeft === 0 ? 'Vence Hoje' : `Em ${paymentDaysLeft} d`}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-gray-500 font-mono">--</span>
                         )}
                       </td>
 
@@ -1406,6 +1562,38 @@ export default function ClientsView({
                                     </div>
                                   )}
                                 </div>
+
+                                {/* Despesas a Reembolsar Incluídas na Mensalidade */}
+                                {(() => {
+                                  const items = generalExpenses.filter(e => e.clientId === c.id && e.billingType === 'monthly_fee' && e.status !== 'reimbursed');
+                                  if (items.length === 0) return null;
+                                  
+                                  const total = items.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+                                  
+                                  return (
+                                    <div className="mt-4 space-y-2">
+                                      <h4 className={`text-[10px] font-extrabold uppercase tracking-widest flex items-center gap-1.5 ${isDark ? 'text-amber-500' : 'text-amber-600'}`}>
+                                        Despesas Pendentes na Próxima Mensalidade
+                                      </h4>
+                                      <div className={`p-3 rounded-lg border text-xs space-y-2 ${isDark ? 'bg-amber-900/10 border-amber-900/30' : 'bg-amber-50 border-amber-200'}`}>
+                                        {items.map(e => (
+                                          <div key={`exp-${e.id}`} className="flex justify-between items-center text-[11px]">
+                                            <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>
+                                              {e.description} <span className="opacity-50">({new Date(e.date).toLocaleDateString('pt-BR')})</span>
+                                            </span>
+                                            <span className="font-mono font-bold text-amber-500/90 gap-1 flex items-center">
+                                              R$ {Number(e.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </span>
+                                          </div>
+                                        ))}
+                                        <div className={`pt-2 border-t flex justify-between font-bold mt-2 ${isDark ? 'border-amber-900/30 text-amber-400' : 'border-amber-200 text-amber-700'}`}>
+                                          <span className="text-[10px] uppercase tracking-wider">Adicional na Fatura:</span>
+                                          <span className="font-mono text-xs">+ R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
 
                                 {/* Intelligent Linker and Quick Recorder Panels */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-white/5 mt-4 text-xs">

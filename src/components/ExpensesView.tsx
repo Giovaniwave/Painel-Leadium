@@ -31,8 +31,22 @@ import {
   Zap,
   Award,
   Eye,
-  UploadCloud
+  UploadCloud,
+  Upload
 } from 'lucide-react';
+
+const COMMON_CARS = [
+  { name: 'Chevrolet Onix 1.0', brand: 'Chevrolet', model: 'Onix', consumption: 13.5, fuelType: 'Flex' },
+  { name: 'Hyundai HB20 1.0', brand: 'Hyundai', model: 'HB20', consumption: 12.8, fuelType: 'Flex' },
+  { name: 'Fiat Strada 1.4', brand: 'Fiat', model: 'Strada', consumption: 11.5, fuelType: 'Flex' },
+  { name: 'Volkswagen Gol 1.0', brand: 'Volkswagen', model: 'Gol', consumption: 13.0, fuelType: 'Flex' },
+  { name: 'Volkswagen Polo 1.0 TSI', brand: 'Volkswagen', model: 'Polo', consumption: 12.5, fuelType: 'Flex' },
+  { name: 'Toyota Corolla 2.0', brand: 'Toyota', model: 'Corolla', consumption: 11.0, fuelType: 'Flex' },
+  { name: 'Jeep Compass 1.3 Turbo', brand: 'Jeep', model: 'Compass', consumption: 9.5, fuelType: 'Gasolina' },
+  { name: 'Honda Civic 2.0', brand: 'Honda', model: 'Civic', consumption: 11.2, fuelType: 'Gasolina' },
+  { name: 'Fiat Argo 1.0', brand: 'Fiat', model: 'Argo', consumption: 13.5, fuelType: 'Flex' },
+  { name: 'Renault Kwid 1.0', brand: 'Renault', model: 'Kwid', consumption: 15.0, fuelType: 'Flex' },
+];
 
 interface Employee {
   id: string;
@@ -77,6 +91,7 @@ interface Displacement {
   status: 'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada';
   notes?: string;
   receiptImage?: string;
+  reimbursementReceiptImage?: string;
   history?: DisplacementHistory[];
 }
 
@@ -159,11 +174,17 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   const isDark = theme !== 'light';
 
   // Core list state
-  const [data, setData] = useState<ExpensesData>({
+  const [rawData, setRawData] = useState<ExpensesData>({
     employees: [],
     vehicles: [],
     displacements: []
   });
+
+  const data = {
+    employees: rawData?.employees || [],
+    vehicles: rawData?.vehicles || [],
+    displacements: rawData?.displacements || []
+  };
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -184,9 +205,10 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   const [copiedReport, setCopiedReport] = useState(false);
 
   // Modals targeting state
-  const [activeModal, setActiveModal] = useState<null | 'employee' | 'vehicle' | 'displacement' | 'status-update'>(null);
+  const [activeModal, setActiveModal] = useState<null | 'employee' | 'vehicle' | 'displacement' | 'status-update' | 'employee-details'>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [statusUpdateTargetId, setStatusUpdateTargetId] = useState<string | null>(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
 
   // Form hooks equivalents
   const [employeeForm, setEmployeeForm] = useState({
@@ -222,8 +244,36 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   });
 
   const [selectedReceiptImage, setSelectedReceiptImage] = useState<string | null>(null);
+  const [historyModalData, setHistoryModalData] = useState<DisplacementHistory[] | null>(null);
+  const [isUploadingReimbursement, setIsUploadingReimbursement] = useState<string | null>(null);
 
   const [statusForm, setStatusForm] = useState<'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada'>('Pendente');
+
+  const [fipeBrands, setFipeBrands] = useState<{codigo: string, nome: string}[]>([]);
+  const [fipeModels, setFipeModels] = useState<{codigo: string, nome: string}[]>([]);
+  const [selectedFipeBrand, setSelectedFipeBrand] = useState('');
+
+  useEffect(() => {
+    fetch('https://parallelum.com.br/fipe/api/v1/carros/marcas')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setFipeBrands(data);
+      })
+      .catch(err => console.error("FIPE API Error:", err));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedFipeBrand) {
+      setFipeModels([]);
+      return;
+    }
+    fetch(`https://parallelum.com.br/fipe/api/v1/carros/marcas/${selectedFipeBrand}/modelos`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.modelos)) setFipeModels(data.modelos);
+      })
+      .catch(err => console.error("FIPE API Error:", err));
+  }, [selectedFipeBrand]);
 
   // Load backend content
   const fetchExpenses = async () => {
@@ -232,7 +282,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       const response = await fetch('/api/expenses');
       if (!response.ok) throw new Error('Não foi possível se comunicar com o banco de dados.');
       const resData = await response.json();
-      setData(resData);
+      setRawData(resData);
       setError('');
     } catch (err: any) {
       console.error(err);
@@ -298,9 +348,13 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       if (res.ok) {
         await fetchExpenses();
         closeModals();
+      } else {
+        const errData = await res.json();
+        alert('Erro ao salvar viagem: ' + (errData.error || 'Erro desconhecido do servidor'));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert('Erro de conexão ou sistema ao salvar viagem: ' + (err.message || err));
     }
   };
 
@@ -320,6 +374,44 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleUploadReimbursementReceipt = async (e: React.ChangeEvent<HTMLInputElement>, id: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingReimbursement(id);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      if (event.target?.result) {
+        try {
+          const uploadRes = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: event.target.result as string })
+          });
+          const uploadData = await uploadRes.json();
+          if (uploadData.url) {
+            const disp = data.displacements.find(d => d.id === id);
+            if (disp) {
+              const res = await fetch('/api/expenses/displacements', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...disp, reimbursementReceiptImage: uploadData.url })
+              });
+              if (res.ok) {
+                await fetchExpenses();
+              }
+            }
+          }
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setIsUploadingReimbursement(null);
+        }
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const deleteEmployee = async (id: string, name: string) => {
@@ -421,22 +513,6 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     setActiveModal('displacement');
   };
 
-  const openEditDisplacement = (disp: Displacement) => {
-    setDisplacementForm({
-      date: disp.date,
-      employeeId: disp.employeeId,
-      clientVisited: disp.clientVisited,
-      city: disp.city,
-      reason: disp.reason,
-      vehicleId: disp.vehicleId,
-      kmTraveled: String(disp.kmTraveled),
-      notes: disp.notes || '',
-      receiptImage: disp.receiptImage || ''
-    });
-    setEditingId(disp.id);
-    setActiveModal('displacement');
-  };
-
   const openStatusUpdate = (disp: Displacement) => {
     setStatusUpdateTargetId(disp.id);
     setStatusForm(disp.status);
@@ -482,8 +558,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   const getCorporateMetrics = () => {
     const displacements = data.displacements;
     
-    const totalSpent = displacements.reduce((acc, d) => acc + d.amount, 0);
-    const totalKm = displacements.reduce((acc, d) => acc + d.kmTraveled, 0);
+    const totalSpent = displacements.reduce((acc, d) => acc + (Number(d.amount) || 0), 0);
+    const totalKm = displacements.reduce((acc, d) => acc + (Number(d.kmTraveled) || 0), 0);
     const totalVisits = displacements.length;
     
     // Unpaid/Pending reimbursement list by collaborator (Important for payout controls)
@@ -528,15 +604,15 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       }
       
       const target = employeeBalances[d.employeeId];
-      target.km += d.kmTraveled;
+      target.km += Number(d.kmTraveled) || 0;
       target.visitsCount += 1;
 
       if (d.status === 'Pendente' || d.status === 'Em análise') {
-        target.pendingReimbursement += d.amount;
+        target.pendingReimbursement += Number(d.amount) || 0;
       } else if (d.status === 'Aprovada' || d.status === 'Reembolsada') {
-        target.paidReimbursement += d.amount;
+        target.paidReimbursement += Number(d.amount) || 0;
       } else {
-        target.pendingReimbursement += d.amount;
+        target.pendingReimbursement += Number(d.amount) || 0;
       }
     });
 
@@ -636,18 +712,17 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       {/* Title Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 dark:border-neutral-800 pb-5">
         <div className="space-y-1">
-          <h2 className="text-2xl font-sans tracking-tight font-bold text-black dark:text-neutral-50 !text-black dark:!text-neutral-50 flex items-center gap-2.5">
-            <Car className="w-6 h-6 text-[#FF4D00]" />
-            <span>Controle de Despesas & Reembolsos</span>
+          <h2 className={`text-2xl font-sans tracking-tight font-bold flex items-center gap-2.5 ${isDark ? 'text-neutral-50' : 'text-black'}`}>
+            <span>Consumo da Frota</span>
           </h2>
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            Controle integrado de combustível, visitas efetuadas e repasses mensais aos colaboradores.
+            Controle integrado de rotas, consumo médio de combustível e reembolsos da frota.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button 
             onClick={fetchExpenses}
-            className="flex items-center gap-2 text-xs font-medium px-3.5 py-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition"
+            className="flex items-center gap-2 text-xs font-medium px-3.5 py-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition active:scale-95"
             title="Atualizar dados"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -777,8 +852,12 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     return (
                       <div 
                         key={emp.id} 
-                        className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
-                          isDark ? 'hover:bg-neutral-900/10' : 'hover:bg-neutral-50/50'
+                        onClick={() => {
+                          setSelectedEmployeeId(emp.id);
+                          setActiveModal('employee-details');
+                        }}
+                        className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all cursor-pointer active:scale-[0.98] ${
+                          isDark ? 'hover:bg-neutral-900/40' : 'hover:bg-neutral-50'
                         }`}
                       >
                         <div className="space-y-1">
@@ -1054,7 +1133,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
 
                   <button
                     onClick={openAddDisplacement}
-                    className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-[#FF4D00] text-white hover:opacity-95 text-xs font-bold font-mono uppercase tracking-wider transition"
+                    className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border-[1.58px] px-5 py-3 font-medium shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-xs font-bold uppercase tracking-wider ${isDark ? 'bg-white border-zinc-200 text-zinc-950' : 'bg-zinc-950 border-zinc-600 text-slate-200'}`}
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Lançar Viagem</span>
@@ -1130,10 +1209,37 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                             {emp ? emp.name : 'Colaborador Desconhecido'}
                           </span>
                         </div>
-                        <div className="text-right">
-                          <span className="font-mono font-bold text-sm text-[#FF4D00]">
-                            R$ {disp.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
+                        <div className="text-right flex flex-col items-end gap-1">
+                          <div className="flex items-center gap-2">
+                            {disp.reimbursementReceiptImage ? (
+                               <button
+                                 onClick={() => setSelectedReceiptImage(disp.reimbursementReceiptImage || '')}
+                                 className="text-emerald-500 hover:text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold flex items-center gap-1 transition-colors"
+                                 title="Ver Comprovante Reembolso"
+                               >
+                                 <CheckCircle2 className="w-3 h-3" /> Recibo
+                               </button>
+                            ) : (
+                               <label className="cursor-pointer text-[#FF4D00] hover:text-[#FF4D00]/80 bg-[#FF4D00]/10 hover:bg-[#FF4D00]/20 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold flex items-center gap-1 transition-colors">
+                                 {isUploadingReimbursement === disp.id ? (
+                                   <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                 ) : (
+                                   <Upload className="w-3 h-3" />
+                                 )}
+                                 <span className="hidden sm:inline">Anexar</span> Recibo
+                                 <input 
+                                   type="file" 
+                                   accept="image/*" 
+                                   className="hidden" 
+                                   onChange={(e) => handleUploadReimbursementReceipt(e, disp.id)} 
+                                   disabled={isUploadingReimbursement === disp.id}
+                                 />
+                               </label>
+                            )}
+                            <span className="font-mono font-bold text-sm text-[#FF4D00]">
+                              R$ {disp.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
                           <span className="block text-[10px] font-mono text-neutral-400 mt-0.5">{disp.kmTraveled} km declarados</span>
                         </div>
                       </div>
@@ -1191,21 +1297,24 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                               <span>Comprovante</span>
                             </button>
                           )}
+
+                          {disp.history && disp.history.length > 0 && (
+                            <button
+                              onClick={() => setHistoryModalData(disp.history || [])}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-mono font-medium transition cursor-pointer ${
+                                isDark
+                                  ? 'bg-neutral-800 text-neutral-300 border border-neutral-700 hover:bg-neutral-700'
+                                  : 'bg-neutral-100 text-neutral-600 border border-neutral-200 hover:bg-neutral-200'
+                              }`}
+                              title="Histórico de alteração de status"
+                            >
+                              <Clock className="w-3 h-3" />
+                              <span className="hidden sm:inline">Histórico</span>
+                            </button>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => openEditDisplacement(disp)}
-                            className={`p-1.5 sm:px-2.5 sm:py-1 rounded border text-xs font-sans transition ${
-                              isDark 
-                                ? 'border-neutral-800 text-neutral-300 hover:bg-neutral-800 hover:text-white' 
-                                : 'border-neutral-200 text-neutral-600 hover:bg-neutral-100 hover:text-black font-semibold'
-                            }`}
-                            title="Editar lançamento de viagem"
-                          >
-                            <span className="sm:inline hidden mr-1">Editar</span>
-                            <Edit className="w-3 h-3 inline" />
-                          </button>
                           <button
                             onClick={() => deleteDisplacement(disp.id)}
                             className="p-1.5 sm:px-2.5 sm:py-1 rounded border border-red-200/50 hover:bg-rose-500/10 text-xs font-sans text-neutral-500 hover:text-rose-500 transition"
@@ -1433,7 +1542,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-1.5 text-xs font-mono uppercase bg-[#FF4D00] text-white rounded hover:opacity-95 transition"
+                  className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border-[1.58px] px-5 py-3 font-medium shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-xs font-bold uppercase tracking-wider ${isDark ? 'bg-white border-zinc-200 text-zinc-950' : 'bg-zinc-950 border-zinc-600 text-slate-200'}`}
                 >
                   Salvar
                 </button>
@@ -1465,26 +1574,52 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 </select>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase font-mono text-neutral-400">Nome do Veículo</label>
-                <input
-                  type="text"
-                  required
-                  value={vehicleForm.name}
-                  onChange={(e) => setVehicleForm({ ...vehicleForm, name: e.target.value })}
-                  placeholder="Ex: Honda Civic"
-                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-mono text-neutral-400">Marca (FIPE)</label>
+                  <select
+                    value={selectedFipeBrand}
+                    onChange={(e) => {
+                      const brandCode = e.target.value;
+                      setSelectedFipeBrand(brandCode);
+                      const brandName = fipeBrands.find(b => b.codigo === brandCode)?.nome || '';
+                      setVehicleForm({ ...vehicleForm, brand: brandName, name: '', model: '' });
+                    }}
+                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                  >
+                    <option value="" disabled>Selecione a marca</option>
+                    {fipeBrands.map(b => (
+                      <option key={b.codigo} value={b.codigo}>{b.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-mono text-neutral-400">Modelo (FIPE)</label>
+                  <select
+                    value={vehicleForm.name}
+                    onChange={(e) => {
+                      const modelName = e.target.value;
+                      setVehicleForm({ ...vehicleForm, name: modelName, model: modelName });
+                    }}
+                    disabled={!selectedFipeBrand || fipeModels.length === 0}
+                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00] disabled:opacity-50"
+                  >
+                    <option value="" disabled>Selecione o modelo</option>
+                    {fipeModels.map(m => (
+                      <option key={m.codigo} value={m.nome}>{m.nome}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-mono text-neutral-400">Marca</label>
+                  <label className="text-[10px] uppercase font-mono text-neutral-400">Ano</label>
                   <input
                     type="text"
-                    value={vehicleForm.brand}
-                    onChange={(e) => setVehicleForm({ ...vehicleForm, brand: e.target.value })}
-                    placeholder="Ex: Honda"
+                    value={vehicleForm.year || ''}
+                    onChange={(e) => setVehicleForm({ ...vehicleForm, year: e.target.value })}
+                    placeholder="Ex: 2021"
                     className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none"
                   />
                 </div>
@@ -1541,7 +1676,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-1.5 text-xs font-mono uppercase bg-[#FF4D00] text-white rounded hover:opacity-95 transition"
+                  className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border-[1.58px] px-5 py-3 font-medium shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-xs font-bold uppercase tracking-wider ${isDark ? 'bg-white border-zinc-200 text-zinc-950' : 'bg-zinc-950 border-zinc-600 text-slate-200'}`}
                 >
                   Salvar
                 </button>
@@ -1598,10 +1733,6 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       <option key={v.id} value={v.id}>{v.name} ({v.plate || '---'}) - {v.avgConsumption} km/l</option>
                     ))
                   }
-                  {/* Fallback to general vehicles if no match */}
-                  {data.vehicles.map(v => (
-                    <option key={v.id} value={v.id}>{v.name} (Geral) - {v.avgConsumption} km/l</option>
-                  ))}
                 </select>
               </div>
 
@@ -1645,14 +1776,14 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase font-mono text-neutral-400">Cidade</label>
-                  <input
-                    type="text"
+                  <select
                     required
-                    value={displacementForm.city}
+                    value={displacementForm.city || 'Porto Feliz - SP'}
                     onChange={(e) => setDisplacementForm({ ...displacementForm, city: e.target.value })}
-                    placeholder="Ex: Osasco"
-                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
-                  />
+                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                  >
+                    <option value="Porto Feliz - SP">Porto Feliz - SP</option>
+                  </select>
                 </div>
 
                 <div className="space-y-1">
@@ -1708,12 +1839,27 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       const file = e.dataTransfer.files[0];
                       if (file && file.type.startsWith('image/')) {
                         const reader = new FileReader();
-                        reader.onload = (event) => {
+                        reader.onload = async (event) => {
                           if (event.target?.result) {
-                            setDisplacementForm({
-                              ...displacementForm,
-                              receiptImage: event.target.result as string
-                            });
+                            try {
+                              const res = await fetch('/api/upload', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ image: event.target.result as string })
+                              });
+                              const data = await res.json();
+                              if (data.url) {
+                                setDisplacementForm(prev => ({
+                                  ...prev,
+                                  receiptImage: data.url
+                                }));
+                              } else {
+                                alert('Erro no upload: ' + (data.error || 'Erro desconhecido'));
+                              }
+                            } catch (err: any) {
+                              console.error(err);
+                              alert('Falha ao enviar imagem');
+                            }
                           }
                         };
                         reader.readAsDataURL(file);
@@ -1727,12 +1873,27 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                         const file = e.target.files[0];
                         if (file) {
                           const reader = new FileReader();
-                          reader.onload = (event) => {
+                          reader.onload = async (event) => {
                             if (event.target?.result) {
-                              setDisplacementForm({
-                                ...displacementForm,
-                                receiptImage: event.target.result as string
-                              });
+                              try {
+                                const res = await fetch('/api/upload', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ image: event.target.result as string })
+                                });
+                                const data = await res.json();
+                                if (data.url) {
+                                  setDisplacementForm(prev => ({
+                                    ...prev,
+                                    receiptImage: data.url
+                                  }));
+                                } else {
+                                  alert('Erro no upload: ' + (data.error || 'Erro desconhecido'));
+                                }
+                              } catch (err: any) {
+                                console.error(err);
+                                alert('Falha ao enviar imagem');
+                              }
                             }
                           };
                           reader.readAsDataURL(file);
@@ -1761,7 +1922,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-1.5 text-xs font-mono uppercase bg-[#FF4D00] text-white rounded hover:opacity-95 transition"
+                  className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border-[1.58px] px-5 py-3 font-medium shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-xs font-bold uppercase tracking-wider ${isDark ? 'bg-white border-zinc-200 text-zinc-950' : 'bg-zinc-950 border-zinc-600 text-slate-200'}`}
                 >
                   Lançar
                 </button>
@@ -1820,7 +1981,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-1.5 text-xs font-mono uppercase bg-[#FF4D00] text-white rounded hover:opacity-95 transition"
+                  className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border-[1.58px] px-5 py-3 font-medium shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-xs font-bold uppercase tracking-wider ${isDark ? 'bg-white border-zinc-200 text-zinc-950' : 'bg-zinc-950 border-zinc-600 text-slate-200'}`}
                 >
                   Confirmar
                 </button>
@@ -1860,6 +2021,109 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
           </div>
         </div>
       )}
+      {/* Modal 5.5: Histórico de Alteração de Status */}
+      {historyModalData && (
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn" 
+          onClick={() => setHistoryModalData(null)}
+        >
+          <div 
+            className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 space-y-4 shadow-xl" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center border-b border-neutral-100 dark:border-neutral-800 pb-2">
+              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white uppercase tracking-wider">Histórico de Status</h3>
+              <button onClick={() => setHistoryModalData(null)} className="text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition">fechar</button>
+            </div>
+            
+            <div className="space-y-4 py-2">
+              {historyModalData.length === 0 ? (
+                <p className="text-xs text-neutral-500 font-mono text-center">Nenhum histórico disponível.</p>
+              ) : (
+                <div className="relative border-l-2 border-neutral-200 dark:border-neutral-800 ml-3 space-y-6">
+                  {historyModalData.map((h, idx) => (
+                    <div key={idx} className="relative pl-5">
+                      <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-white dark:bg-neutral-950 border-2 border-neutral-300 dark:border-neutral-600"></div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${
+                            h.status === 'Aprovada' || h.status === 'Reembolsada' 
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' 
+                              : h.status === 'Em análise'
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                          }`}>
+                            {h.status}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-neutral-500 font-mono flex items-center gap-1.5">
+                          <Clock className="w-3 h-3" />
+                          {new Date(h.date).toLocaleString('pt-BR')}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 6: Employee Details */}
+      {activeModal === 'employee-details' && selectedEmployeeId && (() => {
+        const emp = data.employees.find(e => e.id === selectedEmployeeId);
+        const empDisplacements = data.displacements.filter(d => d.employeeId === selectedEmployeeId).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        if (!emp) return null;
+        return (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn" onClick={closeModals}>
+            <div className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="p-4 border-b border-neutral-100 dark:border-neutral-800 flex justify-between items-center">
+                <div>
+                  <h3 className="text-sm font-semibold text-neutral-900 dark:text-white uppercase tracking-wider">{emp.name}</h3>
+                  <p className="text-[10px] text-neutral-500 font-mono mt-0.5">{emp.role} • Média: {metrics.employeeBalances.find(e => e.id === emp.id)?.km} km rodados</p>
+                </div>
+                <button onClick={closeModals} className="text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition">fechar</button>
+              </div>
+              <div className="p-4 flex-1 overflow-y-auto space-y-3">
+                {empDisplacements.length === 0 ? (
+                  <p className="text-xs text-center text-neutral-500 py-10 font-mono">Nenhuma viagem registrada.</p>
+                ) : empDisplacements.map(disp => (
+                    <div 
+                      key={disp.id} 
+                      className={`p-3 rounded-lg border transition ${
+                        isDark 
+                          ? 'border-neutral-800 bg-[#141414]' 
+                          : 'border-neutral-200 bg-neutral-50'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-[10px] font-mono text-neutral-400">{new Date(disp.date).toLocaleDateString('pt-BR')}</span>
+                          <span className={`block font-bold text-xs mt-0.5 ${isDark ? 'text-white' : 'text-black'}`}>{disp.clientVisited} - {disp.city}</span>
+                          <p className="text-[10px] text-neutral-500 mt-1">{disp.reason} {disp.notes && `• ${disp.notes}`}</p>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-mono font-bold text-xs text-[#FF4D00]">R$ {disp.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          <div className="flex items-center gap-1.5 mt-1 justify-end">{disp.kmTraveled} km
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-bold ${
+                              disp.status === 'Reembolsada' || disp.status === 'Aprovada'
+                                ? 'bg-emerald-500 text-white dark:bg-emerald-900/30 dark:text-emerald-400' 
+                                : 'bg-amber-500 text-white dark:bg-amber-900/30 dark:text-amber-400'
+                            }`}>
+                              {disp.status}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

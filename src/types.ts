@@ -35,9 +35,11 @@ export interface Client {
   segment?: string;
   start_date?: string;
   notes?: string;
+  nextPaymentDate?: string;
+  logo?: string;
 }
 
-export type ActiveTab = 'dashboard' | 'budgeting' | 'transactions' | 'clients' | 'settings' | 'help' | 'expenses';
+export type ActiveTab = 'dashboard' | 'budgeting' | 'transactions' | 'clients' | 'settings' | 'help' | 'expenses' | 'general_expenses';
 
 export interface BudgetFilters {
   account: string;

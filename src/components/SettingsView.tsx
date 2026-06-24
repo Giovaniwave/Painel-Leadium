@@ -44,9 +44,26 @@ export default function SettingsView({
       return;
     }
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       if (e.target?.result) {
-        setAvatarPreview(e.target.result as string);
+        try {
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ image: e.target.result as string }),
+          });
+          const data = await res.json();
+          if (data.url) {
+            setAvatarPreview(data.url);
+          } else if (data.error) {
+            alert('Erro no upload: ' + data.error);
+          }
+        } catch (err: any) {
+          console.error('Upload failed:', err);
+          alert('Falha ao enviar a imagem ao servidor');
+        }
       }
     };
     reader.readAsDataURL(file);

@@ -15,7 +15,8 @@ import {
   ChevronRight,
   X,
   MessageSquare,
-  Receipt
+  Receipt,
+  Truck
 } from 'lucide-react';
 import { ActiveTab } from '../types';
 
@@ -48,7 +49,8 @@ export default function Sidebar({
     { id: 'dashboard' as ActiveTab, label: 'Painel', icon: LayoutDashboard },
     { id: 'budgeting' as ActiveTab, label: 'Carteira', icon: Wallet },
     { id: 'transactions' as ActiveTab, label: 'Transações', icon: ArrowLeftRight },
-    { id: 'expenses' as ActiveTab, label: 'Despesas', icon: Receipt },
+    { id: 'expenses' as ActiveTab, label: 'Frota', icon: Truck },
+    { id: 'general_expenses' as ActiveTab, label: 'Despesas', icon: Receipt },
     { id: 'clients' as ActiveTab, label: 'Clientes', icon: Users },
   ];
 
@@ -68,8 +70,9 @@ export default function Sidebar({
 
       <aside 
         className={`
-          hidden md:flex md:sticky flex-col flex-shrink-0 bg-[#080808] border-r border-white/10 transition-all duration-300
-          ${isCollapsed ? 'md:w-20' : 'md:w-72'}
+          fixed md:sticky top-0 bottom-0 left-0 z-50 flex-col flex-shrink-0 bg-[#080808] border-r border-white/10 transition-all duration-300
+          ${isOpenMobile ? 'flex w-72' : 'hidden md:flex'}
+          ${isCollapsed && !isOpenMobile ? 'md:w-20' : 'md:w-72'}
         `} 
         id="main-sidebar"
       >
