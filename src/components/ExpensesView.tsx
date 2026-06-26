@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
+  X,
   Plus, 
   Trash2, 
   Edit, 
@@ -90,6 +91,7 @@ interface Displacement {
   status: 'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada';
   notes?: string;
   receiptImage?: string;
+  refundReceiptImage?: string;
   history?: DisplacementHistory[];
 }
 
@@ -242,6 +244,26 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   });
 
   const [selectedReceiptImage, setSelectedReceiptImage] = useState<string | null>(null);
+  const [selectedHistoryDisp, setSelectedHistoryDisp] = useState<Displacement | null>(null);
+  const [refundReceiptTargetId, setRefundReceiptTargetId] = useState<string | null>(null);
+
+  const [tripMode, setTripMode] = useState<'gps' | 'manual'>('gps');
+  const [gpsActiveTrip, setGpsActiveTrip] = useState<{
+    active: boolean;
+    employeeId: string;
+    vehicleId: string;
+    startCoords: { lat: number, lng: number } | null;
+    startAddress?: string;
+    startTime: number;
+  } | null>(() => {
+    const stored = localStorage.getItem('leadium_gps_trip');
+    return stored ? JSON.parse(stored) : null;
+  });
+
+  useEffect(() => {
+    if (gpsActiveTrip) localStorage.setItem('leadium_gps_trip', JSON.stringify(gpsActiveTrip));
+    else localStorage.removeItem('leadium_gps_trip');
+  }, [gpsActiveTrip]);
 
   const [statusForm, setStatusForm] = useState<'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada'>('Pendente');
 
@@ -351,6 +373,102 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     } catch (err: any) {
       console.error(err);
       alert('Erro de conexão ou sistema ao salvar viagem: ' + (err.message || err));
+    }
+  };
+
+  const calculateDistanceKM = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2); 
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    return R * c;
+  };
+
+  const startGpsTrip = () => {
+    if (!displacementForm.employeeId || !displacementForm.vehicleId) {
+      alert("Selecione o colaborador e o veículo primeiro.");
+      return;
+    }
+    if (!navigator.geolocation) {
+      alert("Geolocalização não suportada no seu navegador.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        let address = '';
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
+          if (res.ok) {
+            const data = await res.json();
+            address = data.display_name;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+
+        setGpsActiveTrip({
+          active: true,
+          employeeId: displacementForm.employeeId,
+          vehicleId: displacementForm.vehicleId,
+          startCoords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+          startAddress: address,
+          startTime: Date.now()
+        });
+      },
+      (err) => alert("Erro ao obter localização. Verifique as permissões. " + err.message),
+      { enableHighAccuracy: true }
+    );
+  };
+
+  const finishGpsTrip = () => {
+    if (!navigator.geolocation || !gpsActiveTrip) return;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const start = gpsActiveTrip.startCoords;
+        if (!start) return;
+        const distance = calculateDistanceKM(start.lat, start.lng, pos.coords.latitude, pos.coords.longitude);
+        const finalDistance = distance < 0.1 ? 0.1 : Number(distance.toFixed(2));
+        
+        const payload = {
+          date: new Date().toISOString().split('T')[0],
+          employeeId: gpsActiveTrip.employeeId,
+          vehicleId: gpsActiveTrip.vehicleId,
+          kmTraveled: finalDistance,
+          clientVisited: 'Viagem Rastreada (GPS)',
+          city: 'Localização GPS',
+          reason: 'Deslocamento Registrado via GPS',
+          notes: `Duração: ${Math.round((Date.now() - gpsActiveTrip.startTime) / 60000)} minutos.`
+        };
+
+        try {
+          const res = await fetch('/api/expenses/displacements', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            await fetchExpenses();
+            setGpsActiveTrip(null);
+            closeModals();
+          } else {
+            alert('Erro ao salvar a viagem');
+          }
+        } catch(e) {
+          alert('Erro de rede ao salvar a viagem');
+        }
+      },
+      (err) => alert("Erro de GPS: " + err.message),
+      { enableHighAccuracy: true }
+    );
+  };
+
+  const cancelGpsTrip = () => {
+    if(confirm("Deseja cancelar a viagem em andamento?")) {
+      setGpsActiveTrip(null);
     }
   };
 
@@ -481,6 +599,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     setActiveModal(null);
     setEditingId(null);
     setStatusUpdateTargetId(null);
+    setRefundReceiptTargetId(null);
   };
 
   // Clean, fast report generator (no glitter/sparkle AI indicators, pure audit report)
@@ -1167,11 +1286,30 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                             {emp ? emp.name : 'Colaborador Desconhecido'}
                           </span>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right flex flex-col items-end">
                           <span className="font-mono font-bold text-sm text-[#FF4D00]">
                             R$ {disp.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                           <span className="block text-[10px] font-mono text-neutral-400 mt-0.5">{disp.kmTraveled} km declarados</span>
+                          <button
+                            onClick={() => {
+                              if (disp.refundReceiptImage) {
+                                setSelectedReceiptImage(disp.refundReceiptImage);
+                              } else {
+                                setRefundReceiptTargetId(disp.id);
+                                setActiveModal('refund-receipt');
+                              }
+                            }}
+                            className={`mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono font-bold transition cursor-pointer ${
+                              disp.refundReceiptImage
+                                ? (isDark ? 'bg-green-900/30 text-green-400 border border-green-800' : 'bg-green-100 text-green-700 border border-green-200')
+                                : (isDark ? 'bg-neutral-800 text-neutral-300 border border-neutral-700' : 'bg-neutral-100 text-neutral-600 border border-neutral-200')
+                            }`}
+                            title={disp.refundReceiptImage ? "Visualizar Comprovante de Reembolso" : "Anexar Comprovante de Reembolso"}
+                          >
+                            {disp.refundReceiptImage ? <Check className="w-2.5 h-2.5" /> : <UploadCloud className="w-2.5 h-2.5" />}
+                            <span>{disp.refundReceiptImage ? 'Reembolso Anexado' : '+ Reembolso'}</span>
+                          </button>
                         </div>
                       </div>
 
@@ -1228,6 +1366,19 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                               <span>Comprovante</span>
                             </button>
                           )}
+
+                          <button
+                            onClick={() => setSelectedHistoryDisp(disp)}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-mono font-medium transition cursor-pointer ${
+                              isDark
+                                ? 'bg-neutral-800 text-neutral-300 border border-neutral-700 hover:bg-neutral-700'
+                                : 'bg-neutral-100 text-neutral-600 border border-neutral-200 hover:bg-neutral-200'
+                            }`}
+                            title="Histórico de Status"
+                          >
+                            <Clock className="w-3 h-3" />
+                            <span>Histórico</span>
+                          </button>
                         </div>
 
                         <div className="flex items-center gap-1">
@@ -1606,10 +1757,136 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       {activeModal === 'displacement' && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 space-y-4 shadow-xl">
-            <h3 className="text-sm font-semibold text-neutral-900 dark:text-white uppercase tracking-wider">
-              {editingId ? 'Editar Viagem' : 'Lançar Nova Viagem'}
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white uppercase tracking-wider">
+                {editingId ? 'Editar Viagem' : 'Lançar Nova Viagem'}
+              </h3>
+              <button 
+                type="button" 
+                onClick={closeModals}
+                className="p-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
+            {!editingId && !gpsActiveTrip && (
+              <div className="flex bg-neutral-100 dark:bg-neutral-900 rounded-lg p-1 mb-4">
+                <button 
+                  type="button" 
+                  onClick={() => setTripMode('gps')} 
+                  className={`flex-1 text-xs font-semibold py-1.5 rounded-md transition ${tripMode === 'gps' ? 'bg-white dark:bg-neutral-800 shadow text-[#FF4D00]' : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'}`}
+                >
+                  📍 Rastrear (GPS)
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setTripMode('manual')} 
+                  className={`flex-1 text-xs font-semibold py-1.5 rounded-md transition ${tripMode === 'manual' ? 'bg-white dark:bg-neutral-800 shadow text-[#FF4D00]' : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'}`}
+                >
+                  ✍️ Manual
+                </button>
+              </div>
+            )}
+
+            {gpsActiveTrip ? (
+              <div className="space-y-4 text-center py-4">
+                <div className="w-16 h-16 rounded-full bg-[#FF4D00]/10 flex items-center justify-center mx-auto animate-pulse">
+                  <MapPin className="w-8 h-8 text-[#FF4D00]" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-neutral-900 dark:text-white">Viagem em Andamento</p>
+                  <p className="text-xs text-neutral-500 mt-1 font-mono">
+                    Iniciada às {new Date(gpsActiveTrip.startTime).toLocaleTimeString('pt-BR')}
+                  </p>
+                  
+                  {gpsActiveTrip.startCoords && (
+                    <div className="mt-4 p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-800 text-left">
+                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">Ponto de Partida</p>
+                      {gpsActiveTrip.startAddress ? (
+                        <p className="text-xs text-neutral-700 dark:text-neutral-300 leading-relaxed">
+                          {gpsActiveTrip.startAddress}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-neutral-700 dark:text-neutral-300 font-mono">
+                          Lat: {gpsActiveTrip.startCoords.lat.toFixed(6)} <br/>
+                          Lng: {gpsActiveTrip.startCoords.lng.toFixed(6)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="pt-4 space-y-2">
+                  <button 
+                    type="button" 
+                    onClick={finishGpsTrip} 
+                    className="w-full bg-[#FF4D00] text-white py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition hover:bg-[#E64500] hover:shadow-lg"
+                  >
+                    Finalizar Viagem e Salvar
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={cancelGpsTrip} 
+                    className="w-full bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 py-3 rounded-lg font-bold uppercase tracking-wider text-xs hover:bg-neutral-200 dark:hover:bg-neutral-800 transition"
+                  >
+                    Cancelar Viagem
+                  </button>
+                </div>
+              </div>
+            ) : tripMode === 'gps' && !editingId ? (
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-mono text-neutral-400">Selecionar Colaborador</label>
+                  <select
+                    required
+                    value={displacementForm.employeeId}
+                    onChange={(e) => {
+                      const empId = e.target.value;
+                      const linked = data.vehicles.filter(v => v.employeeId === empId);
+                      setDisplacementForm({
+                        ...displacementForm,
+                        employeeId: empId,
+                        vehicleId: linked[0]?.id || ''
+                      });
+                    }}
+                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                  >
+                    <option value="" disabled>--- Escolha o colaborador ---</option>
+                    {data.employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-mono text-neutral-400">Veículo Utilizado</label>
+                  <select
+                    required
+                    value={displacementForm.vehicleId}
+                    onChange={(e) => setDisplacementForm({ ...displacementForm, vehicleId: e.target.value })}
+                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                  >
+                    <option value="" disabled>--- Escolha o veículo ---</option>
+                    {data.vehicles
+                      .filter(v => !displacementForm.employeeId || v.employeeId === displacementForm.employeeId)
+                      .map(v => (
+                        <option key={v.id} value={v.id}>{v.name} ({v.plate || '---'})</option>
+                      ))
+                    }
+                  </select>
+                </div>
+
+                <div className="pt-2">
+                  <button 
+                    type="button" 
+                    onClick={startGpsTrip} 
+                    className="w-full bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 py-3 rounded-lg font-bold uppercase tracking-wider text-xs flex items-center justify-center gap-2 shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+                  >
+                    <MapPin className="w-4 h-4" /> Ativar Localização e Iniciar
+                  </button>
+                </div>
+              </div>
+            ) : (
             <form onSubmit={handleDisplacementSubmit} className="space-y-3">
               <div className="space-y-1">
                 <label className="text-[10px] uppercase font-mono text-neutral-400">Selecionar Colaborador</label>
@@ -1844,6 +2121,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 </button>
               </div>
             </form>
+            )}
           </div>
         </div>
       )}
@@ -1937,6 +2215,148 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
           </div>
         </div>
       )}
+      {/* Modal: Status History */}
+      {selectedHistoryDisp && (
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn" 
+          onClick={() => setSelectedHistoryDisp(null)}
+        >
+          <div 
+            className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-5 shadow-2xl" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-800 pb-3 mb-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-neutral-900 dark:text-white">
+                Histórico de Status
+              </h3>
+              <button 
+                onClick={() => setSelectedHistoryDisp(null)}
+                className="p-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+              {selectedHistoryDisp.history && selectedHistoryDisp.history.length > 0 ? (
+                <div className="relative border-l-2 border-neutral-200 dark:border-neutral-800 ml-2 space-y-4">
+                  {selectedHistoryDisp.history.map((h, i) => (
+                    <div key={i} className="relative pl-4">
+                      <div className="absolute w-2 h-2 bg-[#FF4D00] rounded-full -left-[5px] top-1.5 ring-4 ring-white dark:ring-neutral-950"></div>
+                      <span className="block text-xs font-bold text-neutral-900 dark:text-neutral-100">{h.status}</span>
+                      <span className="block text-[10px] font-mono text-neutral-500 mt-0.5">
+                        {new Date(h.date).toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-center text-neutral-500 font-mono py-4">Sem histórico registrado.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Refund Receipt Upload */}
+      {activeModal === 'refund-receipt' && refundReceiptTargetId && (() => {
+        const targetDisp = data.displacements.find(d => d.id === refundReceiptTargetId);
+        if (!targetDisp) return null;
+        return (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn" onClick={closeModals}>
+            <div className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-semibold text-neutral-900 dark:text-white uppercase tracking-wider">Comprovante de Reembolso</h3>
+                <button onClick={closeModals} className="p-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-[10px] text-neutral-500">Faça o upload do comprovante de pagamento / PIX (Financeiro Leadium).</p>
+              
+              <div className="mt-4">
+                <div 
+                  className="border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-6 text-center cursor-pointer hover:border-[#FF4D00] transition bg-neutral-50/50 dark:bg-neutral-900/25"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const file = e.dataTransfer.files[0];
+                    if (file && file.type.startsWith('image/')) {
+                      const reader = new FileReader();
+                      reader.onload = async (event) => {
+                        if (event.target?.result) {
+                          try {
+                            const res = await fetch('/api/upload', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ image: event.target.result as string })
+                            });
+                            const data = await res.json();
+                            if (data.url) {
+                              // Save straight to displacement
+                              await fetch('/api/expenses/displacements', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ ...targetDisp, refundReceiptImage: data.url })
+                              });
+                              await fetchExpenses();
+                              closeModals();
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            alert('Falha ao enviar comprovante');
+                          }
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = (e: any) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = async (event) => {
+                          if (event.target?.result) {
+                            try {
+                              const res = await fetch('/api/upload', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ image: event.target.result as string })
+                              });
+                              const data = await res.json();
+                              if (data.url) {
+                                await fetch('/api/expenses/displacements', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ ...targetDisp, refundReceiptImage: data.url })
+                                });
+                                await fetchExpenses();
+                                closeModals();
+                              }
+                            } catch (err) {
+                              console.error(err);
+                              alert('Falha ao enviar comprovante');
+                            }
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    };
+                    input.click();
+                  }}
+                >
+                  <UploadCloud className="w-6 h-6 mx-auto text-neutral-400 mb-2" />
+                  <p className="text-[11px] font-mono font-semibold text-neutral-500">Arraste ou clique para anexar comprovante</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Modal 6: Employee Details */}
       {activeModal === 'employee-details' && selectedEmployeeId && (() => {
         const emp = data.employees.find(e => e.id === selectedEmployeeId);

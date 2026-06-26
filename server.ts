@@ -1492,6 +1492,7 @@ async function startServer() {
         notes,
         status,
         receiptImage,
+        refundReceiptImage,
       } = req.body;
       if (!employeeId || !vehicleId || !kmTraveled) {
         return res
@@ -1536,6 +1537,7 @@ async function startServer() {
         amount,
         status: finalStatus,
         receiptImage: receiptImage || (existing ? existing.receiptImage : ""),
+        refundReceiptImage: refundReceiptImage !== undefined ? refundReceiptImage : (existing ? existing.refundReceiptImage : ""),
       };
 
       if (id) {
