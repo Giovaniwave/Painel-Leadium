@@ -31,8 +31,7 @@ import {
   Zap,
   Award,
   Eye,
-  UploadCloud,
-  Upload
+  UploadCloud
 } from 'lucide-react';
 
 const COMMON_CARS = [
@@ -91,7 +90,6 @@ interface Displacement {
   status: 'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada';
   notes?: string;
   receiptImage?: string;
-  reimbursementReceiptImage?: string;
   history?: DisplacementHistory[];
 }
 
@@ -244,8 +242,6 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   });
 
   const [selectedReceiptImage, setSelectedReceiptImage] = useState<string | null>(null);
-  const [historyModalData, setHistoryModalData] = useState<DisplacementHistory[] | null>(null);
-  const [isUploadingReimbursement, setIsUploadingReimbursement] = useState<string | null>(null);
 
   const [statusForm, setStatusForm] = useState<'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada'>('Pendente');
 
@@ -374,44 +370,6 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     } catch (err) {
       console.error(err);
     }
-  };
-
-  const handleUploadReimbursementReceipt = async (e: React.ChangeEvent<HTMLInputElement>, id: string) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploadingReimbursement(id);
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      if (event.target?.result) {
-        try {
-          const uploadRes = await fetch('/api/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: event.target.result as string })
-          });
-          const uploadData = await uploadRes.json();
-          if (uploadData.url) {
-            const disp = data.displacements.find(d => d.id === id);
-            if (disp) {
-              const res = await fetch('/api/expenses/displacements', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...disp, reimbursementReceiptImage: uploadData.url })
-              });
-              if (res.ok) {
-                await fetchExpenses();
-              }
-            }
-          }
-        } catch (err) {
-          console.error(err);
-        } finally {
-          setIsUploadingReimbursement(null);
-        }
-      }
-    };
-    reader.readAsDataURL(file);
   };
 
   const deleteEmployee = async (id: string, name: string) => {
@@ -1209,37 +1167,10 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                             {emp ? emp.name : 'Colaborador Desconhecido'}
                           </span>
                         </div>
-                        <div className="text-right flex flex-col items-end gap-1">
-                          <div className="flex items-center gap-2">
-                            {disp.reimbursementReceiptImage ? (
-                               <button
-                                 onClick={() => setSelectedReceiptImage(disp.reimbursementReceiptImage || '')}
-                                 className="text-emerald-500 hover:text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold flex items-center gap-1 transition-colors"
-                                 title="Ver Comprovante Reembolso"
-                               >
-                                 <CheckCircle2 className="w-3 h-3" /> Recibo
-                               </button>
-                            ) : (
-                               <label className="cursor-pointer text-[#FF4D00] hover:text-[#FF4D00]/80 bg-[#FF4D00]/10 hover:bg-[#FF4D00]/20 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold flex items-center gap-1 transition-colors">
-                                 {isUploadingReimbursement === disp.id ? (
-                                   <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                 ) : (
-                                   <Upload className="w-3 h-3" />
-                                 )}
-                                 <span className="hidden sm:inline">Anexar</span> Recibo
-                                 <input 
-                                   type="file" 
-                                   accept="image/*" 
-                                   className="hidden" 
-                                   onChange={(e) => handleUploadReimbursementReceipt(e, disp.id)} 
-                                   disabled={isUploadingReimbursement === disp.id}
-                                 />
-                               </label>
-                            )}
-                            <span className="font-mono font-bold text-sm text-[#FF4D00]">
-                              R$ {disp.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                          </div>
+                        <div className="text-right">
+                          <span className="font-mono font-bold text-sm text-[#FF4D00]">
+                            R$ {disp.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
                           <span className="block text-[10px] font-mono text-neutral-400 mt-0.5">{disp.kmTraveled} km declarados</span>
                         </div>
                       </div>
@@ -1295,21 +1226,6 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                             >
                               <Eye className="w-3 h-3" />
                               <span>Comprovante</span>
-                            </button>
-                          )}
-
-                          {disp.history && disp.history.length > 0 && (
-                            <button
-                              onClick={() => setHistoryModalData(disp.history || [])}
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-mono font-medium transition cursor-pointer ${
-                                isDark
-                                  ? 'bg-neutral-800 text-neutral-300 border border-neutral-700 hover:bg-neutral-700'
-                                  : 'bg-neutral-100 text-neutral-600 border border-neutral-200 hover:bg-neutral-200'
-                              }`}
-                              title="Histórico de alteração de status"
-                            >
-                              <Clock className="w-3 h-3" />
-                              <span className="hidden sm:inline">Histórico</span>
                             </button>
                           )}
                         </div>
@@ -2021,55 +1937,6 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
           </div>
         </div>
       )}
-      {/* Modal 5.5: Histórico de Alteração de Status */}
-      {historyModalData && (
-        <div 
-          className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn" 
-          onClick={() => setHistoryModalData(null)}
-        >
-          <div 
-            className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 space-y-4 shadow-xl" 
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center border-b border-neutral-100 dark:border-neutral-800 pb-2">
-              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white uppercase tracking-wider">Histórico de Status</h3>
-              <button onClick={() => setHistoryModalData(null)} className="text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition">fechar</button>
-            </div>
-            
-            <div className="space-y-4 py-2">
-              {historyModalData.length === 0 ? (
-                <p className="text-xs text-neutral-500 font-mono text-center">Nenhum histórico disponível.</p>
-              ) : (
-                <div className="relative border-l-2 border-neutral-200 dark:border-neutral-800 ml-3 space-y-6">
-                  {historyModalData.map((h, idx) => (
-                    <div key={idx} className="relative pl-5">
-                      <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-white dark:bg-neutral-950 border-2 border-neutral-300 dark:border-neutral-600"></div>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${
-                            h.status === 'Aprovada' || h.status === 'Reembolsada' 
-                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' 
-                              : h.status === 'Em análise'
-                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                          }`}>
-                            {h.status}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-neutral-500 font-mono flex items-center gap-1.5">
-                          <Clock className="w-3 h-3" />
-                          {new Date(h.date).toLocaleString('pt-BR')}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Modal 6: Employee Details */}
       {activeModal === 'employee-details' && selectedEmployeeId && (() => {
         const emp = data.employees.find(e => e.id === selectedEmployeeId);

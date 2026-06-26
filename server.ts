@@ -1211,7 +1211,6 @@ async function startServer() {
               notes: d.notes,
               status: d.status,
               receiptImage: d.receipt_image || "",
-              reimbursementReceiptImage: d.reimbursement_receipt_image || "",
               litersConsumed: Number(d.liters_consumed) || 0,
               amount: Number(d.amount) || 0,
               history: d.history || [],
@@ -1321,7 +1320,6 @@ async function startServer() {
             notes: d.notes,
             status: d.status,
             receipt_image: d.receiptImage || "",
-            reimbursement_receipt_image: d.reimbursementReceiptImage || "",
             liters_consumed: d.litersConsumed || 0,
             amount: d.amount || 0,
             // history: d.history || [],
@@ -1494,7 +1492,6 @@ async function startServer() {
         notes,
         status,
         receiptImage,
-        reimbursementReceiptImage,
       } = req.body;
       if (!employeeId || !vehicleId || !kmTraveled) {
         return res
@@ -1539,7 +1536,6 @@ async function startServer() {
         amount,
         status: finalStatus,
         receiptImage: receiptImage || (existing ? existing.receiptImage : ""),
-        reimbursementReceiptImage: reimbursementReceiptImage || (existing ? existing.reimbursementReceiptImage : ""),
       };
 
       if (id) {
