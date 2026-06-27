@@ -88,11 +88,19 @@ interface Displacement {
   kmTraveled: number;
   litersConsumed: number;
   amount: number;
-  status: 'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada';
+  status: 'Em andamento' | 'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada';
   notes?: string;
   receiptImage?: string;
   refundReceiptImage?: string;
   history?: DisplacementHistory[];
+  startLat?: number;
+  startLng?: number;
+  endLat?: number;
+  endLng?: number;
+  startAddress?: string;
+  endAddress?: string;
+  startTime?: string;
+  endTime?: string;
 }
 
 interface ExpensesData {
@@ -248,22 +256,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   const [refundReceiptTargetId, setRefundReceiptTargetId] = useState<string | null>(null);
 
   const [tripMode, setTripMode] = useState<'gps' | 'manual'>('gps');
-  const [gpsActiveTrip, setGpsActiveTrip] = useState<{
-    active: boolean;
-    employeeId: string;
-    vehicleId: string;
-    startCoords: { lat: number, lng: number } | null;
-    startAddress?: string;
-    startTime: number;
-  } | null>(() => {
-    const stored = localStorage.getItem('leadium_gps_trip');
-    return stored ? JSON.parse(stored) : null;
-  });
-
-  useEffect(() => {
-    if (gpsActiveTrip) localStorage.setItem('leadium_gps_trip', JSON.stringify(gpsActiveTrip));
-    else localStorage.removeItem('leadium_gps_trip');
-  }, [gpsActiveTrip]);
+  const activeTrip = data.displacements.find(d => d.status === 'Em andamento');
 
   const [statusForm, setStatusForm] = useState<'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada'>('Pendente');
 
@@ -410,38 +403,17 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
           console.error(e);
         }
 
-        setGpsActiveTrip({
-          active: true,
-          employeeId: displacementForm.employeeId,
-          vehicleId: displacementForm.vehicleId,
-          startCoords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
-          startAddress: address,
-          startTime: Date.now()
-        });
-      },
-      (err) => alert("Erro ao obter localização. Verifique as permissões. " + err.message),
-      { enableHighAccuracy: true }
-    );
-  };
-
-  const finishGpsTrip = () => {
-    if (!navigator.geolocation || !gpsActiveTrip) return;
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const start = gpsActiveTrip.startCoords;
-        if (!start) return;
-        const distance = calculateDistanceKM(start.lat, start.lng, pos.coords.latitude, pos.coords.longitude);
-        const finalDistance = distance < 0.1 ? 0.1 : Number(distance.toFixed(2));
-        
         const payload = {
           date: new Date().toISOString().split('T')[0],
-          employeeId: gpsActiveTrip.employeeId,
-          vehicleId: gpsActiveTrip.vehicleId,
-          kmTraveled: finalDistance,
-          clientVisited: 'Viagem Rastreada (GPS)',
+          employeeId: displacementForm.employeeId,
+          vehicleId: displacementForm.vehicleId,
+          status: 'Em andamento',
+          startLat: pos.coords.latitude,
+          startLng: pos.coords.longitude,
+          startAddress: address,
+          startTime: new Date().toISOString(),
+          clientVisited: 'Em andamento (GPS)',
           city: 'Localização GPS',
-          reason: 'Deslocamento Registrado via GPS',
-          notes: `Duração: ${Math.round((Date.now() - gpsActiveTrip.startTime) / 60000)} minutos.`
         };
 
         try {
@@ -452,13 +424,70 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
           });
           if (res.ok) {
             await fetchExpenses();
-            setGpsActiveTrip(null);
-            closeModals();
           } else {
-            alert('Erro ao salvar a viagem');
+            alert('Erro ao iniciar a viagem');
           }
         } catch(e) {
-          alert('Erro de rede ao salvar a viagem');
+          alert('Erro de rede ao iniciar a viagem');
+        }
+      },
+      (err) => alert("Erro ao obter localização. Verifique as permissões. " + err.message),
+      { enableHighAccuracy: true }
+    );
+  };
+
+  const finishGpsTrip = () => {
+    if (!navigator.geolocation || !activeTrip) return;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const startLat = activeTrip.startLat;
+        const startLng = activeTrip.startLng;
+        if (startLat === undefined || startLng === undefined) return;
+        const distance = calculateDistanceKM(startLat, startLng, pos.coords.latitude, pos.coords.longitude);
+        const finalDistance = distance < 0.1 ? 0.1 : Number(distance.toFixed(2));
+        
+        let address = '';
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
+          if (res.ok) {
+            const data = await res.json();
+            address = data.display_name;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+        
+        const payload = {
+          id: activeTrip.id,
+          date: activeTrip.date,
+          employeeId: activeTrip.employeeId,
+          vehicleId: activeTrip.vehicleId,
+          kmTraveled: finalDistance,
+          status: 'Pendente',
+          endLat: pos.coords.latitude,
+          endLng: pos.coords.longitude,
+          endAddress: address,
+          endTime: new Date().toISOString(),
+          clientVisited: 'Viagem Rastreada (GPS)',
+          city: 'Localização GPS',
+          reason: 'Deslocamento Registrado via GPS',
+          notes: activeTrip.startTime ? `Duração: ${Math.round((Date.now() - new Date(activeTrip.startTime).getTime()) / 60000)} minutos.` : ''
+        };
+
+        try {
+          const res = await fetch('/api/expenses/displacements', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            await fetchExpenses();
+            closeModals();
+          } else {
+            alert('Erro ao finalizar a viagem');
+          }
+        } catch(e) {
+          alert('Erro de rede ao finalizar a viagem');
         }
       },
       (err) => alert("Erro de GPS: " + err.message),
@@ -466,9 +495,19 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     );
   };
 
-  const cancelGpsTrip = () => {
+  const cancelGpsTrip = async () => {
     if(confirm("Deseja cancelar a viagem em andamento?")) {
-      setGpsActiveTrip(null);
+      if (activeTrip) {
+        try {
+          const res = await fetch(`/api/expenses/displacements/${activeTrip.id}`, { method: 'DELETE' });
+          if (res.ok) {
+            await fetchExpenses();
+            closeModals();
+          }
+        } catch (e) {
+          alert('Erro ao cancelar viagem');
+        }
+      }
     }
   };
 
@@ -1352,6 +1391,23 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                             {renderBadge(disp.status)}
                           </button>
 
+                          {disp.startLat !== undefined && disp.endLat !== undefined && (
+                            <a
+                              href={`https://www.google.com/maps/dir/?api=1&origin=${disp.startLat},${disp.startLng}&destination=${disp.endLat},${disp.endLng}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-mono font-medium transition cursor-pointer ${
+                                isDark
+                                  ? 'bg-[#FF4D00]/10 text-[#FF4D00] border border-[#FF4D00]/20 hover:bg-[#FF4D00]/20'
+                                  : 'bg-[#FF4D00]/10 text-[#FF4D00] border border-[#FF4D00]/20 hover:bg-[#FF4D00]/20'
+                              }`}
+                              title="Visualizar Rota no Mapa"
+                            >
+                              <MapPin className="w-3 h-3" />
+                              <span>Ver Rota</span>
+                            </a>
+                          )}
+
                           {disp.receiptImage && (
                             <button
                               onClick={() => setSelectedReceiptImage(disp.receiptImage || '')}
@@ -1770,47 +1826,30 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               </button>
             </div>
 
-            {!editingId && !gpsActiveTrip && (
-              <div className="flex bg-neutral-100 dark:bg-neutral-900 rounded-lg p-1 mb-4">
-                <button 
-                  type="button" 
-                  onClick={() => setTripMode('gps')} 
-                  className={`flex-1 text-xs font-semibold py-1.5 rounded-md transition ${tripMode === 'gps' ? 'bg-white dark:bg-neutral-800 shadow text-[#FF4D00]' : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'}`}
-                >
-                  📍 Rastrear (GPS)
-                </button>
-                <button 
-                  type="button" 
-                  onClick={() => setTripMode('manual')} 
-                  className={`flex-1 text-xs font-semibold py-1.5 rounded-md transition ${tripMode === 'manual' ? 'bg-white dark:bg-neutral-800 shadow text-[#FF4D00]' : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'}`}
-                >
-                  ✍️ Manual
-                </button>
-              </div>
-            )}
-
-            {gpsActiveTrip ? (
+            {activeTrip ? (
               <div className="space-y-4 text-center py-4">
                 <div className="w-16 h-16 rounded-full bg-[#FF4D00]/10 flex items-center justify-center mx-auto animate-pulse">
                   <MapPin className="w-8 h-8 text-[#FF4D00]" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-neutral-900 dark:text-white">Viagem em Andamento</p>
-                  <p className="text-xs text-neutral-500 mt-1 font-mono">
-                    Iniciada às {new Date(gpsActiveTrip.startTime).toLocaleTimeString('pt-BR')}
-                  </p>
+                  {activeTrip.startTime && (
+                    <p className="text-xs text-neutral-500 mt-1 font-mono">
+                      Iniciada às {new Date(activeTrip.startTime).toLocaleTimeString('pt-BR')}
+                    </p>
+                  )}
                   
-                  {gpsActiveTrip.startCoords && (
+                  {activeTrip.startLat !== undefined && activeTrip.startLng !== undefined && (
                     <div className="mt-4 p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-800 text-left">
                       <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">Ponto de Partida</p>
-                      {gpsActiveTrip.startAddress ? (
+                      {activeTrip.startAddress ? (
                         <p className="text-xs text-neutral-700 dark:text-neutral-300 leading-relaxed">
-                          {gpsActiveTrip.startAddress}
+                          {activeTrip.startAddress}
                         </p>
                       ) : (
                         <p className="text-xs text-neutral-700 dark:text-neutral-300 font-mono">
-                          Lat: {gpsActiveTrip.startCoords.lat.toFixed(6)} <br/>
-                          Lng: {gpsActiveTrip.startCoords.lng.toFixed(6)}
+                          Lat: {activeTrip.startLat.toFixed(6)} <br/>
+                          Lng: {activeTrip.startLng.toFixed(6)}
                         </p>
                       )}
                     </div>
@@ -1833,7 +1872,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   </button>
                 </div>
               </div>
-            ) : tripMode === 'gps' && !editingId ? (
+            ) : !editingId ? (
               <div className="space-y-4">
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase font-mono text-neutral-400">Selecionar Colaborador</label>

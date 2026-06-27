@@ -1211,9 +1211,18 @@ async function startServer() {
               notes: d.notes,
               status: d.status,
               receiptImage: d.receipt_image || "",
+              refundReceiptImage: d.refund_receipt_image || "",
               litersConsumed: Number(d.liters_consumed) || 0,
               amount: Number(d.amount) || 0,
               history: d.history || [],
+              startLat: d.start_lat,
+              startLng: d.start_lng,
+              endLat: d.end_lat,
+              endLng: d.end_lng,
+              startAddress: d.start_address,
+              endAddress: d.end_address,
+              startTime: d.start_time,
+              endTime: d.end_time,
             }));
           }
         }
@@ -1320,8 +1329,17 @@ async function startServer() {
             notes: d.notes,
             status: d.status,
             receipt_image: d.receiptImage || "",
+            refund_receipt_image: d.refundReceiptImage || "",
             liters_consumed: d.litersConsumed || 0,
             amount: d.amount || 0,
+            start_lat: d.startLat,
+            start_lng: d.startLng,
+            end_lat: d.endLat,
+            end_lng: d.endLng,
+            start_address: d.startAddress,
+            end_address: d.endAddress,
+            start_time: d.startTime,
+            end_time: d.endTime,
             // history: d.history || [],
           }));
           const { error: insD } = await supabaseClient
@@ -1493,12 +1511,20 @@ async function startServer() {
         status,
         receiptImage,
         refundReceiptImage,
+        startLat,
+        startLng,
+        endLat,
+        endLng,
+        startAddress,
+        endAddress,
+        startTime,
+        endTime,
       } = req.body;
-      if (!employeeId || !vehicleId || !kmTraveled) {
+      if (!employeeId || !vehicleId || (kmTraveled === undefined && status !== 'Em andamento')) {
         return res
           .status(400)
           .json({
-            error: "Colaborador, Veículo e KM percorrido são obrigatórios.",
+            error: "Colaborador, Veículo e KM percorrido são obrigatórios (exceto se Em andamento).",
           });
       }
 
@@ -1536,8 +1562,16 @@ async function startServer() {
         litersConsumed,
         amount,
         status: finalStatus,
-        receiptImage: receiptImage || (existing ? existing.receiptImage : ""),
+        receiptImage: receiptImage !== undefined ? receiptImage : (existing ? existing.receiptImage : ""),
         refundReceiptImage: refundReceiptImage !== undefined ? refundReceiptImage : (existing ? existing.refundReceiptImage : ""),
+        startLat: startLat !== undefined ? startLat : (existing ? existing.startLat : undefined),
+        startLng: startLng !== undefined ? startLng : (existing ? existing.startLng : undefined),
+        endLat: endLat !== undefined ? endLat : (existing ? existing.endLat : undefined),
+        endLng: endLng !== undefined ? endLng : (existing ? existing.endLng : undefined),
+        startAddress: startAddress !== undefined ? startAddress : (existing ? existing.startAddress : undefined),
+        endAddress: endAddress !== undefined ? endAddress : (existing ? existing.endAddress : undefined),
+        startTime: startTime !== undefined ? startTime : (existing ? existing.startTime : undefined),
+        endTime: endTime !== undefined ? endTime : (existing ? existing.endTime : undefined),
       };
 
       if (id) {
