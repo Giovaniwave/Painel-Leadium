@@ -1156,6 +1156,89 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
           {/* SUB-TAB: REEMBOLSO POR COLABORADOR */}
           {activeSubTab === 'dashboard' && (
             <div className="space-y-6">
+              {activeTrip && (
+                <div className={`p-5 rounded-2xl border-2 flex flex-col gap-4 shadow-lg transition-all duration-300 ${
+                  isDark 
+                    ? 'border-[#FF4D00]/40 bg-[#1A0C05]/95 text-white shadow-[0_8px_30px_rgba(255,77,0,0.15)]' 
+                    : 'border-[#FF4D00]/30 bg-orange-50/90 text-neutral-900 shadow-[0_8px_30px_rgba(255,77,0,0.08)]'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#FF4D00] animate-ping" />
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#FF4D00] font-mono">
+                        📍 Deslocamento Ativo (Viagem Iniciada)
+                      </span>
+                    </div>
+                    {activeTrip.startTime && (
+                      <span className="text-[10px] font-mono opacity-80">
+                        Início: {new Date(activeTrip.startTime).toLocaleTimeString('pt-BR')}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-mono opacity-60 uppercase">👤 Colaborador / Motorista</p>
+                      <p className="font-bold text-sm">
+                        {data.employees.find(e => String(e.id).toLowerCase() === String(activeTrip.employeeId).toLowerCase())?.name || 'Carregando...'}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-mono opacity-60 uppercase">🚗 Veículo Selecionado</p>
+                      <p className="font-bold text-sm">
+                        {(() => {
+                          const v = data.vehicles.find(veh => String(veh.id).toLowerCase() === String(activeTrip.vehicleId).toLowerCase());
+                          return v ? `${v.brand} ${v.model} (${v.plate})` : 'Não identificado';
+                        })()}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-mono opacity-60 uppercase">🏢 Cliente a ser Visitado</p>
+                      <p className="font-bold text-sm text-[#FF4D00]">
+                        {activeTrip.clientVisited}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-mono opacity-60 uppercase">📍 Ponto de Partida</p>
+                      <p className="font-semibold truncate">
+                        {activeTrip.startAddress || 'Localização GPS'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={finishGpsTrip}
+                      disabled={gpsLoading}
+                      className="flex-1 bg-[#FF4D00] hover:bg-[#E64500] text-white py-3 px-4 rounded-xl font-black uppercase tracking-widest text-xs shadow-md transition-all duration-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                    >
+                      {gpsLoading ? (
+                        <>
+                          <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Obtendo Localização / Calculando...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" />
+                          🏁 CHEGUEI (Finalizar Viagem)
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelGpsTrip}
+                      className="sm:w-32 bg-transparent border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-900 text-neutral-500 hover:text-[#FF4D00] dark:hover:text-[#FF4D00] py-3 px-4 rounded-xl font-bold uppercase tracking-wider text-[10px] transition-all duration-200"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Card - Direct payout visual list by dynamic stats */}
               <div className={`rounded-xl border overflow-hidden ${
                 isDark ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white shadow-xs'
@@ -2530,7 +2613,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     ) : (
                       <>
                         <CheckCircle2 className="w-4 h-4" />
-                        🏁 FINALIZAR VIAGEM
+                        🏁 CHEGUEI (Finalizar Viagem)
                       </>
                     )}
                   </button>
@@ -2594,9 +2677,9 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       Ponto de Partida (Localização Atual)
                     </label>
                     
-                    <div className="p-2.5 rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white flex items-center gap-2">
-                      <MapPin className={`w-3.5 h-3.5 shrink-0 ${gpsLoading ? 'text-amber-500 animate-pulse' : gpsStartStreet ? 'text-[#FF4D00]' : 'text-neutral-400'}`} />
-                      <span className={`text-xs truncate font-medium ${!gpsStartStreet ? 'text-[#FF4D00] font-bold animate-pulse' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                    <div className="p-3 rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-neutral-950 dark:text-white flex items-center gap-2 shadow-xs">
+                      <MapPin className={`w-4 h-4 shrink-0 ${gpsLoading ? 'text-[#FF4D00] animate-pulse' : gpsStartStreet ? 'text-emerald-500' : 'text-[#FF4D00] animate-bounce'}`} />
+                      <span className={`text-xs font-bold truncate ${!gpsStartStreet ? 'text-[#FF4D00] animate-pulse' : 'text-neutral-800 dark:text-neutral-200'}`}>
                         {gpsLoading ? 'Obtendo localização GPS...' : (gpsStartStreet || 'Aperte em Recarregar GPS')}
                       </span>
                     </div>
@@ -2605,20 +2688,16 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       type="button" 
                       onClick={fetchStartLocation}
                       disabled={gpsLoading}
-                      className="w-full mt-2 py-2.5 px-3 rounded-lg font-bold uppercase tracking-wider text-xs flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 shadow-sm border border-neutral-300 dark:border-neutral-800"
-                      style={{
-                        backgroundColor: theme === 'dark' ? '#262626' : '#e5e5e5',
-                        color: theme === 'dark' ? '#ffffff' : '#171717'
-                      }}
+                      className="w-full mt-2.5 py-3 px-4 rounded-xl font-extrabold uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 shadow-md bg-[#FF4D00] hover:bg-[#E64500] text-white cursor-pointer active:scale-95"
                     >
                       {gpsLoading ? (
                         <>
-                          <span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                          <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                           Buscando...
                         </>
                       ) : (
                         <>
-                          <MapPin className="w-3.5 h-3.5 text-[#FF4D00]" />
+                          <MapPin className="w-4 h-4 text-white" />
                           Obter Localização Atual (Recarregar GPS)
                         </>
                       )}

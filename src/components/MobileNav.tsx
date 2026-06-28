@@ -49,10 +49,18 @@ export default function MobileNav({ activeTab, onTabChange, theme }: MobileNavPr
               }`}
             >
               <Icon 
-                className="w-5 h-5 shrink-0" 
+                className={`w-5 h-5 shrink-0 ${
+                  isActive
+                    ? isDark ? '!text-black' : '!text-white'
+                    : isDark ? 'text-[#8E8E93]' : 'text-[#555555]'
+                }`} 
                 strokeWidth={isActive ? 2.5 : 2} 
               />
-              <span className="text-[9px] font-sans font-extrabold tracking-wider leading-none">
+              <span className={`text-[9px] font-sans font-extrabold tracking-wider leading-none ${
+                isActive
+                  ? isDark ? '!text-black' : '!text-white'
+                  : isDark ? 'text-[#8E8E93]' : 'text-[#555555]'
+              }`}>
                 {tab.label}
               </span>
             </button>

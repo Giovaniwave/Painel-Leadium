@@ -1064,8 +1064,10 @@ async function startServer() {
   });
 
   // Helpers to fetch and seed expenses data
-  function toUUID(str: string): string {
-    if (!str || typeof str !== "string") return str;
+  function toUUID(val: any): string {
+    if (val === undefined || val === null) return "";
+    const str = String(val).trim();
+    if (!str) return "";
     if (
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
         str,
