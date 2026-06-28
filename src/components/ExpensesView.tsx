@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import L from 'leaflet';
 import { 
   X,
   Plus, 
@@ -178,6 +179,104 @@ function parseAuditReport(rawReport: string): ParsedAudit {
   return sections;
 }
 
+interface RouteAuditMapProps {
+  startLat: number;
+  startLng: number;
+  endLat?: number;
+  endLng?: number;
+  startAddress?: string;
+  endAddress?: string;
+}
+
+const RouteAuditMap: React.FC<RouteAuditMapProps> = ({
+  startLat,
+  startLng,
+  endLat,
+  endLng,
+  startAddress,
+  endAddress
+}) => {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+
+    // Clean up existing map instance if any
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.remove();
+      mapInstanceRef.current = null;
+    }
+
+    try {
+      const map = L.map(mapContainerRef.current, {
+        zoomControl: true,
+        attributionControl: false
+      }).setView([startLat, startLng], 13);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+      }).addTo(map);
+
+      mapInstanceRef.current = map;
+
+      // Add start marker
+      const startIcon = L.divIcon({
+        html: `<div class="w-6 h-6 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center text-white font-bold text-[10px] shadow-lg">A</div>`,
+        className: '',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+      L.marker([startLat, startLng], { icon: startIcon })
+        .addTo(map)
+        .bindPopup(`<b>Ponto de Partida</b><br/>${startAddress || ''}`);
+
+      if (endLat !== undefined && endLng !== undefined) {
+        // Add end marker
+        const endIcon = L.divIcon({
+          html: `<div class="w-6 h-6 rounded-full bg-[#FF4D00] border-2 border-white flex items-center justify-center text-white font-bold text-[10px] shadow-lg">B</div>`,
+          className: '',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+        L.marker([endLat, endLng], { icon: endIcon })
+          .addTo(map)
+          .bindPopup(`<b>Ponto de Chegada</b><br/>${endAddress || ''}`);
+
+        // Draw polyline connecting them
+        const polyline = L.polyline([[startLat, startLng], [endLat, endLng]], {
+          color: '#FF4D00',
+          weight: 4,
+          opacity: 0.8,
+          dashArray: '5, 10'
+        }).addTo(map);
+
+        // Adjust bounds
+        map.fitBounds(polyline.getBounds(), { padding: [40, 40] });
+      }
+    } catch (err) {
+      console.error("Error creating map:", err);
+    }
+
+    return () => {
+      if (mapInstanceRef.current) {
+        try {
+          mapInstanceRef.current.remove();
+        } catch (e) {}
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [startLat, startLng, endLat, endLng, startAddress, endAddress]);
+
+  return (
+    <div 
+      ref={mapContainerRef} 
+      className="w-full h-full rounded-xl dark:brightness-95 dark:contrast-105 dark:invert dark:hue-rotate-180"
+      style={{ minHeight: '350px', zIndex: 1 }}
+    />
+  );
+};
+
 export default function ExpensesView({ theme }: ExpensesViewProps) {
   const isDark = theme !== 'light';
 
@@ -197,8 +296,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Primary sub-tabs: 'dashboard' (Métricas) | 'entries' (Viagens) | 'employees' (Equipe) | 'vehicles' (Frota)
-  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'entries' | 'employees' | 'vehicles'>('dashboard');
+  // Primary sub-tabs
+  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'entries' | 'fuel_reimbursement' | 'employees' | 'vehicles' | 'routes_audit'>('dashboard');
 
   // Filters state
   const [showFilters, setShowFilters] = useState(false);
@@ -255,8 +354,18 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   const [selectedHistoryDisp, setSelectedHistoryDisp] = useState<Displacement | null>(null);
   const [refundReceiptTargetId, setRefundReceiptTargetId] = useState<string | null>(null);
 
+  const [selectedAuditTripId, setSelectedAuditTripId] = useState<string | null>(null);
+  const [calcDistance, setCalcDistance] = useState<string>('100');
+  const [calcVehicleId, setCalcVehicleId] = useState<string>('');
+  const [calcConsumption, setCalcConsumption] = useState<string>('12');
+  const [calcFuelPrice, setCalcFuelPrice] = useState<string>('6.29');
+
   const [tripMode, setTripMode] = useState<'gps' | 'manual'>('gps');
   const activeTrip = data.displacements.find(d => d.status === 'Em andamento');
+
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsStartCoords, setGpsStartCoords] = useState<{ lat: number, lng: number } | null>(null);
+  const [gpsStartStreet, setGpsStartStreet] = useState<string>('');
 
   const [statusForm, setStatusForm] = useState<'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada'>('Pendente');
 
@@ -381,80 +490,126 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     return R * c;
   };
 
-  const startGpsTrip = () => {
+  const extractStreetName = (osmData: any): string => {
+    if (!osmData) return '';
+    const addr = osmData.address || {};
+    const road = addr.road || addr.street || addr.pedestrian || addr.suburb || '';
+    const houseNumber = addr.house_number ? `, ${addr.house_number}` : '';
+    const city = addr.city || addr.town || addr.village || '';
+    if (road) {
+      return `${road}${houseNumber}${city ? ` - ${city}` : ''}`;
+    }
+    return osmData.display_name || '';
+  };
+
+  const fetchStartLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocalização não é suportada por este dispositivo.");
+      return;
+    }
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&addressdetails=1`);
+          if (res.ok) {
+            const data = await res.json();
+            const cleanStreet = extractStreetName(data);
+            setGpsStartStreet(cleanStreet);
+            setGpsStartCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          } else {
+            setGpsStartStreet(`Lat: ${pos.coords.latitude.toFixed(5)}, Lng: ${pos.coords.longitude.toFixed(5)}`);
+            setGpsStartCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          }
+        } catch (e) {
+          console.error(e);
+          setGpsStartStreet(`Lat: ${pos.coords.latitude.toFixed(5)}, Lng: ${pos.coords.longitude.toFixed(5)}`);
+          setGpsStartCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        } finally {
+          setGpsLoading(false);
+        }
+      },
+      (err) => {
+        setGpsLoading(false);
+        alert("Erro de Geolocalização ao obter ponto de partida: " + err.message);
+      },
+      { enableHighAccuracy: true, timeout: 12000 }
+    );
+  };
+
+  const startGpsTrip = async () => {
     if (!displacementForm.employeeId || !displacementForm.vehicleId) {
       alert("Selecione o colaborador e o veículo primeiro.");
       return;
     }
-    if (!navigator.geolocation) {
-      alert("Geolocalização não suportada no seu navegador.");
+    if (!gpsStartCoords || !gpsStartStreet) {
+      alert("Por favor, clique em 'Localização atual' primeiro para obter o ponto de partida.");
       return;
     }
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        let address = '';
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
-          if (res.ok) {
-            const data = await res.json();
-            address = data.display_name;
-          }
-        } catch (e) {
-          console.error(e);
-        }
+    if (!displacementForm.clientVisited || !displacementForm.reason) {
+      alert("Por favor, informe o nome do cliente e o motivo da visita.");
+      return;
+    }
 
-        const payload = {
-          date: new Date().toISOString().split('T')[0],
-          employeeId: displacementForm.employeeId,
-          vehicleId: displacementForm.vehicleId,
-          status: 'Em andamento',
-          startLat: pos.coords.latitude,
-          startLng: pos.coords.longitude,
-          startAddress: address,
-          startTime: new Date().toISOString(),
-          clientVisited: 'Em andamento (GPS)',
-          city: 'Localização GPS',
-        };
+    const payload = {
+      date: new Date().toISOString().split('T')[0],
+      employeeId: displacementForm.employeeId,
+      vehicleId: displacementForm.vehicleId,
+      status: 'Em andamento',
+      startLat: gpsStartCoords.lat,
+      startLng: gpsStartCoords.lng,
+      startAddress: gpsStartStreet,
+      startTime: new Date().toISOString(),
+      clientVisited: displacementForm.clientVisited,
+      city: 'Localização GPS',
+      reason: displacementForm.reason,
+    };
 
-        try {
-          const res = await fetch('/api/expenses/displacements', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          if (res.ok) {
-            await fetchExpenses();
-          } else {
-            alert('Erro ao iniciar a viagem');
-          }
-        } catch(e) {
-          alert('Erro de rede ao iniciar a viagem');
-        }
-      },
-      (err) => alert("Erro ao obter localização. Verifique as permissões. " + err.message),
-      { enableHighAccuracy: true }
-    );
+    try {
+      const res = await fetch('/api/expenses/displacements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        await fetchExpenses();
+        // Clear temp inputs/states
+        setGpsStartCoords(null);
+        setGpsStartStreet('');
+      } else {
+        const errJson = await res.json();
+        alert('Erro ao iniciar a viagem: ' + (errJson.error || 'Erro desconhecido'));
+      }
+    } catch(e) {
+      alert('Erro de rede ao iniciar a viagem');
+    }
   };
 
   const finishGpsTrip = () => {
     if (!navigator.geolocation || !activeTrip) return;
+    setGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const startLat = activeTrip.startLat;
         const startLng = activeTrip.startLng;
-        if (startLat === undefined || startLng === undefined) return;
-        const distance = calculateDistanceKM(startLat, startLng, pos.coords.latitude, pos.coords.longitude);
+        let distance = 0.5; // fallback
+        if (startLat !== undefined && startLng !== undefined) {
+          distance = calculateDistanceKM(startLat, startLng, pos.coords.latitude, pos.coords.longitude);
+        }
         const finalDistance = distance < 0.1 ? 0.1 : Number(distance.toFixed(2));
         
         let address = '';
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&addressdetails=1`);
           if (res.ok) {
             const data = await res.json();
-            address = data.display_name;
+            address = extractStreetName(data);
+          } else {
+            address = `Rua de Destino (Lat: ${pos.coords.latitude.toFixed(5)}, Lng: ${pos.coords.longitude.toFixed(5)})`;
           }
         } catch (e) {
           console.error(e);
+          address = `Rua de Destino (Lat: ${pos.coords.latitude.toFixed(5)}, Lng: ${pos.coords.longitude.toFixed(5)})`;
         }
         
         const payload = {
@@ -468,9 +623,9 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
           endLng: pos.coords.longitude,
           endAddress: address,
           endTime: new Date().toISOString(),
-          clientVisited: 'Viagem Rastreada (GPS)',
-          city: 'Localização GPS',
-          reason: 'Deslocamento Registrado via GPS',
+          clientVisited: activeTrip.clientVisited || 'Cliente Não Especificado',
+          city: activeTrip.city || 'Cidade Não Especificada',
+          reason: activeTrip.reason || 'Deslocamento via GPS',
           notes: activeTrip.startTime ? `Duração: ${Math.round((Date.now() - new Date(activeTrip.startTime).getTime()) / 60000)} minutos.` : ''
         };
 
@@ -484,14 +639,20 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
             await fetchExpenses();
             closeModals();
           } else {
-            alert('Erro ao finalizar a viagem');
+            const errJson = await res.json();
+            alert('Erro ao finalizar a viagem: ' + (errJson.error || 'Erro desconhecido'));
           }
         } catch(e) {
           alert('Erro de rede ao finalizar a viagem');
+        } finally {
+          setGpsLoading(false);
         }
       },
-      (err) => alert("Erro de GPS: " + err.message),
-      { enableHighAccuracy: true }
+      (err) => {
+        setGpsLoading(false);
+        alert("Erro de GPS ao informar chegada: " + err.message);
+      },
+      { enableHighAccuracy: true, timeout: 12000 }
     );
   };
 
@@ -912,7 +1073,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
               }`}
             >
-              Reembolso por Colaborador
+              Reembolso Colaborador
             </button>
             <button
               onClick={() => setActiveSubTab('entries')}
@@ -922,7 +1083,17 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
               }`}
             >
-              Registro de Viagens ({filteredDisplacements.length})
+              Viagens ({filteredDisplacements.length})
+            </button>
+            <button
+              onClick={() => setActiveSubTab('fuel_reimbursement')}
+              className={`pb-3 px-3 text-sm font-sans font-medium transition-all relative border-b-2 whitespace-nowrap ${
+                activeSubTab === 'fuel_reimbursement'
+                  ? `border-[#FF4D00] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
+                  : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
+              }`}
+            >
+              Reembolso Combustível
             </button>
             <button
               onClick={() => setActiveSubTab('employees')}
@@ -943,6 +1114,16 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               }`}
             >
               Veículos Cadastrados
+            </button>
+            <button
+              onClick={() => setActiveSubTab('routes_audit')}
+              className={`pb-3 px-3 text-sm font-sans font-medium transition-all relative border-b-2 whitespace-nowrap ${
+                activeSubTab === 'routes_audit'
+                  ? `border-[#FF4D00] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
+                  : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
+              }`}
+            >
+              Auditoria de Rotas
             </button>
           </div>
 
@@ -1578,6 +1759,387 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               </div>
             </div>
           )}
+
+          {/* ============================== */}
+          {/* SUB-TAB: REEMBOLSO COMBUSTÍVEL */}
+          {activeSubTab === 'fuel_reimbursement' && (
+            <div className="space-y-6">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className={`p-4 rounded-xl border ${isDark ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white shadow-xs'}`}>
+                  <span className={`block text-[10px] font-mono uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-500 font-bold'}`}>Litros Consumidos (Est.)</span>
+                  <span className={`text-lg font-sans font-bold mt-1.5 block ${isDark ? 'text-white' : 'text-neutral-950'}`}>
+                    {data.displacements.reduce((acc, d) => {
+                      const v = data.vehicles.find(veh => veh.id === d.vehicleId);
+                      const cons = Number(v?.avgConsumption) || 12;
+                      return acc + (d.kmTraveled / cons);
+                    }, 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L
+                  </span>
+                </div>
+
+                <div className={`p-4 rounded-xl border ${isDark ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white shadow-xs'}`}>
+                  <span className={`block text-[10px] font-mono uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-500 font-bold'}`}>Preço Gasolina (Ref.)</span>
+                  <span className={`text-lg font-sans font-bold mt-1.5 block ${isDark ? 'text-white' : 'text-neutral-950'}`}>
+                    R$ 6,29 / L
+                  </span>
+                </div>
+
+                <div className={`p-4 rounded-xl border ${isDark ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white shadow-xs'}`}>
+                  <span className={`block text-[10px] font-mono uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-500 font-bold'}`}>Reembolso de Combustível</span>
+                  <span className={`text-lg font-sans font-bold mt-1.5 block ${isDark ? 'text-white' : 'text-neutral-950'}`}>
+                    R$ {data.displacements.reduce((acc, d) => {
+                      const v = data.vehicles.find(veh => veh.id === d.vehicleId);
+                      const cons = Number(v?.avgConsumption) || 12;
+                      const liters = d.kmTraveled / cons;
+                      return acc + (liters * 6.29);
+                    }, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Dynamic Simulator / Calculator */}
+              <div className={`p-5 rounded-xl border ${isDark ? 'border-neutral-800 bg-[#111111]/40' : 'border-neutral-200 bg-neutral-50 shadow-xs'} space-y-4`}>
+                <div className="flex items-center gap-2 pb-2 border-b border-neutral-200 dark:border-neutral-800">
+                  <DollarSign className="w-4 h-4 text-[#FF4D00]" />
+                  <span className={`text-xs font-mono font-bold uppercase tracking-wider ${isDark ? 'text-neutral-200' : 'text-neutral-900'}`}>
+                    Calculadora de Reembolso Instantâneo
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-mono text-neutral-400">Veículo Referência</label>
+                    <select
+                      value={calcVehicleId}
+                      onChange={(e) => {
+                        setCalcVehicleId(e.target.value);
+                        const v = data.vehicles.find(x => x.id === e.target.value);
+                        if (v) setCalcConsumption(v.avgConsumption || '12');
+                      }}
+                      className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    >
+                      <option value="">-- Selecionar veículo --</option>
+                      {data.vehicles.map(v => (
+                        <option key={v.id} value={v.id}>{v.name} ({v.avgConsumption} km/l)</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-mono text-neutral-400">Consumo (km / L)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={calcConsumption}
+                      onChange={(e) => setCalcConsumption(e.target.value)}
+                      className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-mono text-neutral-400">Distância (KM)</label>
+                    <input
+                      type="number"
+                      value={calcDistance}
+                      onChange={(e) => setCalcDistance(e.target.value)}
+                      className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-mono text-neutral-400">Preço do Litro (R$)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={calcFuelPrice}
+                      onChange={(e) => setCalcFuelPrice(e.target.value)}
+                      className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    />
+                  </div>
+                </div>
+
+                {/* Calculator Results */}
+                {calcDistance && calcConsumption && calcFuelPrice && (
+                  <div className={`p-4 rounded-lg flex items-center justify-between text-xs font-mono border ${
+                    isDark ? 'bg-neutral-900/50 border-neutral-800' : 'bg-white border-neutral-200 shadow-xs'
+                  }`}>
+                    <div>
+                      <span className="block text-neutral-450 text-[10px] uppercase font-bold">Consumo Previsto</span>
+                      <span className={`text-sm font-bold block mt-0.5 ${isDark ? 'text-white' : 'text-black'}`}>
+                        {(Number(calcDistance) / Number(calcConsumption)).toFixed(1)} Litros
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="block text-[#FF4D00] text-[10px] uppercase font-bold">Total do Reembolso</span>
+                      <span className="text-base font-bold text-[#FF4D00] block mt-0.5">
+                        R$ {((Number(calcDistance) / Number(calcConsumption)) * Number(calcFuelPrice)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Fuel Refund Table */}
+              <div className={`rounded-xl border overflow-hidden ${isDark ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white shadow-xs'}`}>
+                <div className={`p-4 border-b ${isDark ? 'bg-neutral-900/50 border-neutral-800' : 'bg-neutral-100 border-neutral-200'}`}>
+                  <h3 className={`text-xs font-mono uppercase tracking-wider ${isDark ? 'text-neutral-400' : 'text-neutral-700 font-bold'}`}>
+                    Lista Detalhada de Reembolso de Combustível
+                  </h3>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className={`border-b ${isDark ? 'border-neutral-800 text-neutral-400 bg-neutral-900/30' : 'border-neutral-200 text-neutral-500 bg-neutral-50'}`}>
+                        <th className="p-3 font-mono font-bold uppercase text-[10px]">Colaborador / Data</th>
+                        <th className="p-3 font-mono font-bold uppercase text-[10px]">Veículo / Eficiência</th>
+                        <th className="p-3 font-mono font-bold uppercase text-[10px] text-right">KM Percorrido</th>
+                        <th className="p-3 font-mono font-bold uppercase text-[10px] text-right">Litros Consumidos</th>
+                        <th className="p-3 font-mono font-bold uppercase text-[10px] text-right text-[#FF4D00]">Reembolso Comb.</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${isDark ? 'divide-neutral-800' : 'divide-neutral-200'}`}>
+                      {data.displacements.map(d => {
+                        const employee = data.employees.find(e => e.id === d.employeeId);
+                        const vehicle = data.vehicles.find(v => v.id === d.vehicleId);
+                        const consumption = Number(vehicle?.avgConsumption) || 12;
+                        const liters = d.kmTraveled / consumption;
+                        const fuelReimbursementAmount = liters * 6.29;
+
+                        return (
+                          <tr key={d.id} className={`${isDark ? 'hover:bg-neutral-900/40' : 'hover:bg-neutral-50'}`}>
+                            <td className="p-3">
+                              <span className={`font-bold block ${isDark ? 'text-neutral-100' : 'text-neutral-900'}`}>{employee?.name || 'Não cadastrado'}</span>
+                              <span className="text-[10px] text-neutral-500 block font-mono mt-0.5">{d.date}</span>
+                            </td>
+                            <td className="p-3">
+                              <span className="font-semibold block">{vehicle?.name || 'Não cadastrado'}</span>
+                              <span className="text-[10px] text-neutral-500 block font-mono mt-0.5">{consumption} km/l</span>
+                            </td>
+                            <td className="p-3 text-right font-mono font-semibold">{d.kmTraveled.toFixed(1)} km</td>
+                            <td className="p-3 text-right font-mono text-neutral-500">{liters.toFixed(1)} L</td>
+                            <td className="p-3 text-right font-mono font-bold text-[#FF4D00]">R$ {fuelReimbursementAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          </tr>
+                        );
+                      })}
+
+                      {data.displacements.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="p-8 text-center text-neutral-400 font-mono">
+                            Nenhuma viagem cadastrada no sistema.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ============================== */}
+          {/* SUB-TAB: AUDITORIA DE ROTAS */}
+          {activeSubTab === 'routes_audit' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Sidebar: Travels List */}
+              <div className="space-y-3">
+                <span className="text-xs font-mono text-neutral-400 uppercase tracking-wider font-bold block pb-1 border-b border-neutral-100 dark:border-neutral-800">
+                  Viagens Registradas
+                </span>
+
+                <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1 no-scrollbar">
+                  {data.displacements.map(d => {
+                    const employee = data.employees.find(e => e.id === d.employeeId);
+                    const isGps = d.startLat !== undefined && d.endLat !== undefined;
+                    const isSelected = selectedAuditTripId === d.id;
+
+                    return (
+                      <div
+                        key={d.id}
+                        onClick={() => setSelectedAuditTripId(d.id)}
+                        className={`p-3 rounded-lg border text-left cursor-pointer transition active:scale-[0.98] ${
+                          isSelected
+                            ? 'border-[#FF4D00] bg-[#FF4D00]/5'
+                            : isDark
+                            ? 'border-neutral-800 bg-[#141414] hover:border-neutral-700'
+                            : 'border-neutral-200 bg-white hover:border-neutral-300 shadow-xs'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`font-bold text-xs truncate ${isDark ? 'text-neutral-200' : 'text-neutral-900'}`}>
+                            {employee?.name || 'Não cadastrado'}
+                          </span>
+                          {isGps ? (
+                            <span className="px-1.5 py-0.5 rounded text-[8px] font-mono uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-bold">
+                              📍 GPS
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 rounded text-[8px] font-mono uppercase bg-neutral-500/10 text-neutral-500 border border-neutral-500/20 font-bold">
+                              ✍️ Manual
+                            </span>
+                          )}
+                        </div>
+
+                        <div className={`text-[11px] mt-1 truncate ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                          {d.city} &bull; {d.clientVisited}
+                        </div>
+
+                        <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400 mt-2">
+                          <span>{d.date}</span>
+                          <span className="font-bold">{d.kmTraveled} km</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {data.displacements.length === 0 && (
+                    <div className="p-8 text-center text-xs text-neutral-400 font-mono border border-dashed rounded-lg">
+                      Nenhuma rota disponível.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Main Map Panel */}
+              <div className="md:col-span-2 space-y-4">
+                {(() => {
+                  const selectedTrip = data.displacements.find(d => d.id === selectedAuditTripId);
+                  if (!selectedTrip) {
+                    return (
+                      <div className={`h-[400px] rounded-xl border border-dashed flex flex-col items-center justify-center p-8 text-center ${
+                        isDark ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white'
+                      }`}>
+                        <MapPin className="w-10 h-10 text-neutral-400 animate-bounce mb-3" />
+                        <h4 className={`text-sm font-semibold ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`}>Nenhuma Rota Selecionada</h4>
+                        <p className="text-xs text-neutral-500 mt-1 max-w-sm">
+                          Selecione um dos registros de viagens ao lado para visualizar a auditoria completa da rota e coordenadas no mapa interativo.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  const employee = data.employees.find(e => e.id === selectedTrip.employeeId);
+                  const vehicle = data.vehicles.find(v => v.id === selectedTrip.vehicleId);
+                  const isGps = selectedTrip.startLat !== undefined && selectedTrip.endLat !== undefined;
+
+                  return (
+                    <div className="space-y-4">
+                      {/* Interactive OpenStreetMap Map */}
+                      <div className={`rounded-xl border overflow-hidden relative shadow-sm h-[350px] ${
+                        isDark ? 'border-neutral-800' : 'border-neutral-200 bg-white'
+                      }`}>
+                        {isGps && selectedTrip.startLat !== undefined && selectedTrip.startLng !== undefined ? (
+                          <RouteAuditMap
+                            startLat={selectedTrip.startLat}
+                            startLng={selectedTrip.startLng}
+                            endLat={selectedTrip.endLat}
+                            endLng={selectedTrip.endLng}
+                            startAddress={selectedTrip.startAddress}
+                            endAddress={selectedTrip.endAddress}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-neutral-50 dark:bg-neutral-900 text-center">
+                            <AlertTriangle className="w-8 h-8 text-amber-500 mb-2" />
+                            <span className={`text-sm font-semibold ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`}>Sem Dados de Georeferenciamento</span>
+                            <span className="text-xs text-neutral-500 mt-1 max-w-xs leading-relaxed">
+                              Esta rota foi preenchida de forma manual sem o uso de rastreamento por GPS nativo. A auditoria baseia-se na origem, destino informados e relatório da inteligência fiscal.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Travel Detailed Analytics */}
+                      <div className={`p-4 rounded-xl border ${
+                        isDark ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white'
+                      } space-y-4`}>
+                        <div className="flex items-center justify-between pb-2 border-b border-neutral-100 dark:border-neutral-800">
+                          <div>
+                            <span className={`text-sm font-bold block ${isDark ? 'text-white' : 'text-neutral-900'}`}>{employee?.name || 'Colaborador'}</span>
+                            <span className="text-[10px] text-neutral-500 block font-mono mt-0.5">{selectedTrip.date} &bull; {selectedTrip.city}</span>
+                          </div>
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono font-bold uppercase ${
+                            selectedTrip.status === 'Aprovada' || selectedTrip.status === 'Reembolsada'
+                              ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                              : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                          }`}>
+                            {selectedTrip.status}
+                          </span>
+                        </div>
+
+                        {/* Audit Details Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+                          <div className="space-y-3">
+                            <div>
+                              <span className="block text-neutral-450 text-[10px] uppercase font-bold">Endereço de Partida</span>
+                              <span className={`block mt-0.5 text-[11px] leading-relaxed ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`}>
+                                {selectedTrip.startAddress || 'Não fornecido (Viagem Manual)'}
+                              </span>
+                            </div>
+
+                            <div>
+                              <span className="block text-neutral-450 text-[10px] uppercase font-bold">Endereço de Chegada</span>
+                              <span className={`block mt-0.5 text-[11px] leading-relaxed ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`}>
+                                {selectedTrip.endAddress || 'Não fornecido (Viagem Manual)'}
+                              </span>
+                            </div>
+
+                            {selectedTrip.startTime && (
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <span className="block text-neutral-450 text-[10px] uppercase font-bold font-mono">Início</span>
+                                  <span className="block font-bold mt-0.5">{new Date(selectedTrip.startTime).toLocaleTimeString('pt-BR')}</span>
+                                </div>
+                                <div>
+                                  <span className="block text-neutral-450 text-[10px] uppercase font-bold font-mono">Término</span>
+                                  <span className="block font-bold mt-0.5">{selectedTrip.endTime ? new Date(selectedTrip.endTime).toLocaleTimeString('pt-BR') : '--'}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-3 pl-0 sm:pl-4 border-l-0 sm:border-l border-neutral-200 dark:border-neutral-800">
+                            <div>
+                              <span className="block text-neutral-450 text-[10px] uppercase font-bold">Veículo da Viagem</span>
+                              <span className={`block mt-0.5 font-sans font-bold ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`}>
+                                {vehicle?.name || 'Não cadastrado'}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <span className="block text-neutral-450 text-[10px] uppercase font-bold font-mono">Quilometragem</span>
+                                <span className="block font-bold text-sm mt-0.5">{selectedTrip.kmTraveled} km</span>
+                              </div>
+                              <div>
+                                <span className="block text-neutral-450 text-[10px] uppercase font-bold font-mono">Est. Consumo</span>
+                                <span className="block font-bold text-sm mt-0.5">
+                                  {(selectedTrip.kmTraveled / (Number(vehicle?.avgConsumption) || 12)).toFixed(1)} L
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="pt-2">
+                              <span className="block text-[#FF4D00] text-[10px] uppercase font-bold font-mono">Est. Reembolso Combustível</span>
+                              <span className="block font-bold text-sm text-[#FF4D00] mt-0.5">
+                                R$ {((selectedTrip.kmTraveled / (Number(vehicle?.avgConsumption) || 12)) * 6.29).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {selectedTrip.notes && (
+                          <div className="p-3 bg-neutral-50 dark:bg-neutral-900/40 rounded-lg text-[11px] leading-relaxed border border-neutral-100 dark:border-neutral-800">
+                            <strong className="block mb-0.5">Observações:</strong>
+                            {selectedTrip.notes}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -1827,41 +2389,50 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
             </div>
 
             {activeTrip ? (
-              <div className="space-y-4 text-center py-4">
+              <div className="space-y-4 text-center py-4 animate-fadeIn">
                 <div className="w-16 h-16 rounded-full bg-[#FF4D00]/10 flex items-center justify-center mx-auto animate-pulse">
                   <MapPin className="w-8 h-8 text-[#FF4D00]" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-neutral-900 dark:text-white">Viagem em Andamento</p>
+                  <p className="text-sm font-semibold text-neutral-900 dark:text-white uppercase tracking-wider">Viagem em Andamento</p>
                   {activeTrip.startTime && (
                     <p className="text-xs text-neutral-500 mt-1 font-mono">
                       Iniciada às {new Date(activeTrip.startTime).toLocaleTimeString('pt-BR')}
                     </p>
                   )}
                   
-                  {activeTrip.startLat !== undefined && activeTrip.startLng !== undefined && (
-                    <div className="mt-4 p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-800 text-left">
-                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">Ponto de Partida</p>
-                      {activeTrip.startAddress ? (
-                        <p className="text-xs text-neutral-700 dark:text-neutral-300 leading-relaxed">
-                          {activeTrip.startAddress}
-                        </p>
-                      ) : (
-                        <p className="text-xs text-neutral-700 dark:text-neutral-300 font-mono">
-                          Lat: {activeTrip.startLat.toFixed(6)} <br/>
-                          Lng: {activeTrip.startLng.toFixed(6)}
-                        </p>
-                      )}
+                  <div className="mt-4 p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-800 text-left space-y-2">
+                    <div>
+                      <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider block">🏢 Cliente Visitado</span>
+                      <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">{activeTrip.clientVisited}</p>
                     </div>
-                  )}
+                    {activeTrip.reason && (
+                      <div>
+                        <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider block">📝 Motivo da Visita</span>
+                        <p className="text-xs text-neutral-700 dark:text-neutral-300">{activeTrip.reason}</p>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider block">📍 Ponto de Partida</span>
+                      <p className="text-xs text-neutral-700 dark:text-neutral-300 leading-relaxed">
+                        {activeTrip.startAddress || 'Localização GPS Obtida'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
                 <div className="pt-4 space-y-2">
                   <button 
                     type="button" 
+                    disabled={gpsLoading}
                     onClick={finishGpsTrip} 
-                    className="w-full bg-[#FF4D00] text-white py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition hover:bg-[#E64500] hover:shadow-lg"
+                    className="w-full bg-[#FF4D00] text-white py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition hover:bg-[#E64500] hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    Finalizar Viagem e Salvar
+                    {gpsLoading ? (
+                      <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
+                    🏁 Informar Chegada no Cliente
                   </button>
                   <button 
                     type="button" 
@@ -1874,54 +2445,110 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               </div>
             ) : !editingId ? (
               <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-mono text-neutral-400">Selecionar Colaborador</label>
-                  <select
-                    required
-                    value={displacementForm.employeeId}
-                    onChange={(e) => {
-                      const empId = e.target.value;
-                      const linked = data.vehicles.filter(v => v.employeeId === empId);
-                      setDisplacementForm({
-                        ...displacementForm,
-                        employeeId: empId,
-                        vehicleId: linked[0]?.id || ''
-                      });
-                    }}
-                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
-                  >
-                    <option value="" disabled>--- Escolha o colaborador ---</option>
-                    {data.employees.map(emp => (
-                      <option key={emp.id} value={emp.id}>{emp.name}</option>
-                    ))}
-                  </select>
-                </div>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-mono text-neutral-400">1. Escolha o Colaborador</label>
+                    <select
+                      required
+                      value={displacementForm.employeeId}
+                      onChange={(e) => {
+                        const empId = e.target.value;
+                        const linked = data.vehicles.filter(v => v.employeeId === empId);
+                        setDisplacementForm({
+                          ...displacementForm,
+                          employeeId: empId,
+                          vehicleId: linked[0]?.id || ''
+                        });
+                      }}
+                      className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    >
+                      <option value="" disabled>--- Escolha o colaborador ---</option>
+                      {data.employees.map(emp => (
+                        <option key={emp.id} value={emp.id}>{emp.name}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-mono text-neutral-400">Veículo Utilizado</label>
-                  <select
-                    required
-                    value={displacementForm.vehicleId}
-                    onChange={(e) => setDisplacementForm({ ...displacementForm, vehicleId: e.target.value })}
-                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
-                  >
-                    <option value="" disabled>--- Escolha o veículo ---</option>
-                    {data.vehicles
-                      .filter(v => !displacementForm.employeeId || v.employeeId === displacementForm.employeeId)
-                      .map(v => (
-                        <option key={v.id} value={v.id}>{v.name} ({v.plate || '---'})</option>
-                      ))
-                    }
-                  </select>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-mono text-neutral-400">Veículo Utilizado</label>
+                    <select
+                      required
+                      value={displacementForm.vehicleId}
+                      onChange={(e) => setDisplacementForm({ ...displacementForm, vehicleId: e.target.value })}
+                      className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    >
+                      <option value="" disabled>--- Escolha o veículo ---</option>
+                      {data.vehicles
+                        .filter(v => !displacementForm.employeeId || v.employeeId === displacementForm.employeeId)
+                        .map(v => (
+                          <option key={v.id} value={v.id}>{v.name} ({v.plate || '---'})</option>
+                        ))
+                      }
+                    </select>
+                  </div>
+
+                  <div className="pt-2">
+                    <button 
+                      type="button" 
+                      onClick={fetchStartLocation}
+                      disabled={gpsLoading}
+                      className="w-full bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 py-2.5 rounded-lg font-bold uppercase tracking-wider text-[11px] flex items-center justify-center gap-2 shadow-sm transition hover:bg-neutral-800 dark:hover:bg-neutral-100 disabled:opacity-50"
+                    >
+                      {gpsLoading ? (
+                        <span className="inline-block w-3.5 h-3.5 border-2 border-white dark:border-neutral-950 border-t-transparent rounded-full animate-spin"></span>
+                      ) : (
+                        <MapPin className="w-3.5 h-3.5" />
+                      )}
+                      Obter Localização atual
+                    </button>
+                  </div>
+
+                  {gpsStartStreet && (
+                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg space-y-1 animate-fadeIn">
+                      <div className="flex items-center gap-1.5 text-emerald-600 font-bold text-[10px] uppercase tracking-wider">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Localização Obtida com Sucesso!
+                      </div>
+                      <p className="text-xs text-neutral-800 dark:text-neutral-200 font-medium">
+                        {gpsStartStreet}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-2 pt-1 border-t border-neutral-100 dark:border-neutral-900">
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-mono text-neutral-400">Cliente a Visitar</label>
+                      <input 
+                        type="text"
+                        required
+                        placeholder="Nome do cliente/loja"
+                        value={displacementForm.clientVisited}
+                        onChange={(e) => setDisplacementForm({ ...displacementForm, clientVisited: e.target.value })}
+                        className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-mono text-neutral-400">Motivo da Visita</label>
+                      <input 
+                        type="text"
+                        required
+                        placeholder="Ex: Entrega de mercadorias / Reunião"
+                        value={displacementForm.reason}
+                        onChange={(e) => setDisplacementForm({ ...displacementForm, reason: e.target.value })}
+                        className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="pt-2">
                   <button 
                     type="button" 
                     onClick={startGpsTrip} 
-                    className="w-full bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 py-3 rounded-lg font-bold uppercase tracking-wider text-xs flex items-center justify-center gap-2 shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+                    disabled={!gpsStartCoords || !displacementForm.employeeId || !displacementForm.clientVisited || !displacementForm.reason}
+                    className="w-full bg-[#FF4D00] text-white py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition hover:bg-[#E64500] hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <MapPin className="w-4 h-4" /> Ativar Localização e Iniciar
+                    Começar Viagem / Deslocamento
                   </button>
                 </div>
               </div>

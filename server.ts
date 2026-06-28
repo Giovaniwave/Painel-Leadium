@@ -1520,7 +1520,17 @@ async function startServer() {
         startTime,
         endTime,
       } = req.body;
-      if (!employeeId || !vehicleId || (kmTraveled === undefined && status !== 'Em andamento')) {
+
+      const expenses = await getExpensesData();
+      const existing = id
+        ? expenses.displacements.find((d: any) => d.id === id)
+        : null;
+
+      const empId = employeeId || (existing ? existing.employeeId : null);
+      const vehId = vehicleId || (existing ? existing.vehicleId : null);
+      const finalKm = kmTraveled !== undefined ? kmTraveled : (existing ? existing.kmTraveled : undefined);
+
+      if (!empId || !vehId || (finalKm === undefined && status !== 'Em andamento')) {
         return res
           .status(400)
           .json({
@@ -1528,8 +1538,7 @@ async function startServer() {
           });
       }
 
-      const expenses = await getExpensesData();
-      const vehicle = expenses.vehicles.find((v: any) => v.id === vehicleId);
+      const vehicle = expenses.vehicles.find((v: any) => v.id === vehId);
       if (!vehicle) {
         return res
           .status(400)
@@ -1537,25 +1546,22 @@ async function startServer() {
       }
 
       // Automatic calculations:
-      const kms = Number(kmTraveled);
+      const kms = Number(finalKm) || 0;
       const consumption = Number(vehicle.avgConsumption) || 10;
       const litersConsumed = Number((kms / consumption).toFixed(2));
       const amount = Number((litersConsumed * 6.29).toFixed(2)); // standard price of Gasoline in BR is R$ 6.29
 
       const currentSecs = new Date().toISOString();
-      const existing = id
-        ? expenses.displacements.find((d: any) => d.id === id)
-        : null;
       const finalStatus = status || (existing ? existing.status : "Pendente");
 
       let displacementData: any = {
         id: id || crypto.randomUUID(),
         date: date || currentSecs.substring(0, 10),
-        employeeId,
+        employeeId: empId,
         clientVisited: clientVisited || "Cliente Não Especificado",
         city: city || "Cidade Não Especificada",
         reason: reason || "",
-        vehicleId,
+        vehicleId: vehId,
         vehicleName: vehicle.name,
         kmTraveled: kms,
         notes: notes || "",
