@@ -89,7 +89,7 @@ interface Displacement {
   kmTraveled: number;
   litersConsumed: number;
   amount: number;
-  status: 'Em andamento' | 'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada';
+  status: 'Pendente' | 'Finalizado' | 'Em análise' | 'Aprovada' | 'Reembolsada';
   notes?: string;
   receiptImage?: string;
   refundReceiptImage?: string;
@@ -361,7 +361,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   const [calcFuelPrice, setCalcFuelPrice] = useState<string>('6.29');
 
   const [tripMode, setTripMode] = useState<'gps' | 'manual'>('gps');
-  const activeTrip = data.displacements.find(d => d.status === 'Em andamento');
+  const activeTrip = data.displacements.find(d => d.status === 'Pendente' && d.startLat != null && !d.endTime);
 
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsStartCoords, setGpsStartCoords] = useState<{ lat: number, lng: number } | null>(null);
@@ -384,7 +384,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     payload: any;
   } | null>(null);
 
-  const [statusForm, setStatusForm] = useState<'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada'>('Pendente');
+  const [statusForm, setStatusForm] = useState<'Pendente' | 'Finalizado' | 'Em análise' | 'Aprovada' | 'Reembolsada'>('Finalizado');
 
   const [fipeBrands, setFipeBrands] = useState<{codigo: string, nome: string}[]>([]);
   const [fipeModels, setFipeModels] = useState<{codigo: string, nome: string}[]>([]);
@@ -624,7 +624,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       date: new Date().toISOString().split('T')[0],
       employeeId: displacementForm.employeeId,
       vehicleId: displacementForm.vehicleId,
-      status: 'Em andamento',
+      status: 'Pendente',
       startLat: gpsStartCoords?.lat || -23.2178,
       startLng: gpsStartCoords?.lng || -47.5222,
       startAddress: gpsStartStreet || 'Porto Feliz - SP (Sede)',
@@ -635,8 +635,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       endAddress: endAddressInput,
       endLat: gpsEndCoords.lat,
       endLng: gpsEndCoords.lng,
-      kmTraveled: calculatedDistance || 0,
-      amount: calculatedValue || 0,
+      kmTraveled: 0,
+      amount: 0,
     };
 
     try {
@@ -718,7 +718,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
           employeeId: activeTrip.employeeId || displacementForm.employeeId,
           vehicleId: activeTrip.vehicleId || displacementForm.vehicleId,
           kmTraveled: finalDistance,
-          status: 'Pendente',
+          status: 'Finalizado',
           endLat: pos.coords.latitude,
           endLng: pos.coords.longitude,
           endAddress: address || activeTrip.endAddress,
@@ -1017,7 +1017,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       target.km += Number(d.kmTraveled) || 0;
       target.visitsCount += 1;
 
-      if (d.status === 'Pendente' || d.status === 'Em análise') {
+      if (d.status === 'Pendente' || d.status === 'Finalizado' || d.status === 'Em análise') {
         target.pendingReimbursement += Number(d.amount) || 0;
       } else if (d.status === 'Aprovada' || d.status === 'Reembolsada') {
         target.paidReimbursement += Number(d.amount) || 0;
@@ -1059,7 +1059,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       const currentMonth = new Date().toISOString().substring(0, 7);
       list = list.filter(d => d.date.startsWith(currentMonth));
     } else if (filterPeriod === 'pendentes') {
-      list = list.filter(d => d.status === 'Pendente' || d.status === 'Em análise');
+      list = list.filter(d => d.status === 'Pendente' || d.status === 'Finalizado' || d.status === 'Em análise');
     } else if (filterPeriod === 'aprovadas') {
       list = list.filter(d => d.status === 'Aprovada');
     }
@@ -1090,7 +1090,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
             </>
           ) : (
             <>
-              <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Pendente
+              <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" /> {status}
             </>
           )}
         </span>
@@ -1109,7 +1109,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
             </>
           ) : (
             <>
-              <Clock className="w-3.5 h-3.5 text-amber-500 animate-pulse shrink-0" /> Pendente
+              <Clock className="w-3.5 h-3.5 text-amber-500 animate-pulse shrink-0" /> {status}
             </>
           )}
         </span>
