@@ -2590,8 +2590,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       {/* Modal 3: Lançar Viagem */}
       {activeModal === 'displacement' && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-3">
+          <div className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 shadow-xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-3 shrink-0">
               <h3 className="text-sm font-bold text-neutral-900 dark:text-white uppercase tracking-wider font-sans">
                 {finishedTripSummary 
                   ? 'Resumo da Viagem' 
@@ -2611,6 +2611,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               </button>
             </div>
 
+            <div className="overflow-y-auto pr-1 flex-1 space-y-4 mt-3 scrollbar-thin scrollbar-thumb-neutral-300 dark:scrollbar-thumb-neutral-800">
             {finishedTripSummary ? (
               /* PHASE 1: COMPLETED TRIP SUMMARY SCREEN */
               <div className="space-y-4 animate-fadeIn">
@@ -2712,53 +2713,6 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       </div>
                     )}
                   </div>
-                </div>
-
-                {/* SIMULATION & GPS BYPASS TOGGLE FOR ACTIVE TRIP */}
-                <div className="p-2.5 rounded-lg border border-yellow-500/20 bg-yellow-500/5 text-xs text-left space-y-1.5 mx-auto">
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="checkbox"
-                      id="active-bypass-dist"
-                      checked={testBypassDistance}
-                      onChange={(e) => setTestBypassDistance(e.target.checked)}
-                      className="accent-[#FF4D00] h-3.5 w-3.5 cursor-pointer"
-                    />
-                    <label htmlFor="active-bypass-dist" className="font-bold text-neutral-800 dark:text-neutral-200 cursor-pointer select-none">
-                      Ignorar limite de distância para testes
-                    </label>
-                  </div>
-                  <p className="text-[10px] text-neutral-500 leading-normal">
-                    Se ativado, ignora a comprovação de proximidade de 300 metros no encerramento da viagem.
-                  </p>
-                </div>
-
-                {/* ACTIVE TRIP SQL DE PERSISTENCIA PANEL */}
-                <div className="border border-neutral-200 dark:border-neutral-800 rounded-lg overflow-hidden bg-neutral-50 dark:bg-neutral-900/20 text-xs text-left">
-                  <button
-                    type="button"
-                    onClick={() => setShowSqlPreview(!showSqlPreview)}
-                    className="w-full flex items-center justify-between p-2 px-3 hover:bg-neutral-100 dark:hover:bg-neutral-900/40 text-neutral-600 dark:text-neutral-400 font-semibold transition"
-                  >
-                    <span>🛠️ Visualizar Comando SQL de Persistência</span>
-                    <span>{showSqlPreview ? 'Recolher' : 'Expandir'}</span>
-                  </button>
-                  {showSqlPreview && (
-                    <div className="p-3 border-t border-neutral-250 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-950 font-mono text-[10px] text-neutral-700 dark:text-neutral-300 overflow-x-auto whitespace-pre space-y-2 leading-relaxed">
-                      <p className="text-emerald-600 dark:text-emerald-400 font-bold">-- Consulta para ler viagem em andamento:</p>
-                      <code>{`SELECT * FROM leadium_displacements 
-WHERE id = '${activeTrip.id}';`}</code>
-
-                      <p className="text-amber-600 dark:text-amber-400 font-bold mt-4">-- SQL ao finalizar comprovando presença (dentro de 300m):</p>
-                      <code>{`UPDATE leadium_displacements SET 
-  status = 'Pendente', 
-  end_lat = LATITUDE_ATUAL_GPS, 
-  end_lng = LONGITUDE_ATUAL_GPS, 
-  end_address = 'ENDERECO_REVERSO_DESTINO', 
-  end_time = 'TIMESTAMP_FIM' 
-WHERE id = '${activeTrip.id}';`}</code>
-                    </div>
-                  )}
                 </div>
                 
                 <div className="pt-4 space-y-2">
@@ -2942,76 +2896,6 @@ WHERE id = '${activeTrip.id}';`}</code>
                       )}
                     </div>
                   </div>
-                </div>
-
-                {/* SIMULATION & GPS BYPASS TOGGLE */}
-                <div className="p-2.5 rounded-lg border border-yellow-500/20 bg-yellow-500/5 text-xs space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="checkbox"
-                      id="bypass-dist"
-                      checked={testBypassDistance}
-                      onChange={(e) => setTestBypassDistance(e.target.checked)}
-                      className="accent-[#FF4D00] h-3.5 w-3.5 cursor-pointer"
-                    />
-                    <label htmlFor="bypass-dist" className="font-bold text-neutral-800 dark:text-neutral-200 cursor-pointer select-none">
-                      Ignorar limite de distância para testes (Modo Simulação)
-                    </label>
-                  </div>
-                  <p className="text-[10px] text-neutral-500 leading-normal">
-                    Permite finalizar a viagem sem precisar estar fisicamente a menos de 300 metros do endereço de destino durante o teste no navegador.
-                  </p>
-                </div>
-
-                {/* PERSISTENCE SQL PREVIEW TOGGLE PANEL */}
-                <div className="border border-neutral-200 dark:border-neutral-800 rounded-lg overflow-hidden bg-neutral-50 dark:bg-neutral-900/20 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setShowSqlPreview(!showSqlPreview)}
-                    className="w-full flex items-center justify-between p-2 px-3 hover:bg-neutral-100 dark:hover:bg-neutral-900/40 text-neutral-600 dark:text-neutral-400 font-semibold transition"
-                  >
-                    <span>🛠️ Visualizar Comando SQL de Persistência</span>
-                    <span>{showSqlPreview ? 'Recolher' : 'Expandir'}</span>
-                  </button>
-                  {showSqlPreview && (
-                    <div className="p-3 border-t border-neutral-250 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-950 font-mono text-[10px] text-neutral-700 dark:text-neutral-300 overflow-x-auto whitespace-pre space-y-2 leading-relaxed">
-                      <p className="text-emerald-600 dark:text-emerald-400 font-bold">-- 1. SQL para iniciar viagem e salvar coordenadas de destino:</p>
-                      <code>{`INSERT INTO leadium_displacements (
-  id, date, employee_id, client_visited, city, reason, vehicle_id, vehicle_name, 
-  km_traveled, amount, liters_consumed, status, start_lat, start_lng, end_lat, end_lng, 
-  start_address, end_address, start_time
-) VALUES (
-  '${activeTrip?.id || 'NOVA_UUID'}',
-  '${displacementForm.date}',
-  '${displacementForm.employeeId || 'ID_COLABORADOR'}',
-  '${displacementForm.clientVisited || 'NOME_CLIENTE'}',
-  'Localização GPS',
-  '${displacementForm.reason || 'MOTIVO_VISITA'}',
-  '${displacementForm.vehicleId || 'ID_VEICULO'}',
-  '${data.vehicles.find(v => v.id === displacementForm.vehicleId)?.name || 'NOME_VEICULO'}',
-  ${calculatedDistance || 0},
-  ${calculatedValue || 0},
-  ${((calculatedDistance || 0) / (Number(data.vehicles.find(v => v.id === displacementForm.vehicleId)?.avgConsumption) || 10)).toFixed(2)},
-  'Em andamento',
-  ${gpsStartCoords?.lat || -23.2178},
-  ${gpsStartCoords?.lng || -47.5222},
-  ${gpsEndCoords?.lat || 'NULL'},
-  ${gpsEndCoords?.lng || 'NULL'},
-  '${gpsStartStreet || 'Localização de Partida'}',
-  '${endAddressInput || 'Endereço de Destino'}',
-  '${new Date().toISOString()}'
-);`}</code>
-
-                      <p className="text-amber-600 dark:text-amber-400 font-bold mt-4">-- 2. SQL ao finalizar comprovando presença (dentro de 300m):</p>
-                      <code>{`UPDATE leadium_displacements SET 
-  status = 'Pendente', 
-  end_lat = LATITUDE_ATUAL_GPS, 
-  end_lng = LONGITUDE_ATUAL_GPS, 
-  end_address = 'ENDERECO_REVERSO_DESTINO', 
-  end_time = 'TIMESTAMP_FIM' 
-WHERE id = 'UUID_DA_VIAGEM';`}</code>
-                    </div>
-                  )}
                 </div>
 
                 <div className="pt-2">
@@ -3261,6 +3145,7 @@ WHERE id = 'UUID_DA_VIAGEM';`}</code>
               </div>
             </form>
             )}
+            </div>
           </div>
         </div>
       )}
