@@ -366,6 +366,17 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsStartCoords, setGpsStartCoords] = useState<{ lat: number, lng: number } | null>(null);
   const [gpsStartStreet, setGpsStartStreet] = useState<string>('');
+  
+  // Destination Tracking and Simulation states
+  const [gpsEndCoords, setGpsEndCoords] = useState<{ lat: number, lng: number } | null>(null);
+  const [endAddressInput, setEndAddressInput] = useState<string>('');
+  const [calculatedDistance, setCalculatedDistance] = useState<number | null>(null);
+  const [calculatedValue, setCalculatedValue] = useState<number | null>(null);
+  const [geocodingEndLoading, setGeocodingEndLoading] = useState(false);
+  const [geocodingError, setGeocodingError] = useState<string>('');
+  const [testBypassDistance, setTestBypassDistance] = useState(true);
+  const [showSqlPreview, setShowSqlPreview] = useState(false);
+
   const [finishedTripSummary, setFinishedTripSummary] = useState<{
     km: number;
     amount: number;
@@ -543,6 +554,54 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     );
   };
 
+  const calculateRoute = (startLat: number, startLng: number, endLat: number, endLng: number) => {
+    const dist = calculateDistanceKM(startLat, startLng, endLat, endLng);
+    const finalDist = Number(dist.toFixed(2));
+    setCalculatedDistance(finalDist);
+
+    const vehicle = data.vehicles.find(v => v.id === displacementForm.vehicleId);
+    const consumption = Number(vehicle?.avgConsumption) || 10;
+    const liters = finalDist / consumption;
+    const val = Number((liters * 6.29).toFixed(2));
+    setCalculatedValue(val);
+    setGeocodingError('');
+  };
+
+  const handleGeocodeDestination = async (address: string) => {
+    if (!address || address.trim() === '') return;
+    if (!gpsStartCoords) {
+      setGeocodingError('Por favor, obtenha o Ponto de Partida (recarregar GPS) primeiro.');
+      return;
+    }
+    setGeocodingEndLoading(true);
+    setGeocodingError('');
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
+      if (res.ok) {
+        const results = await res.json();
+        if (results && results.length > 0) {
+          const first = results[0];
+          const lat = parseFloat(first.lat);
+          const lng = parseFloat(first.lon);
+          setGpsEndCoords({ lat, lng });
+          calculateRoute(gpsStartCoords.lat, gpsStartCoords.lng, lat, lng);
+        } else {
+          setGeocodingError('Endereço não encontrado no mapa. Tente digitar de forma mais simples (ex: Nome da Rua, Cidade).');
+          setGpsEndCoords(null);
+          setCalculatedDistance(null);
+          setCalculatedValue(null);
+        }
+      } else {
+        setGeocodingError('Erro na consulta do serviço de mapas.');
+      }
+    } catch (e) {
+      console.error(e);
+      setGeocodingError('Erro de rede ao buscar o endereço.');
+    } finally {
+      setGeocodingEndLoading(false);
+    }
+  };
+
   const startGpsTrip = async () => {
     if (!displacementForm.employeeId || !displacementForm.vehicleId) {
       alert("Selecione o colaborador e o veículo primeiro.");
@@ -550,6 +609,14 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     }
     if (!displacementForm.clientVisited || !displacementForm.reason) {
       alert("Por favor, informe o nome do cliente e o motivo da visita.");
+      return;
+    }
+    if (!endAddressInput.trim()) {
+      alert("Por favor, preencha o Endereço de Visita (destino).");
+      return;
+    }
+    if (!gpsEndCoords) {
+      alert("Por favor, certifique-se de calcular a rota para o endereço de visita clicando no botão de calcular.");
       return;
     }
 
@@ -565,6 +632,11 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       clientVisited: displacementForm.clientVisited,
       city: 'Localização GPS',
       reason: displacementForm.reason,
+      endAddress: endAddressInput,
+      endLat: gpsEndCoords.lat,
+      endLng: gpsEndCoords.lng,
+      kmTraveled: calculatedDistance || 0,
+      amount: calculatedValue || 0,
     };
 
     try {
@@ -578,6 +650,11 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
         // Clear temp inputs/states
         setGpsStartCoords(null);
         setGpsStartStreet('');
+        setGpsEndCoords(null);
+        setEndAddressInput('');
+        setCalculatedDistance(null);
+        setCalculatedValue(null);
+        setGeocodingError('');
       } else {
         const errJson = await res.json();
         alert('Erro ao iniciar a viagem: ' + (errJson.error || 'Erro desconhecido'));
@@ -592,13 +669,33 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     setGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        // Proximity check: verify we are at least 300m close to the destination
+        if (activeTrip.endLat !== undefined && activeTrip.endLng !== undefined && activeTrip.endLat !== null && activeTrip.endLng !== null) {
+          const proximityKm = calculateDistanceKM(activeTrip.endLat, activeTrip.endLng, pos.coords.latitude, pos.coords.longitude);
+          const proximityMeters = Math.round(proximityKm * 1000);
+          
+          if (proximityMeters > 300) {
+            if (!testBypassDistance) {
+              setGpsLoading(false);
+              alert(`🚫 VALIDAÇÃO DE GPS FALHOU:\n\nVocê está a ${proximityMeters}m de distância do endereço de destino cadastrado.\n\nPara finalizar esta viagem e receber o reembolso, você deve estar a pelo menos 300 metros (limite de proximidade) do local de destino.\n\nCaso esteja testando o aplicativo, você pode ativar o "Ignorar limite de distância para testes" para prosseguir.`);
+              return;
+            } else {
+              console.log(`[Modo Simulação] Ignorando distância de ${proximityMeters}m do destino.`);
+            }
+          }
+        }
+
         const startLat = activeTrip.startLat;
         const startLng = activeTrip.startLng;
         let distance = 0.5; // fallback
         if (startLat !== undefined && startLng !== undefined) {
           distance = calculateDistanceKM(startLat, startLng, pos.coords.latitude, pos.coords.longitude);
         }
-        const finalDistance = distance < 0.1 ? 0.1 : Number(distance.toFixed(2));
+        
+        // Use the planned kmTraveled if available since it represents the official geocoded route distance
+        const finalDistance = activeTrip.kmTraveled && activeTrip.kmTraveled > 0 
+          ? activeTrip.kmTraveled 
+          : (distance < 0.1 ? 0.1 : Number(distance.toFixed(2)));
         
         let address = '';
         try {
@@ -607,11 +704,11 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
             const data = await res.json();
             address = extractStreetName(data);
           } else {
-            address = `Rua de Destino (Lat: ${pos.coords.latitude.toFixed(5)}, Lng: ${pos.coords.longitude.toFixed(5)})`;
+            address = activeTrip.endAddress || `Rua de Destino (Lat: ${pos.coords.latitude.toFixed(5)}, Lng: ${pos.coords.longitude.toFixed(5)})`;
           }
         } catch (e) {
           console.error(e);
-          address = `Rua de Destino (Lat: ${pos.coords.latitude.toFixed(5)}, Lng: ${pos.coords.longitude.toFixed(5)})`;
+          address = activeTrip.endAddress || `Rua de Destino (Lat: ${pos.coords.latitude.toFixed(5)}, Lng: ${pos.coords.longitude.toFixed(5)})`;
         }
         
         const durationMins = activeTrip.startTime ? Math.round((Date.now() - new Date(activeTrip.startTime).getTime()) / 60000) : 0;
@@ -620,11 +717,11 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
           date: activeTrip.date,
           employeeId: activeTrip.employeeId || displacementForm.employeeId,
           vehicleId: activeTrip.vehicleId || displacementForm.vehicleId,
-          kmTraveled: (typeof finalDistance === 'number' && !isNaN(finalDistance)) ? finalDistance : 0.1,
+          kmTraveled: finalDistance,
           status: 'Pendente',
           endLat: pos.coords.latitude,
           endLng: pos.coords.longitude,
-          endAddress: address,
+          endAddress: address || activeTrip.endAddress,
           endTime: new Date().toISOString(),
           clientVisited: activeTrip.clientVisited || 'Cliente Não Especificado',
           city: activeTrip.city || 'Cidade Não Especificada',
@@ -641,7 +738,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
         setFinishedTripSummary({
           km: finalDistance,
           amount: calculatedAmount,
-          address: address,
+          address: address || activeTrip.endAddress || 'Não especificado',
           payload: payload
         });
         setGpsLoading(false);
@@ -809,6 +906,12 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     setEditingId(null);
     setGpsStartCoords(null);
     setGpsStartStreet('');
+    setGpsEndCoords(null);
+    setEndAddressInput('');
+    setCalculatedDistance(null);
+    setCalculatedValue(null);
+    setGeocodingError('');
+    setShowSqlPreview(false);
     setFinishedTripSummary(null);
     setActiveModal('displacement');
     
@@ -2600,7 +2703,62 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                         {activeTrip.startAddress || 'Localização GPS Obtida'}
                       </p>
                     </div>
+                    {activeTrip.endAddress && (
+                      <div>
+                        <span className="text-[9px] font-bold text-neutral-450 dark:text-neutral-500 uppercase tracking-wider block">🎯 Endereço de Destino (Visita)</span>
+                        <p className="text-xs text-neutral-700 dark:text-neutral-300 leading-relaxed truncate">
+                          {activeTrip.endAddress}
+                        </p>
+                      </div>
+                    )}
                   </div>
+                </div>
+
+                {/* SIMULATION & GPS BYPASS TOGGLE FOR ACTIVE TRIP */}
+                <div className="p-2.5 rounded-lg border border-yellow-500/20 bg-yellow-500/5 text-xs text-left space-y-1.5 mx-auto">
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox"
+                      id="active-bypass-dist"
+                      checked={testBypassDistance}
+                      onChange={(e) => setTestBypassDistance(e.target.checked)}
+                      className="accent-[#FF4D00] h-3.5 w-3.5 cursor-pointer"
+                    />
+                    <label htmlFor="active-bypass-dist" className="font-bold text-neutral-800 dark:text-neutral-200 cursor-pointer select-none">
+                      Ignorar limite de distância para testes
+                    </label>
+                  </div>
+                  <p className="text-[10px] text-neutral-500 leading-normal">
+                    Se ativado, ignora a comprovação de proximidade de 300 metros no encerramento da viagem.
+                  </p>
+                </div>
+
+                {/* ACTIVE TRIP SQL DE PERSISTENCIA PANEL */}
+                <div className="border border-neutral-200 dark:border-neutral-800 rounded-lg overflow-hidden bg-neutral-50 dark:bg-neutral-900/20 text-xs text-left">
+                  <button
+                    type="button"
+                    onClick={() => setShowSqlPreview(!showSqlPreview)}
+                    className="w-full flex items-center justify-between p-2 px-3 hover:bg-neutral-100 dark:hover:bg-neutral-900/40 text-neutral-600 dark:text-neutral-400 font-semibold transition"
+                  >
+                    <span>🛠️ Visualizar Comando SQL de Persistência</span>
+                    <span>{showSqlPreview ? 'Recolher' : 'Expandir'}</span>
+                  </button>
+                  {showSqlPreview && (
+                    <div className="p-3 border-t border-neutral-250 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-950 font-mono text-[10px] text-neutral-700 dark:text-neutral-300 overflow-x-auto whitespace-pre space-y-2 leading-relaxed">
+                      <p className="text-emerald-600 dark:text-emerald-400 font-bold">-- Consulta para ler viagem em andamento:</p>
+                      <code>{`SELECT * FROM leadium_displacements 
+WHERE id = '${activeTrip.id}';`}</code>
+
+                      <p className="text-amber-600 dark:text-amber-400 font-bold mt-4">-- SQL ao finalizar comprovando presença (dentro de 300m):</p>
+                      <code>{`UPDATE leadium_displacements SET 
+  status = 'Pendente', 
+  end_lat = LATITUDE_ATUAL_GPS, 
+  end_lng = LONGITUDE_ATUAL_GPS, 
+  end_address = 'ENDERECO_REVERSO_DESTINO', 
+  end_time = 'TIMESTAMP_FIM' 
+WHERE id = '${activeTrip.id}';`}</code>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="pt-4 space-y-2">
@@ -2733,15 +2891,135 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                         className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
                       />
                     </div>
+
+                    {/* NEW BLOCK: ENDEREÇO DE VISITA */}
+                    <div className="space-y-1.5 pt-2 border-t border-neutral-100 dark:border-neutral-900">
+                      <label className="text-[10px] uppercase font-mono font-bold text-neutral-500 dark:text-neutral-400 block">
+                        Endereço de Visita (Destino)
+                      </label>
+                      
+                      <div className="flex gap-1.5">
+                        <input 
+                          type="text"
+                          required
+                          placeholder="Ex: Av. Paulista, 1000 - São Paulo"
+                          value={endAddressInput}
+                          onChange={(e) => setEndAddressInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleGeocodeDestination(endAddressInput);
+                            }
+                          }}
+                          className="flex-1 p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleGeocodeDestination(endAddressInput)}
+                          disabled={geocodingEndLoading || !endAddressInput.trim()}
+                          className="px-3 bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 text-xs font-bold rounded hover:bg-neutral-200 dark:hover:bg-neutral-800 text-neutral-800 dark:text-white transition disabled:opacity-50"
+                        >
+                          {geocodingEndLoading ? 'Buscando...' : 'Calcular'}
+                        </button>
+                      </div>
+
+                      {geocodingError && (
+                        <p className="text-[10px] text-red-500 font-medium">{geocodingError}</p>
+                      )}
+
+                      {/* Display of calculated metrics (KM and Value) */}
+                      {calculatedDistance !== null && calculatedValue !== null && (
+                        <div className="grid grid-cols-2 gap-2 mt-2 p-2.5 rounded border border-emerald-500/30 bg-emerald-500/5 text-xs animate-fadeIn">
+                          <div className="text-center">
+                            <span className="text-[8px] uppercase font-mono text-neutral-400 block">Distância Estimada</span>
+                            <span className="font-extrabold text-neutral-900 dark:text-white text-sm">{calculatedDistance} KM</span>
+                          </div>
+                          <div className="text-center">
+                            <span className="text-[8px] uppercase font-mono text-neutral-400 block">Valor Reembolso</span>
+                            <span className="font-extrabold text-[#FF4D00] text-sm">R$ {calculatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
+                </div>
+
+                {/* SIMULATION & GPS BYPASS TOGGLE */}
+                <div className="p-2.5 rounded-lg border border-yellow-500/20 bg-yellow-500/5 text-xs space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox"
+                      id="bypass-dist"
+                      checked={testBypassDistance}
+                      onChange={(e) => setTestBypassDistance(e.target.checked)}
+                      className="accent-[#FF4D00] h-3.5 w-3.5 cursor-pointer"
+                    />
+                    <label htmlFor="bypass-dist" className="font-bold text-neutral-800 dark:text-neutral-200 cursor-pointer select-none">
+                      Ignorar limite de distância para testes (Modo Simulação)
+                    </label>
+                  </div>
+                  <p className="text-[10px] text-neutral-500 leading-normal">
+                    Permite finalizar a viagem sem precisar estar fisicamente a menos de 300 metros do endereço de destino durante o teste no navegador.
+                  </p>
+                </div>
+
+                {/* PERSISTENCE SQL PREVIEW TOGGLE PANEL */}
+                <div className="border border-neutral-200 dark:border-neutral-800 rounded-lg overflow-hidden bg-neutral-50 dark:bg-neutral-900/20 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setShowSqlPreview(!showSqlPreview)}
+                    className="w-full flex items-center justify-between p-2 px-3 hover:bg-neutral-100 dark:hover:bg-neutral-900/40 text-neutral-600 dark:text-neutral-400 font-semibold transition"
+                  >
+                    <span>🛠️ Visualizar Comando SQL de Persistência</span>
+                    <span>{showSqlPreview ? 'Recolher' : 'Expandir'}</span>
+                  </button>
+                  {showSqlPreview && (
+                    <div className="p-3 border-t border-neutral-250 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-950 font-mono text-[10px] text-neutral-700 dark:text-neutral-300 overflow-x-auto whitespace-pre space-y-2 leading-relaxed">
+                      <p className="text-emerald-600 dark:text-emerald-400 font-bold">-- 1. SQL para iniciar viagem e salvar coordenadas de destino:</p>
+                      <code>{`INSERT INTO leadium_displacements (
+  id, date, employee_id, client_visited, city, reason, vehicle_id, vehicle_name, 
+  km_traveled, amount, liters_consumed, status, start_lat, start_lng, end_lat, end_lng, 
+  start_address, end_address, start_time
+) VALUES (
+  '${activeTrip?.id || 'NOVA_UUID'}',
+  '${displacementForm.date}',
+  '${displacementForm.employeeId || 'ID_COLABORADOR'}',
+  '${displacementForm.clientVisited || 'NOME_CLIENTE'}',
+  'Localização GPS',
+  '${displacementForm.reason || 'MOTIVO_VISITA'}',
+  '${displacementForm.vehicleId || 'ID_VEICULO'}',
+  '${data.vehicles.find(v => v.id === displacementForm.vehicleId)?.name || 'NOME_VEICULO'}',
+  ${calculatedDistance || 0},
+  ${calculatedValue || 0},
+  ${((calculatedDistance || 0) / (Number(data.vehicles.find(v => v.id === displacementForm.vehicleId)?.avgConsumption) || 10)).toFixed(2)},
+  'Em andamento',
+  ${gpsStartCoords?.lat || -23.2178},
+  ${gpsStartCoords?.lng || -47.5222},
+  ${gpsEndCoords?.lat || 'NULL'},
+  ${gpsEndCoords?.lng || 'NULL'},
+  '${gpsStartStreet || 'Localização de Partida'}',
+  '${endAddressInput || 'Endereço de Destino'}',
+  '${new Date().toISOString()}'
+);`}</code>
+
+                      <p className="text-amber-600 dark:text-amber-400 font-bold mt-4">-- 2. SQL ao finalizar comprovando presença (dentro de 300m):</p>
+                      <code>{`UPDATE leadium_displacements SET 
+  status = 'Pendente', 
+  end_lat = LATITUDE_ATUAL_GPS, 
+  end_lng = LONGITUDE_ATUAL_GPS, 
+  end_address = 'ENDERECO_REVERSO_DESTINO', 
+  end_time = 'TIMESTAMP_FIM' 
+WHERE id = 'UUID_DA_VIAGEM';`}</code>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-2">
                   <button 
                     type="button" 
                     onClick={startGpsTrip} 
-                    disabled={!displacementForm.employeeId || !displacementForm.vehicleId || !displacementForm.clientVisited || !displacementForm.reason}
-                    className="w-full bg-[#FF4D00] text-white py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition hover:bg-[#E64500] hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!displacementForm.employeeId || !displacementForm.vehicleId || !displacementForm.clientVisited || !displacementForm.reason || !gpsEndCoords}
+                    className="w-full bg-[#FF4D00] text-white py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition hover:bg-[#E64500] hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     Começar Viagem / Deslocamento
                   </button>
