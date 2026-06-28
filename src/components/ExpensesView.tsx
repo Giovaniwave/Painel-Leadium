@@ -811,6 +811,11 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     setGpsStartStreet('');
     setFinishedTripSummary(null);
     setActiveModal('displacement');
+    
+    // Auto-fetch start location when the modal/card opens
+    setTimeout(() => {
+      fetchStartLocation();
+    }, 100);
   };
 
   const openStatusUpdate = (disp: Displacement) => {
@@ -2735,7 +2740,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   <button 
                     type="button" 
                     onClick={startGpsTrip} 
-                    disabled={!gpsStartCoords || !displacementForm.employeeId || !displacementForm.vehicleId || !displacementForm.clientVisited || !displacementForm.reason}
+                    disabled={!displacementForm.employeeId || !displacementForm.vehicleId || !displacementForm.clientVisited || !displacementForm.reason}
                     className="w-full bg-[#FF4D00] text-white py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition hover:bg-[#E64500] hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Começar Viagem / Deslocamento

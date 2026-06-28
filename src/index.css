@@ -128,6 +128,11 @@
   color: #6B7280 !important;
 }
 
+.light-theme #mobile-bottom-tabs button.bg-black,
+.light-theme #mobile-bottom-tabs button.bg-black * {
+  color: #FFFFFF !important;
+}
+
 .light-theme #mobile-bottom-tabs button.text-white {
   color: #111827 !important;
 }
