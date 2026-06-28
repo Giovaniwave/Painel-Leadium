@@ -160,8 +160,28 @@ CREATE TABLE IF NOT EXISTS leadium_displacements (
   liters_consumed NUMERIC DEFAULT 0,
   amount NUMERIC DEFAULT 0,
   history JSONB DEFAULT '[]'::jsonb,
+  refund_receipt_image TEXT DEFAULT '',
+  start_lat NUMERIC,
+  start_lng NUMERIC,
+  end_lat NUMERIC,
+  end_lng NUMERIC,
+  start_address TEXT DEFAULT '',
+  end_address TEXT DEFAULT '',
+  start_time TEXT DEFAULT '',
+  end_time TEXT DEFAULT '',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
 );
+
+-- Garantir que as colunas de GPS e tracking existam na tabela existente
+ALTER TABLE leadium_displacements ADD COLUMN IF NOT EXISTS refund_receipt_image TEXT DEFAULT '';
+ALTER TABLE leadium_displacements ADD COLUMN IF NOT EXISTS start_lat NUMERIC;
+ALTER TABLE leadium_displacements ADD COLUMN IF NOT EXISTS start_lng NUMERIC;
+ALTER TABLE leadium_displacements ADD COLUMN IF NOT EXISTS end_lat NUMERIC;
+ALTER TABLE leadium_displacements ADD COLUMN IF NOT EXISTS end_lng NUMERIC;
+ALTER TABLE leadium_displacements ADD COLUMN IF NOT EXISTS start_address TEXT DEFAULT '';
+ALTER TABLE leadium_displacements ADD COLUMN IF NOT EXISTS end_address TEXT DEFAULT '';
+ALTER TABLE leadium_displacements ADD COLUMN IF NOT EXISTS start_time TEXT DEFAULT '';
+ALTER TABLE leadium_displacements ADD COLUMN IF NOT EXISTS end_time TEXT DEFAULT '';
 
 -- Tabela de Despesas Gerais (leadium_general_expenses)
 CREATE TABLE IF NOT EXISTS leadium_general_expenses (

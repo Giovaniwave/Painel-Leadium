@@ -364,8 +364,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   const activeTrip = data.displacements.find(d => d.status === 'Em andamento');
 
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [gpsStartCoords, setGpsStartCoords] = useState<{ lat: number, lng: number } | null>(null);
-  const [gpsStartStreet, setGpsStartStreet] = useState<string>('');
+  const [gpsStartCoords, setGpsStartCoords] = useState<{ lat: number, lng: number } | null>({ lat: -23.2178, lng: -47.5222 });
+  const [gpsStartStreet, setGpsStartStreet] = useState<string>('Porto Feliz - SP (Sede)');
 
   const [statusForm, setStatusForm] = useState<'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada'>('Pendente');
 
@@ -542,10 +542,6 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       alert("Selecione o colaborador e o veículo primeiro.");
       return;
     }
-    if (!gpsStartCoords || !gpsStartStreet) {
-      alert("Por favor, clique em 'Localização atual' primeiro para obter o ponto de partida.");
-      return;
-    }
     if (!displacementForm.clientVisited || !displacementForm.reason) {
       alert("Por favor, informe o nome do cliente e o motivo da visita.");
       return;
@@ -556,9 +552,9 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       employeeId: displacementForm.employeeId,
       vehicleId: displacementForm.vehicleId,
       status: 'Em andamento',
-      startLat: gpsStartCoords.lat,
-      startLng: gpsStartCoords.lng,
-      startAddress: gpsStartStreet,
+      startLat: gpsStartCoords?.lat || -23.2178,
+      startLng: gpsStartCoords?.lng || -47.5222,
+      startAddress: gpsStartStreet || 'Porto Feliz - SP (Sede)',
       startTime: new Date().toISOString(),
       clientVisited: displacementForm.clientVisited,
       city: 'Localização GPS',
@@ -574,8 +570,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       if (res.ok) {
         await fetchExpenses();
         // Clear temp inputs/states
-        setGpsStartCoords(null);
-        setGpsStartStreet('');
+        setGpsStartCoords({ lat: -23.2178, lng: -47.5222 });
+        setGpsStartStreet('Porto Feliz - SP (Sede)');
       } else {
         const errJson = await res.json();
         alert('Erro ao iniciar a viagem: ' + (errJson.error || 'Erro desconhecido'));
@@ -615,9 +611,9 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
         const payload = {
           id: activeTrip.id,
           date: activeTrip.date,
-          employeeId: activeTrip.employeeId,
-          vehicleId: activeTrip.vehicleId,
-          kmTraveled: finalDistance,
+          employeeId: activeTrip.employeeId || displacementForm.employeeId,
+          vehicleId: activeTrip.vehicleId || displacementForm.vehicleId,
+          kmTraveled: (typeof finalDistance === 'number' && !isNaN(finalDistance)) ? finalDistance : 0.1,
           status: 'Pendente',
           endLat: pos.coords.latitude,
           endLng: pos.coords.longitude,
@@ -787,6 +783,10 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     });
     setEditingId(null);
     setActiveModal('displacement');
+    // Proactively fetch precise GPS start location in background
+    setTimeout(() => {
+      fetchStartLocation();
+    }, 50);
   };
 
   const openStatusUpdate = (disp: Displacement) => {
@@ -2487,32 +2487,25 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     </select>
                   </div>
 
-                  <div className="pt-2">
-                    <button 
-                      type="button" 
-                      onClick={fetchStartLocation}
-                      disabled={gpsLoading}
-                      className="w-full bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 py-2.5 rounded-lg font-bold uppercase tracking-wider text-[11px] flex items-center justify-center gap-2 shadow-sm transition hover:bg-neutral-800 dark:hover:bg-neutral-100 disabled:opacity-50"
-                    >
-                      {gpsLoading ? (
-                        <span className="inline-block w-3.5 h-3.5 border-2 border-white dark:border-neutral-950 border-t-transparent rounded-full animate-spin"></span>
-                      ) : (
-                        <MapPin className="w-3.5 h-3.5" />
-                      )}
-                      Obter Localização atual
-                    </button>
-                  </div>
-
-                  {gpsStartStreet && (
-                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg space-y-1 animate-fadeIn">
-                      <div className="flex items-center gap-1.5 text-emerald-600 font-bold text-[10px] uppercase tracking-wider">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Localização Obtida com Sucesso!
-                      </div>
-                      <p className="text-xs text-neutral-800 dark:text-neutral-200 font-medium">
-                        {gpsStartStreet}
-                      </p>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] uppercase font-mono text-neutral-400 font-bold text-[#FF4D00]">Ponto de Partida (Localização Atual)</label>
+                      <button 
+                        type="button" 
+                        onClick={fetchStartLocation}
+                        disabled={gpsLoading}
+                        className="text-[10px] text-[#FF4D00] hover:underline flex items-center gap-1 font-mono font-bold disabled:opacity-50"
+                      >
+                        {gpsLoading ? 'Buscando...' : '🔄 Recarregar GPS'}
+                      </button>
                     </div>
-                  )}
+                    <div className="p-2.5 rounded border border-neutral-300 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60 text-neutral-950 dark:text-white flex items-center gap-2">
+                      <MapPin className={`w-3.5 h-3.5 shrink-0 ${gpsLoading ? 'text-neutral-450 animate-pulse' : 'text-[#FF4D00]'}`} />
+                      <span className="text-xs text-neutral-700 dark:text-neutral-300 font-medium truncate">
+                        {gpsLoading ? 'Obtendo localização GPS...' : (gpsStartStreet || 'Porto Feliz - SP (Sede)')}
+                      </span>
+                    </div>
+                  </div>
 
                   <div className="space-y-2 pt-1 border-t border-neutral-100 dark:border-neutral-900">
                     <div className="space-y-1">
@@ -2545,7 +2538,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   <button 
                     type="button" 
                     onClick={startGpsTrip} 
-                    disabled={!gpsStartCoords || !displacementForm.employeeId || !displacementForm.clientVisited || !displacementForm.reason}
+                    disabled={!displacementForm.employeeId || !displacementForm.vehicleId || !displacementForm.clientVisited || !displacementForm.reason}
                     className="w-full bg-[#FF4D00] text-white py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition hover:bg-[#E64500] hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Começar Viagem / Deslocamento

@@ -1064,26 +1064,26 @@ async function startServer() {
   });
 
   // Helpers to fetch and seed expenses data
+  function toUUID(str: string): string {
+    if (!str || typeof str !== "string") return str;
+    if (
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        str,
+      )
+    ) {
+      return str;
+    }
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
+    }
+    const hex = Math.abs(hash).toString(16).padEnd(32, "0");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(12, 15)}-a${hex.slice(15, 18)}-${hex.slice(18, 30)}`;
+  }
+
   function sanitizeExpenses(expenses: any) {
     if (!expenses) return expenses;
-
-    const toUUID = (str: string): string => {
-      if (!str || typeof str !== "string") return str;
-      if (
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          str,
-        )
-      ) {
-        return str;
-      }
-      let hash = 0;
-      for (let i = 0; i < str.length; i++) {
-        hash = (hash << 5) - hash + str.charCodeAt(i);
-        hash |= 0;
-      }
-      const hex = Math.abs(hash).toString(16).padEnd(32, "0");
-      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(12, 15)}-a${hex.slice(15, 18)}-${hex.slice(18, 30)}`;
-    };
 
     if (Array.isArray(expenses.employees)) {
       expenses.employees = expenses.employees.map((e: any) => ({
@@ -1521,13 +1521,17 @@ async function startServer() {
         endTime,
       } = req.body;
 
+      const targetId = id ? toUUID(id) : null;
+      const targetEmployeeId = employeeId ? toUUID(employeeId) : null;
+      const targetVehicleId = vehicleId ? toUUID(vehicleId) : null;
+
       const expenses = await getExpensesData();
-      const existing = id
-        ? expenses.displacements.find((d: any) => d.id === id)
+      const existing = targetId
+        ? expenses.displacements.find((d: any) => toUUID(d.id) === targetId)
         : null;
 
-      const empId = employeeId || (existing ? existing.employeeId : null);
-      const vehId = vehicleId || (existing ? existing.vehicleId : null);
+      const empId = targetEmployeeId || (existing ? toUUID(existing.employeeId) : null);
+      const vehId = targetVehicleId || (existing ? toUUID(existing.vehicleId) : null);
       const finalKm = kmTraveled !== undefined ? kmTraveled : (existing ? existing.kmTraveled : undefined);
 
       if (!empId || !vehId || (finalKm === undefined && status !== 'Em andamento')) {
@@ -1538,7 +1542,7 @@ async function startServer() {
           });
       }
 
-      const vehicle = expenses.vehicles.find((v: any) => v.id === vehId);
+      const vehicle = expenses.vehicles.find((v: any) => toUUID(v.id) === toUUID(vehId));
       if (!vehicle) {
         return res
           .status(400)
@@ -1555,7 +1559,7 @@ async function startServer() {
       const finalStatus = status || (existing ? existing.status : "Pendente");
 
       let displacementData: any = {
-        id: id || crypto.randomUUID(),
+        id: targetId || crypto.randomUUID(),
         date: date || currentSecs.substring(0, 10),
         employeeId: empId,
         clientVisited: clientVisited || "Cliente Não Especificado",
@@ -1580,7 +1584,7 @@ async function startServer() {
         endTime: endTime !== undefined ? endTime : (existing ? existing.endTime : undefined),
       };
 
-      if (id) {
+      if (targetId) {
         // Find existing to preserve history
         displacementData.history =
           existing && existing.history
@@ -1593,7 +1597,7 @@ async function startServer() {
           });
         }
         expenses.displacements = expenses.displacements.map((d: any) =>
-          d.id === id ? displacementData : d,
+          toUUID(d.id) === targetId ? displacementData : d,
         );
       } else {
         // Create new
