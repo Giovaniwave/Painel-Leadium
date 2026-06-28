@@ -1071,7 +1071,7 @@ async function startServer() {
         str,
       )
     ) {
-      return str;
+      return str.toLowerCase();
     }
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -1542,7 +1542,11 @@ async function startServer() {
           });
       }
 
-      const vehicle = expenses.vehicles.find((v: any) => toUUID(v.id) === toUUID(vehId));
+      const vehicle = expenses.vehicles.find((v: any) => {
+        const id1 = toUUID(v.id);
+        const id2 = toUUID(vehId);
+        return id1 && id2 && id1.toLowerCase() === id2.toLowerCase();
+      });
       if (!vehicle) {
         return res
           .status(400)
