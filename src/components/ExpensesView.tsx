@@ -364,8 +364,14 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   const activeTrip = data.displacements.find(d => d.status === 'Em andamento');
 
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [gpsStartCoords, setGpsStartCoords] = useState<{ lat: number, lng: number } | null>({ lat: -23.2178, lng: -47.5222 });
-  const [gpsStartStreet, setGpsStartStreet] = useState<string>('Porto Feliz - SP (Sede)');
+  const [gpsStartCoords, setGpsStartCoords] = useState<{ lat: number, lng: number } | null>(null);
+  const [gpsStartStreet, setGpsStartStreet] = useState<string>('');
+  const [finishedTripSummary, setFinishedTripSummary] = useState<{
+    km: number;
+    amount: number;
+    address: string;
+    payload: any;
+  } | null>(null);
 
   const [statusForm, setStatusForm] = useState<'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada'>('Pendente');
 
@@ -570,8 +576,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       if (res.ok) {
         await fetchExpenses();
         // Clear temp inputs/states
-        setGpsStartCoords({ lat: -23.2178, lng: -47.5222 });
-        setGpsStartStreet('Porto Feliz - SP (Sede)');
+        setGpsStartCoords(null);
+        setGpsStartStreet('');
       } else {
         const errJson = await res.json();
         alert('Erro ao iniciar a viagem: ' + (errJson.error || 'Erro desconhecido'));
@@ -608,6 +614,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
           address = `Rua de Destino (Lat: ${pos.coords.latitude.toFixed(5)}, Lng: ${pos.coords.longitude.toFixed(5)})`;
         }
         
+        const durationMins = activeTrip.startTime ? Math.round((Date.now() - new Date(activeTrip.startTime).getTime()) / 60000) : 0;
         const payload = {
           id: activeTrip.id,
           date: activeTrip.date,
@@ -622,27 +629,22 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
           clientVisited: activeTrip.clientVisited || 'Cliente Não Especificado',
           city: activeTrip.city || 'Cidade Não Especificada',
           reason: activeTrip.reason || 'Deslocamento via GPS',
-          notes: activeTrip.startTime ? `Duração: ${Math.round((Date.now() - new Date(activeTrip.startTime).getTime()) / 60000)} minutos.` : ''
+          notes: durationMins ? `Duração: ${durationMins} minutos.` : ''
         };
 
-        try {
-          const res = await fetch('/api/expenses/displacements', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          if (res.ok) {
-            await fetchExpenses();
-            closeModals();
-          } else {
-            const errJson = await res.json();
-            alert('Erro ao finalizar a viagem: ' + (errJson.error || 'Erro desconhecido'));
-          }
-        } catch(e) {
-          alert('Erro de rede ao finalizar a viagem');
-        } finally {
-          setGpsLoading(false);
-        }
+        // Automatic reimbursement value and consumption calculation
+        const activeVehicle = data.vehicles.find(v => v.id === activeTrip.vehicleId);
+        const consumption = Number(activeVehicle?.avgConsumption) || 12;
+        const liters = Number((finalDistance / consumption).toFixed(2));
+        const calculatedAmount = Number((liters * 6.29).toFixed(2));
+
+        setFinishedTripSummary({
+          km: finalDistance,
+          amount: calculatedAmount,
+          address: address,
+          payload: payload
+        });
+        setGpsLoading(false);
       },
       (err) => {
         setGpsLoading(false);
@@ -650,6 +652,29 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       },
       { enableHighAccuracy: true, timeout: 12000 }
     );
+  };
+
+  const saveFinishedTrip = async () => {
+    if (!finishedTripSummary) return;
+    setGpsLoading(true);
+    try {
+      const res = await fetch('/api/expenses/displacements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(finishedTripSummary.payload)
+      });
+      if (res.ok) {
+        await fetchExpenses();
+        closeModals();
+      } else {
+        const errJson = await res.json();
+        alert('Erro ao salvar a viagem finalizada: ' + (errJson.error || 'Erro desconhecido'));
+      }
+    } catch(e) {
+      alert('Erro de rede ao salvar a viagem');
+    } finally {
+      setGpsLoading(false);
+    }
   };
 
   const cancelGpsTrip = async () => {
@@ -782,11 +807,10 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       receiptImage: ''
     });
     setEditingId(null);
+    setGpsStartCoords(null);
+    setGpsStartStreet('');
+    setFinishedTripSummary(null);
     setActiveModal('displacement');
-    // Proactively fetch precise GPS start location in background
-    setTimeout(() => {
-      fetchStartLocation();
-    }, 50);
   };
 
   const openStatusUpdate = (disp: Displacement) => {
@@ -800,6 +824,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     setEditingId(null);
     setStatusUpdateTargetId(null);
     setRefundReceiptTargetId(null);
+    setFinishedTripSummary(null);
   };
 
   // Clean, fast report generator (no glitter/sparkle AI indicators, pure audit report)
@@ -2375,9 +2400,16 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       {activeModal === 'displacement' && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white uppercase tracking-wider">
-                {editingId ? 'Editar Viagem' : 'Lançar Nova Viagem'}
+            <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-3">
+              <h3 className="text-sm font-bold text-neutral-900 dark:text-white uppercase tracking-wider font-sans">
+                {finishedTripSummary 
+                  ? 'Resumo da Viagem' 
+                  : activeTrip 
+                    ? 'Viagem em Andamento' 
+                    : editingId 
+                      ? 'Editar Viagem' 
+                      : 'Lançar Nova Viagem'
+                }
               </h3>
               <button 
                 type="button" 
@@ -2388,38 +2420,101 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               </button>
             </div>
 
-            {activeTrip ? (
-              <div className="space-y-4 text-center py-4 animate-fadeIn">
+            {finishedTripSummary ? (
+              /* PHASE 1: COMPLETED TRIP SUMMARY SCREEN */
+              <div className="space-y-4 animate-fadeIn">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto text-emerald-500">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                
+                <div className="text-center space-y-1">
+                  <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest font-mono">Chegada Confirmada!</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">Verifique os dados calculados abaixo:</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 text-center">
+                    <span className="text-[9px] uppercase font-mono text-neutral-400 font-bold block">KM Rodado</span>
+                    <span className="text-lg font-extrabold text-neutral-900 dark:text-white">{finishedTripSummary.km} km</span>
+                  </div>
+                  <div className="p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 text-center">
+                    <span className="text-[9px] uppercase font-mono text-neutral-400 font-bold block">Valor Reembolso</span>
+                    <span className="text-lg font-extrabold text-[#FF4D00]">R$ {finishedTripSummary.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 space-y-2 text-left text-xs">
+                  <div>
+                    <span className="text-[8px] uppercase font-mono text-neutral-400 font-bold block">🏢 Cliente</span>
+                    <span className="font-semibold text-neutral-800 dark:text-neutral-200">{activeTrip?.clientVisited}</span>
+                  </div>
+                  <div>
+                    <span className="text-[8px] uppercase font-mono text-neutral-400 font-bold block">🏁 Partida</span>
+                    <span className="text-neutral-600 dark:text-neutral-450 block truncate">{activeTrip?.startAddress}</span>
+                  </div>
+                  <div>
+                    <span className="text-[8px] uppercase font-mono text-neutral-400 font-bold block">📍 Chegada</span>
+                    <span className="text-neutral-600 dark:text-neutral-450 block truncate">{finishedTripSummary.address}</span>
+                  </div>
+                </div>
+
+                <div className="pt-2 space-y-2">
+                  <button
+                    type="button"
+                    onClick={saveFinishedTrip}
+                    disabled={gpsLoading}
+                    className="w-full bg-[#FF4D00] hover:bg-[#E64500] text-white py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition-all duration-200 flex items-center justify-center gap-2"
+                  >
+                    {gpsLoading ? (
+                      <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
+                    Gravar e Enviar Reembolso
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFinishedTripSummary(null)}
+                    className="w-full bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400 py-2 rounded-lg font-bold uppercase tracking-wider text-[10px] transition-colors duration-250"
+                  >
+                    Recalcular GPS / Voltar
+                  </button>
+                </div>
+              </div>
+            ) : activeTrip ? (
+              /* PHASE 2: ACTIVE TRIP IN PROGRESS SCREEN */
+              <div className="space-y-4 text-center py-2 animate-fadeIn">
                 <div className="w-16 h-16 rounded-full bg-[#FF4D00]/10 flex items-center justify-center mx-auto animate-pulse">
                   <MapPin className="w-8 h-8 text-[#FF4D00]" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-neutral-900 dark:text-white uppercase tracking-wider">Viagem em Andamento</p>
+                  <p className="text-sm font-bold text-neutral-900 dark:text-white uppercase tracking-wider">Viagem em Andamento</p>
                   {activeTrip.startTime && (
                     <p className="text-xs text-neutral-500 mt-1 font-mono">
                       Iniciada às {new Date(activeTrip.startTime).toLocaleTimeString('pt-BR')}
                     </p>
                   )}
                   
-                  <div className="mt-4 p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-800 text-left space-y-2">
+                  <div className="mt-4 p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-800 text-left space-y-2.5">
                     <div>
-                      <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider block">🏢 Cliente Visitado</span>
+                      <span className="text-[9px] font-bold text-neutral-450 dark:text-neutral-500 uppercase tracking-wider block">🏢 Cliente Visitado</span>
                       <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">{activeTrip.clientVisited}</p>
                     </div>
                     {activeTrip.reason && (
                       <div>
-                        <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider block">📝 Motivo da Visita</span>
+                        <span className="text-[9px] font-bold text-neutral-450 dark:text-neutral-500 uppercase tracking-wider block">📝 Motivo da Visita</span>
                         <p className="text-xs text-neutral-700 dark:text-neutral-300">{activeTrip.reason}</p>
                       </div>
                     )}
                     <div>
-                      <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider block">📍 Ponto de Partida</span>
-                      <p className="text-xs text-neutral-700 dark:text-neutral-300 leading-relaxed">
+                      <span className="text-[9px] font-bold text-neutral-450 dark:text-neutral-500 uppercase tracking-wider block">📍 Ponto de Partida</span>
+                      <p className="text-xs text-neutral-700 dark:text-neutral-300 leading-relaxed truncate">
                         {activeTrip.startAddress || 'Localização GPS Obtida'}
                       </p>
                     </div>
                   </div>
                 </div>
+                
                 <div className="pt-4 space-y-2">
                   <button 
                     type="button" 
@@ -2428,11 +2523,16 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     className="w-full bg-[#FF4D00] text-white py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition hover:bg-[#E64500] hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {gpsLoading ? (
-                      <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <>
+                        <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        Obtendo GPS de Destino...
+                      </>
                     ) : (
-                      <CheckCircle2 className="w-4 h-4" />
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        🏁 FINALIZAR VIAGEM
+                      </>
                     )}
-                    🏁 Informar Chegada no Cliente
                   </button>
                   <button 
                     type="button" 
@@ -2444,10 +2544,11 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 </div>
               </div>
             ) : !editingId ? (
+              /* PHASE 3: LAUNCH TRIP FORM */
               <div className="space-y-4">
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-mono text-neutral-400">1. Escolha o Colaborador</label>
+                    <label className="text-[10px] uppercase font-mono text-neutral-400">Escolha o Colaborador</label>
                     <select
                       required
                       value={displacementForm.employeeId}
@@ -2487,24 +2588,37 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     </select>
                   </div>
 
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] uppercase font-mono text-neutral-400 font-bold text-[#FF4D00]">Ponto de Partida (Localização Atual)</label>
-                      <button 
-                        type="button" 
-                        onClick={fetchStartLocation}
-                        disabled={gpsLoading}
-                        className="text-[10px] text-[#FF4D00] hover:underline flex items-center gap-1 font-mono font-bold disabled:opacity-50"
-                      >
-                        {gpsLoading ? 'Buscando...' : '🔄 Recarregar GPS'}
-                      </button>
-                    </div>
-                    <div className="p-2.5 rounded border border-neutral-300 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60 text-neutral-950 dark:text-white flex items-center gap-2">
-                      <MapPin className={`w-3.5 h-3.5 shrink-0 ${gpsLoading ? 'text-neutral-450 animate-pulse' : 'text-[#FF4D00]'}`} />
-                      <span className="text-xs text-neutral-700 dark:text-neutral-300 font-medium truncate">
-                        {gpsLoading ? 'Obtendo localização GPS...' : (gpsStartStreet || 'Porto Feliz - SP (Sede)')}
+                  {/* Departure address GPS segment */}
+                  <div className="space-y-1.5 p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40">
+                    <label className="text-[10px] uppercase font-mono font-bold text-neutral-500 dark:text-neutral-400 block">
+                      Ponto de Partida (Localização Atual)
+                    </label>
+                    
+                    <div className="p-2.5 rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white flex items-center gap-2">
+                      <MapPin className={`w-3.5 h-3.5 shrink-0 ${gpsLoading ? 'text-amber-500 animate-pulse' : gpsStartStreet ? 'text-[#FF4D00]' : 'text-neutral-400'}`} />
+                      <span className={`text-xs truncate font-medium ${!gpsStartStreet ? 'text-[#FF4D00] font-bold animate-pulse' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                        {gpsLoading ? 'Obtendo localização GPS...' : (gpsStartStreet || 'Aperte em Recarregar GPS')}
                       </span>
                     </div>
+
+                    <button 
+                      type="button" 
+                      onClick={fetchStartLocation}
+                      disabled={gpsLoading}
+                      className="w-full mt-1.5 bg-neutral-900 hover:bg-black dark:bg-neutral-800 dark:hover:bg-neutral-700 text-white text-xs py-2 px-3 rounded-lg font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm transition-all duration-200 disabled:opacity-50"
+                    >
+                      {gpsLoading ? (
+                        <>
+                          <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                          Buscando...
+                        </>
+                      ) : (
+                        <>
+                          <MapPin className="w-3.5 h-3.5 text-[#FF4D00]" />
+                          Obter Localização Atual (Recarregar GPS)
+                        </>
+                      )}
+                    </button>
                   </div>
 
                   <div className="space-y-2 pt-1 border-t border-neutral-100 dark:border-neutral-900">
@@ -2525,7 +2639,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       <input 
                         type="text"
                         required
-                        placeholder="Ex: Entrega de mercadorias / Reunião"
+                        placeholder="Ex: Reunião"
                         value={displacementForm.reason}
                         onChange={(e) => setDisplacementForm({ ...displacementForm, reason: e.target.value })}
                         className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
@@ -2538,7 +2652,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   <button 
                     type="button" 
                     onClick={startGpsTrip} 
-                    disabled={!displacementForm.employeeId || !displacementForm.vehicleId || !displacementForm.clientVisited || !displacementForm.reason}
+                    disabled={!gpsStartCoords || !displacementForm.employeeId || !displacementForm.vehicleId || !displacementForm.clientVisited || !displacementForm.reason}
                     className="w-full bg-[#FF4D00] text-white py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition hover:bg-[#E64500] hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Começar Viagem / Deslocamento
