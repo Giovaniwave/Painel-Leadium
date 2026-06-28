@@ -89,7 +89,7 @@ interface Displacement {
   kmTraveled: number;
   litersConsumed: number;
   amount: number;
-  status: 'Pendente' | 'Finalizado' | 'Em análise' | 'Aprovada' | 'Reembolsada';
+  status: 'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada';
   notes?: string;
   receiptImage?: string;
   refundReceiptImage?: string;
@@ -384,7 +384,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     payload: any;
   } | null>(null);
 
-  const [statusForm, setStatusForm] = useState<'Pendente' | 'Finalizado' | 'Em análise' | 'Aprovada' | 'Reembolsada'>('Finalizado');
+  const [statusForm, setStatusForm] = useState<'Pendente' | 'Em análise' | 'Aprovada' | 'Reembolsada'>('Em análise');
 
   const [fipeBrands, setFipeBrands] = useState<{codigo: string, nome: string}[]>([]);
   const [fipeModels, setFipeModels] = useState<{codigo: string, nome: string}[]>([]);
@@ -718,7 +718,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
           employeeId: activeTrip.employeeId || displacementForm.employeeId,
           vehicleId: activeTrip.vehicleId || displacementForm.vehicleId,
           kmTraveled: finalDistance,
-          status: 'Finalizado',
+          status: 'Em análise',
           endLat: pos.coords.latitude,
           endLng: pos.coords.longitude,
           endAddress: address || activeTrip.endAddress,
@@ -1017,7 +1017,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       target.km += Number(d.kmTraveled) || 0;
       target.visitsCount += 1;
 
-      if (d.status === 'Pendente' || d.status === 'Finalizado' || d.status === 'Em análise') {
+      if (d.status === 'Pendente' || d.status === 'Em análise') {
         target.pendingReimbursement += Number(d.amount) || 0;
       } else if (d.status === 'Aprovada' || d.status === 'Reembolsada') {
         target.paidReimbursement += Number(d.amount) || 0;
@@ -1059,7 +1059,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       const currentMonth = new Date().toISOString().substring(0, 7);
       list = list.filter(d => d.date.startsWith(currentMonth));
     } else if (filterPeriod === 'pendentes') {
-      list = list.filter(d => d.status === 'Pendente' || d.status === 'Finalizado' || d.status === 'Em análise');
+      list = list.filter(d => d.status === 'Pendente' || d.status === 'Em análise');
     } else if (filterPeriod === 'aprovadas') {
       list = list.filter(d => d.status === 'Aprovada');
     }
@@ -2166,7 +2166,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1 no-scrollbar">
                   {data.displacements.map(d => {
                     const employee = data.employees.find(e => e.id === d.employeeId);
-                    const isGps = d.startLat !== undefined && d.endLat !== undefined;
+                    const isGps = d.startLat !== undefined && d.startLat !== null && d.endLat !== undefined && d.endLat !== null;
                     const isSelected = selectedAuditTripId === d.id;
 
                     return (
@@ -2590,7 +2590,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       {/* Modal 3: Lançar Viagem */}
       {activeModal === 'displacement' && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 shadow-xl max-h-[90vh] flex flex-col">
+          <div className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 shadow-xl max-h-[85dvh] flex flex-col">
             <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-900 pb-3 shrink-0">
               <h3 className="text-sm font-bold text-neutral-900 dark:text-white uppercase tracking-wider font-sans">
                 {finishedTripSummary 
@@ -2611,7 +2611,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               </button>
             </div>
 
-            <div className="overflow-y-auto pr-1 flex-1 space-y-4 mt-3 scrollbar-thin scrollbar-thumb-neutral-300 dark:scrollbar-thumb-neutral-800">
+            <div className="overflow-y-auto pr-2 pb-6 flex-1 space-y-4 mt-3 scrollbar-thin scrollbar-thumb-neutral-300 dark:scrollbar-thumb-neutral-800">
             {finishedTripSummary ? (
               /* PHASE 1: COMPLETED TRIP SUMMARY SCREEN */
               <div className="space-y-4 animate-fadeIn">
@@ -2650,7 +2650,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   </div>
                 </div>
 
-                <div className="pt-2 space-y-2">
+                <div className="pt-2 space-y-2 sticky bottom-0 bg-white dark:bg-neutral-950 pb-2 z-10 border-t border-neutral-100 dark:border-neutral-900 mt-4">
                   <button
                     type="button"
                     onClick={saveFinishedTrip}
@@ -2715,7 +2715,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   </div>
                 </div>
                 
-                <div className="pt-4 space-y-2">
+                <div className="pt-4 space-y-2 sticky bottom-0 bg-white dark:bg-neutral-950 pb-2 z-10 border-t border-neutral-100 dark:border-neutral-900 mt-4">
                   <button 
                     type="button" 
                     disabled={gpsLoading}
@@ -2898,7 +2898,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   </div>
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-2 sticky bottom-0 bg-white dark:bg-neutral-950 pb-2 z-10 border-t border-neutral-100 dark:border-neutral-900 mt-4">
                   <button 
                     type="button" 
                     onClick={startGpsTrip} 
@@ -3124,7 +3124,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 )}
               </div>
 
-              <div className="flex gap-2 pt-3">
+              <div className="flex gap-2 pt-3 sticky bottom-0 bg-white dark:bg-neutral-950 pb-2 z-10 border-t border-neutral-100 dark:border-neutral-900 mt-4">
                 <button
                   type="button"
                   onClick={closeModals}
@@ -3389,7 +3389,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
         if (!emp) return null;
         return (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn" onClick={closeModals}>
-            <div className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="w-full max-w-2xl max-h-[85dvh] flex flex-col rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-2xl" onClick={e => e.stopPropagation()}>
               <div className="p-4 border-b border-neutral-100 dark:border-neutral-800 flex justify-between items-center">
                 <div>
                   <h3 className="text-sm font-semibold text-neutral-900 dark:text-white uppercase tracking-wider">{emp.name}</h3>
@@ -3397,7 +3397,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 </div>
                 <button onClick={closeModals} className="text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition">fechar</button>
               </div>
-              <div className="p-4 flex-1 overflow-y-auto space-y-3">
+              <div className="p-4 pb-8 flex-1 overflow-y-auto space-y-3">
                 {empDisplacements.length === 0 ? (
                   <p className="text-xs text-center text-neutral-500 py-10 font-mono">Nenhuma viagem registrada.</p>
                 ) : empDisplacements.map(disp => (

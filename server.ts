@@ -1322,25 +1322,25 @@ async function startServer() {
             id: d.id,
             date: d.date,
             employee_id: d.employeeId,
-            client_visited: d.clientVisited,
-            city: d.city,
-            reason: d.reason,
+            client_visited: d.clientVisited || "Não especificado",
+            city: d.city || "Não especificado",
+            reason: d.reason || "",
             vehicle_id: d.vehicleId,
             vehicle_name: d.vehicleName || "",
-            km_traveled: d.kmTraveled,
-            notes: d.notes,
-            status: d.status,
+            km_traveled: Number(d.kmTraveled) || 0,
+            notes: d.notes || "",
+            status: d.status || "Pendente",
             receipt_image: d.receiptImage || "",
             refund_receipt_image: d.refundReceiptImage || "",
-            liters_consumed: d.litersConsumed || 0,
-            amount: d.amount || 0,
+            liters_consumed: Number(d.litersConsumed) || 0,
+            amount: Number(d.amount) || 0,
             start_lat: d.startLat,
             start_lng: d.startLng,
             end_lat: d.endLat,
             end_lng: d.endLng,
-            start_address: d.startAddress,
-            end_address: d.endAddress,
-            start_time: d.startTime,
+            start_address: d.startAddress || "",
+            end_address: d.endAddress || "",
+            start_time: d.startTime || new Date().toISOString(),
             end_time: d.endTime,
             // history: d.history || [],
           }));
@@ -1536,11 +1536,11 @@ async function startServer() {
       const vehId = targetVehicleId || (existing ? toUUID(existing.vehicleId) : null);
       const finalKm = kmTraveled !== undefined ? kmTraveled : (existing ? existing.kmTraveled : undefined);
 
-      if (!empId || !vehId || (finalKm === undefined && status !== 'Em andamento')) {
+      if (!empId || !vehId || (finalKm === undefined && status !== 'Pendente')) {
         return res
           .status(400)
           .json({
-            error: "Colaborador, Veículo e KM percorrido são obrigatórios (exceto se Em andamento).",
+            error: "Colaborador, Veículo e KM percorrido são obrigatórios (exceto se Pendente).",
           });
       }
 
