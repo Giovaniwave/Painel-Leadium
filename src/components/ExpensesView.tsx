@@ -775,17 +775,15 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   };
 
   const cancelGpsTrip = async () => {
-    if(confirm("Deseja cancelar a viagem em andamento?")) {
-      if (activeTrip) {
-        try {
-          const res = await fetch(`/api/expenses/displacements/${activeTrip.id}`, { method: 'DELETE' });
-          if (res.ok) {
-            await fetchExpenses();
-            closeModals();
-          }
-        } catch (e) {
-          alert('Erro ao cancelar viagem');
+    if (activeTrip) {
+      try {
+        const res = await fetch(`/api/expenses/displacements/${activeTrip.id}`, { method: 'DELETE' });
+        if (res.ok) {
+          await fetchExpenses();
+          closeModals();
         }
+      } catch (e) {
+        alert('Erro ao cancelar viagem');
       }
     }
   };
@@ -809,7 +807,6 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   };
 
   const deleteEmployee = async (id: string, name: string) => {
-    if (!confirm(`Remover "${name}"? Veículos vinculados serão desligados.`)) return;
     try {
       const res = await fetch(`/api/expenses/employees/${id}`, { method: 'DELETE' });
       if (res.ok) await fetchExpenses();
@@ -819,7 +816,6 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   };
 
   const deleteVehicle = async (id: string, name: string) => {
-    if (!confirm(`Remover veículo "${name}"?`)) return;
     try {
       const res = await fetch(`/api/expenses/vehicles/${id}`, { method: 'DELETE' });
       if (res.ok) await fetchExpenses();
@@ -829,7 +825,6 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   };
 
   const deleteDisplacement = async (id: string) => {
-    if (!confirm(`Excluir este lançamento de viagem?`)) return;
     try {
       const res = await fetch(`/api/expenses/displacements/${id}`, { method: 'DELETE' });
       if (res.ok) await fetchExpenses();
@@ -1646,7 +1641,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
 
                   <button
                     onClick={openAddDisplacement}
-                    className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border-[1.58px] px-5 py-3 font-medium shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-xs font-bold uppercase tracking-wider ${isDark ? 'bg-white border-zinc-200 text-zinc-950' : 'bg-zinc-950 border-zinc-600 text-slate-200'}`}
+                    className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2 font-medium shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md text-[10px] font-bold uppercase tracking-wider ${isDark ? 'bg-white border-zinc-200 text-zinc-950' : 'bg-zinc-950 border-zinc-600 text-slate-200'}`}
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Lançar Viagem</span>
