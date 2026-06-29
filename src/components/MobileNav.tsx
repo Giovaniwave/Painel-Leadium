@@ -24,10 +24,10 @@ export default function MobileNav({ activeTab, onTabChange, theme }: MobileNavPr
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 sm:hidden px-4 pb-4 bg-transparent pointer-events-none">
       <div 
-        className={`w-full max-w-md mx-auto h-[72px] pointer-events-auto flex items-center justify-around px-3 rounded-[24px] shadow-lg transition-colors duration-300 ${
+        className={`w-full max-w-sm mx-auto h-[60px] pointer-events-auto flex items-center justify-around px-2 rounded-2xl shadow-lg transition-colors duration-300 ${
           isDark 
-            ? 'bg-[#141414] border border-neutral-800/80 shadow-[0_8px_30px_rgb(0,0,0,0.5)]' 
-            : 'bg-white border border-neutral-100/90 shadow-[0_8px_30px_rgb(0,0,0,0.06)]'
+            ? 'bg-[#141414]/95 backdrop-blur-md border border-neutral-800/80 shadow-[0_8px_30px_rgb(0,0,0,0.5)]' 
+            : 'bg-white/95 backdrop-blur-md border border-neutral-200/90 shadow-[0_8px_30px_rgb(0,0,0,0.06)]'
         }`}
       >
         {tabs.map((tab) => {
@@ -38,28 +38,28 @@ export default function MobileNav({ activeTab, onTabChange, theme }: MobileNavPr
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`flex flex-col items-center justify-center gap-1.5 h-[56px] px-4 min-w-[90px] transition-all duration-200 cursor-pointer rounded-[18px] ${
+              className={`flex flex-col items-center justify-center gap-1 h-[48px] px-3 min-w-[70px] transition-all duration-200 cursor-pointer rounded-xl ${
                 isActive
                   ? isDark
-                    ? 'bg-white text-black font-extrabold shadow-sm scale-100'
-                    : 'bg-black text-white font-extrabold shadow-sm scale-100'
+                    ? 'bg-white text-black font-extrabold shadow-sm'
+                    : 'bg-black text-white font-extrabold shadow-sm'
                   : isDark
-                    ? 'text-[#8E8E93] hover:text-white bg-transparent scale-95'
-                    : 'text-[#555555] hover:text-black bg-transparent scale-95'
+                    ? 'text-neutral-500 hover:text-white bg-transparent'
+                    : 'text-neutral-500 hover:text-black bg-transparent'
               }`}
             >
               <Icon 
-                className={`w-5 h-5 shrink-0 ${
+                className={`w-4 h-4 shrink-0 ${
                   isActive
                     ? isDark ? '!text-black' : '!text-white'
-                    : isDark ? 'text-[#8E8E93]' : 'text-[#555555]'
+                    : isDark ? 'text-neutral-500' : 'text-neutral-500'
                 }`} 
                 strokeWidth={isActive ? 2.5 : 2} 
               />
-              <span className={`text-[9px] font-sans font-extrabold tracking-wider leading-none ${
+              <span className={`text-[8px] font-sans font-extrabold tracking-wider leading-none ${
                 isActive
                   ? isDark ? '!text-black' : '!text-white'
-                  : isDark ? 'text-[#8E8E93]' : 'text-[#555555]'
+                  : isDark ? 'text-neutral-500' : 'text-neutral-500'
               }`}>
                 {tab.label}
               </span>

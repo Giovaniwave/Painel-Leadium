@@ -7,7 +7,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { OpenAI } from "openai";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 import fs from "fs";
 import dotenv from "dotenv";
@@ -903,11 +903,9 @@ async function startServer() {
       });
 
       if (error) {
-        return res
-          .status(401)
-          .json({
-            error: "Credenciais inválidas. Verifique seu e-mail e senha.",
-          });
+        return res.status(401).json({
+          error: "Credenciais inválidas. Verifique seu e-mail e senha.",
+        });
       }
 
       if (data && data.user) {
@@ -1532,16 +1530,26 @@ async function startServer() {
         ? expenses.displacements.find((d: any) => toUUID(d.id) === targetId)
         : null;
 
-      const empId = targetEmployeeId || (existing ? toUUID(existing.employeeId) : null);
-      const vehId = targetVehicleId || (existing ? toUUID(existing.vehicleId) : null);
-      const finalKm = kmTraveled !== undefined ? kmTraveled : (existing ? existing.kmTraveled : undefined);
+      const empId =
+        targetEmployeeId || (existing ? toUUID(existing.employeeId) : null);
+      const vehId =
+        targetVehicleId || (existing ? toUUID(existing.vehicleId) : null);
+      const finalKm =
+        kmTraveled !== undefined
+          ? kmTraveled
+          : existing
+            ? existing.kmTraveled
+            : undefined;
 
-      if (!empId || !vehId || (finalKm === undefined && status !== 'Pendente')) {
-        return res
-          .status(400)
-          .json({
-            error: "Colaborador, Veículo e KM percorrido são obrigatórios (exceto se Pendente).",
-          });
+      if (
+        !empId ||
+        !vehId ||
+        (finalKm === undefined && status !== "Pendente")
+      ) {
+        return res.status(400).json({
+          error:
+            "Colaborador, Veículo e KM percorrido são obrigatórios (exceto se Pendente).",
+        });
       }
 
       const vehicle = expenses.vehicles.find((v: any) => {
@@ -1578,16 +1586,66 @@ async function startServer() {
         litersConsumed,
         amount,
         status: finalStatus,
-        receiptImage: receiptImage !== undefined ? receiptImage : (existing ? existing.receiptImage : ""),
-        refundReceiptImage: refundReceiptImage !== undefined ? refundReceiptImage : (existing ? existing.refundReceiptImage : ""),
-        startLat: startLat !== undefined ? startLat : (existing ? existing.startLat : undefined),
-        startLng: startLng !== undefined ? startLng : (existing ? existing.startLng : undefined),
-        endLat: endLat !== undefined ? endLat : (existing ? existing.endLat : undefined),
-        endLng: endLng !== undefined ? endLng : (existing ? existing.endLng : undefined),
-        startAddress: startAddress !== undefined ? startAddress : (existing ? existing.startAddress : undefined),
-        endAddress: endAddress !== undefined ? endAddress : (existing ? existing.endAddress : undefined),
-        startTime: startTime !== undefined ? startTime : (existing ? existing.startTime : undefined),
-        endTime: endTime !== undefined ? endTime : (existing ? existing.endTime : undefined),
+        receiptImage:
+          receiptImage !== undefined
+            ? receiptImage
+            : existing
+              ? existing.receiptImage
+              : "",
+        refundReceiptImage:
+          refundReceiptImage !== undefined
+            ? refundReceiptImage
+            : existing
+              ? existing.refundReceiptImage
+              : "",
+        startLat:
+          startLat !== undefined
+            ? startLat
+            : existing
+              ? existing.startLat
+              : undefined,
+        startLng:
+          startLng !== undefined
+            ? startLng
+            : existing
+              ? existing.startLng
+              : undefined,
+        endLat:
+          endLat !== undefined
+            ? endLat
+            : existing
+              ? existing.endLat
+              : undefined,
+        endLng:
+          endLng !== undefined
+            ? endLng
+            : existing
+              ? existing.endLng
+              : undefined,
+        startAddress:
+          startAddress !== undefined
+            ? startAddress
+            : existing
+              ? existing.startAddress
+              : undefined,
+        endAddress:
+          endAddress !== undefined
+            ? endAddress
+            : existing
+              ? existing.endAddress
+              : undefined,
+        startTime:
+          startTime !== undefined
+            ? startTime
+            : existing
+              ? existing.startTime
+              : undefined,
+        endTime:
+          endTime !== undefined
+            ? endTime
+            : existing
+              ? existing.endTime
+              : undefined,
       };
 
       if (targetId) {
@@ -1914,7 +1972,159 @@ ${Object.keys(dateBalances)
 4. TODAS AS TRANSAÇÕES BRUTAS EM DETALHE:
 ${JSON.stringify(transactionsContext, null, 2)}
 
-Lembre-se: Você é o Kairos, membro do time Leadium. Converse como um profissional humano de altíssimo nível, amigável, ágil e livre de scripts robóticos!`;
+Lembre-se: Você é o Kairos, membro do time Leadium. Converse como um profissional humano de altíssimo nível, amigável, ágil e livre de scripts robóticos!
+Você pode executar ações no sistema através de funções: adicionar transações, adicionar despesas (viagens), adicionar clientes. Caso não consiga extrair as informações necessárias, peça para o usuário complementar.`;
+
+      const openaiTools = [
+        {
+          type: "function",
+          function: {
+            name: "addTransaction",
+            description:
+              "Adiciona uma nova transação financeira (receita ou despesa).",
+            parameters: {
+              type: "object",
+              properties: {
+                type: {
+                  type: "string",
+                  enum: ["income", "expense"],
+                  description:
+                    "'income' para entrada (receita), 'expense' para saída (despesa).",
+                },
+                category: {
+                  type: "string",
+                  description: "A categoria, ex: 'Vendas', 'Impostos', etc.",
+                },
+                amount: {
+                  type: "number",
+                  description: "O valor numérico (positivo).",
+                },
+                sender: {
+                  type: "string",
+                  description: "Nome do pagador/recebedor (Pessoa ou Empresa).",
+                },
+                description: {
+                  type: "string",
+                  description: "Descrição opcional.",
+                },
+                date: {
+                  type: "string",
+                  description: "Data no formato YYYY-MM-DD.",
+                },
+              },
+              required: ["type", "category", "amount", "sender", "date"],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "addDisplacement",
+            description:
+              "Adiciona um novo lançamento de viagem/deslocamento da frota (despesa de combustível).",
+            parameters: {
+              type: "object",
+              properties: {
+                date: { type: "string", description: "YYYY-MM-DD" },
+                route: { type: "string", description: "Rota do deslocamento." },
+                reason: { type: "string", description: "Motivo da viagem." },
+                distanceKm: {
+                  type: "number",
+                  description: "Distância percorrida em km.",
+                },
+              },
+              required: ["date", "route", "reason", "distanceKm"],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "addClient",
+            description: "Adiciona um novo cliente ao CRM.",
+            parameters: {
+              type: "object",
+              properties: {
+                name: {
+                  type: "string",
+                  description: "Nome do cliente ou empresa.",
+                },
+                contractValue: {
+                  type: "number",
+                  description:
+                    "Valor do contrato mensal ou taxa única em Reais.",
+                },
+                isRecurring: {
+                  type: "boolean",
+                  description:
+                    "true se for pagamento recorrente (MRR), false se for taxa única.",
+                },
+                category: {
+                  type: "string",
+                  description: "Categoria de serviço.",
+                },
+              },
+              required: ["name", "contractValue", "isRecurring", "category"],
+            },
+          },
+        },
+      ];
+
+      const geminiTools: FunctionDeclaration[] = [
+        {
+          name: "addTransaction",
+          description:
+            "Adiciona uma nova transação financeira (receita ou despesa).",
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              type: {
+                type: Type.STRING,
+                description: "'income' para entrada, 'expense' para saída.",
+              },
+              category: { type: Type.STRING },
+              amount: { type: Type.NUMBER },
+              sender: { type: Type.STRING },
+              description: { type: Type.STRING },
+              date: { type: Type.STRING },
+            },
+            required: ["type", "category", "amount", "sender", "date"],
+          },
+        },
+        {
+          name: "addDisplacement",
+          description:
+            "Adiciona um novo lançamento de viagem/deslocamento da frota (despesa de combustível).",
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              date: { type: Type.STRING, description: "YYYY-MM-DD" },
+              route: { type: Type.STRING },
+              reason: { type: Type.STRING },
+              distanceKm: { type: Type.NUMBER },
+            },
+            required: ["date", "route", "reason", "distanceKm"],
+          },
+        },
+        {
+          name: "addClient",
+          description: "Adiciona um novo cliente ao CRM.",
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              contractValue: { type: Type.NUMBER },
+              isRecurring: { type: Type.BOOLEAN },
+              category: { type: Type.STRING },
+            },
+            required: ["name", "contractValue", "isRecurring", "category"],
+          },
+        },
+      ];
+
+      let toolName: string | null = null;
+      let toolArgs: any = null;
+      let textResponse = "";
 
       if (openai) {
         // Use OpenAI gpt-4o-mini as the brain (Primary)
@@ -1924,13 +2134,19 @@ Lembre-se: Você é o Kairos, membro do time Leadium. Converse como um profissio
             { role: "system", content: systemInstruction },
             { role: "user", content: prompt },
           ],
+          tools: openaiTools as any,
           temperature: 0.1, // extremely low temperature for highest consistency and speed
         });
-        return res.json({
-          text:
-            response.choices[0]?.message?.content ||
-            "Desculpe, tive um problema ao formular a resposta.",
-        });
+
+        const msg = response.choices[0]?.message;
+        if (msg?.tool_calls?.length) {
+          toolName = msg.tool_calls[0].function.name;
+          toolArgs = JSON.parse(msg.tool_calls[0].function.arguments);
+        } else {
+          textResponse =
+            msg?.content ||
+            "Desculpe, tive um problema ao formular a resposta.";
+        }
       } else if (gemini) {
         // Fallback to Gemini if OpenAI Key is not set
         const response = await gemini.models.generateContent({
@@ -1939,14 +2155,75 @@ Lembre-se: Você é o Kairos, membro do time Leadium. Converse como um profissio
           config: {
             systemInstruction: systemInstruction,
             temperature: 0.1,
+            tools: [{ functionDeclarations: geminiTools }],
           },
         });
-        return res.json({
-          text:
+
+        const functionCalls = response.functionCalls;
+        if (functionCalls && functionCalls.length > 0) {
+          toolName = functionCalls[0].name;
+          toolArgs = functionCalls[0].args;
+        } else {
+          textResponse =
             response.text ||
-            "Desculpe, não consegui processar sua mensagem agora.",
-        });
+            "Desculpe, não consegui processar sua mensagem agora.";
+        }
       }
+
+      // Execute tool if requested
+      if (toolName && toolArgs) {
+        try {
+          if (toolName === "addTransaction") {
+            const txs = await loadTransactions();
+            txs.push({
+              id: crypto.randomUUID(),
+              type: toolArgs.type,
+              category: toolArgs.category,
+              amount: toolArgs.amount,
+              sender: toolArgs.sender,
+              description: toolArgs.description || "",
+              date: toolArgs.date,
+              status: "completed",
+            });
+            await saveTransactions(txs);
+            textResponse = `Feito! Adicionei a transação de R$ ${toolArgs.amount} (${toolArgs.type === "income" ? "Entrada" : "Saída"}) com sucesso. Posso ajudar em algo mais?`;
+          } else if (toolName === "addClient") {
+            const clients = await loadClients();
+            clients.push({
+              id: crypto.randomUUID(),
+              name: toolArgs.name,
+              contract_value: toolArgs.contractValue,
+              is_recurring: toolArgs.isRecurring,
+              category: toolArgs.category,
+              status: "active",
+              created_at: new Date().toISOString(),
+            });
+            await saveClients(clients);
+            textResponse = `Pronto! Cliente ${toolArgs.name} adicionado ao CRM com sucesso.`;
+          } else if (toolName === "addDisplacement") {
+            const expenses = await getExpensesData();
+            expenses.displacements.push({
+              id: crypto.randomUUID(),
+              date: toolArgs.date,
+              employeeId: expenses.employees[0]?.id || crypto.randomUUID(),
+              vehicleId: expenses.vehicles[0]?.id || crypto.randomUUID(),
+              reason: toolArgs.reason,
+              clientVisited: toolArgs.route,
+              city: "",
+              kmTraveled: toolArgs.distanceKm,
+              amount: toolArgs.distanceKm * 0.5,
+              status: "Pendente",
+              history: [{ status: "Pendente", date: new Date().toISOString() }],
+            });
+            await saveExpensesData(expenses);
+            textResponse = `Certo! Deslocamento registrado (${toolArgs.distanceKm} km, Rota: ${toolArgs.route}).`;
+          }
+        } catch (e: any) {
+          textResponse = `Ocorreu um erro ao tentar executar a ação: ${e.message}`;
+        }
+      }
+
+      return res.json({ text: textResponse });
     } catch (err: any) {
       console.error("Chat API Error:", err);
       res.status(500).json({ error: err.message || "Processing failed." });
@@ -1972,11 +2249,9 @@ Lembre-se: Você é o Kairos, membro do time Leadium. Converse como um profissio
 
       const match = image.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
       if (!match) {
-        return res
-          .status(400)
-          .json({
-            error: "Formato de imagem inválido. Deve ser base64 data-uri.",
-          });
+        return res.status(400).json({
+          error: "Formato de imagem inválido. Deve ser base64 data-uri.",
+        });
       }
 
       const mimeType = match[1];

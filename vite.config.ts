@@ -12,32 +12,32 @@ export default defineConfig(() => {
       VitePWA({
         injectRegister: false,
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+        includeAssets: ['favicon.ico', 'pwa-icon.jpg', 'apple-touch-icon.png'],
         manifest: {
-          name: 'Nome do Aplicativo',
-          short_name: 'App',
-          description: 'A progressive web app built with React and Vite',
+          name: 'CRM - Agência Leadium',
+          short_name: 'Leadium CRM',
+          description: 'A progressive web app built with React and Vite for Leadium CRM',
           theme_color: '#000000',
-          background_color: '#ffffff',
+          background_color: '#0D0D0D',
           display: 'standalone',
           start_url: '/',
           orientation: 'portrait',
           icons: [
             {
-              src: '/icons/icon-192.svg',
-              sizes: '192x192',
-              type: 'image/svg+xml'
+              src: '/icons/pwa-icon.jpg',
+              sizes: '512x512',
+              type: 'image/jpeg'
             },
             {
-              src: '/icons/icon-512.svg',
+              src: '/icons/pwa-icon.jpg',
               sizes: '512x512',
-              type: 'image/svg+xml',
+              type: 'image/jpeg',
               purpose: 'any maskable'
             }
           ]
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,jpg,jpeg,svg}'],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

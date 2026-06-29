@@ -291,7 +291,7 @@ export default function FinanceAssistant({
               <span className={`w-1.5 h-1.5 rounded-full animate-bounce ${isDark ? 'bg-white' : 'bg-black'}`}></span>
               <span className={`w-1.5 h-1.5 rounded-full animate-bounce delay-100 ${isDark ? 'bg-white' : 'bg-black'}`}></span>
               <span className={`w-1.5 h-1.5 rounded-full animate-bounce delay-200 ${isDark ? 'bg-white' : 'bg-black'}`}></span>
-              <span>Analisando o dashboard...</span>
+              <span>Só um momento...</span>
             </div>
           </div>
         )}

@@ -1681,7 +1681,7 @@ export default function ClientsView({
                                         </div>
                                       ) : (
                                         <div className="py-3 text-center italic text-[10px] text-gray-500 leading-normal">
-                                          Não há receitas avulsas dadas como pendentes na carteira atualmente.
+                                          Não há receitas avulsas.
                                         </div>
                                       )}
                                     </div>

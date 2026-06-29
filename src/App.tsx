@@ -584,53 +584,6 @@ export default function App() {
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation Menu */}
-      <div 
-        className={`md:hidden fixed bottom-6 left-6 right-6 z-45 flex justify-around items-center py-2 px-2 rounded-2xl shadow-2xl transition-all ${
-          theme === 'light' 
-            ? 'bg-[#FFFFFF]/95 backdrop-blur-md border border-[#E5E7EB]' 
-            : 'bg-[#1A1A1A]/95 backdrop-blur-md border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.5)]'
-        }`}
-        id="mobile-bottom-tabs"
-      >
-        <button
-          type="button"
-          onClick={() => setActiveTab('dashboard')}
-          className={`flex flex-col items-center gap-1 py-1.5 px-4 rounded-xl transition-all cursor-pointer active:scale-95 ${
-            activeTab === 'dashboard' 
-              ? 'text-[#FF4D00] bg-[#FF4D00]/10 border border-[#FF4D00]/20 font-bold scale-105 shadow-sm' 
-              : 'text-gray-500 hover:text-gray-400 border border-transparent'
-          }`}
-        >
-          <LayoutDashboard className="w-[22px] h-[22px]" />
-          <span className="text-[9px] uppercase tracking-wider font-semibold font-sans">Painel</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('budgeting')}
-          className={`flex flex-col items-center gap-1 py-1.5 px-4 rounded-xl transition-all cursor-pointer active:scale-95 ${
-            activeTab === 'budgeting' 
-              ? 'text-[#FF4D00] bg-[#FF4D00]/10 border border-[#FF4D00]/20 font-bold scale-105 shadow-sm' 
-              : 'text-gray-500 hover:text-gray-400 border border-transparent'
-          }`}
-        >
-          <Wallet className="w-[22px] h-[22px]" />
-          <span className="text-[9px] uppercase tracking-wider font-semibold font-sans">Carteira</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('transactions')}
-          className={`flex flex-col items-center gap-1 py-1.5 px-4 rounded-xl transition-all cursor-pointer active:scale-95 ${
-            activeTab === 'transactions' 
-              ? 'text-[#FF4D00] bg-[#FF4D00]/10 border border-[#FF4D00]/20 font-bold scale-105 shadow-sm' 
-              : 'text-gray-500 hover:text-gray-400 border border-transparent'
-          }`}
-        >
-          <ArrowLeftRight className="w-[22px] h-[22px]" />
-          <span className="text-[9px] uppercase tracking-wider font-semibold font-sans">Transações</span>
-        </button>
-      </div>
-
       {/* Draggable & Removable Floating Assistente Button (Kairos Chat Trigger) */}
       {isFloatingVisible && (
         <div 
