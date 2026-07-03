@@ -75,6 +75,7 @@ async function startServer() {
     vehicles: false,
     displacements: false,
     general_expenses: false,
+    chat_messages: false,
   };
 
   const tables = {
@@ -86,6 +87,7 @@ async function startServer() {
     vehicles: "leadium_vehicles",
     displacements: "leadium_displacements",
     general_expenses: "leadium_general_expenses",
+    chat_messages: "leadium_chat_messages",
   };
 
   if (supabaseUrl && supabaseKey) {
@@ -228,6 +230,21 @@ async function startServer() {
         console.warn(
           "Supabase info: leadium_general_expenses table not ready:",
           genExpErr.message,
+        );
+      }
+
+      // Test leadium_chat_messages
+      const { error: chatErr } = await supabaseClient
+        .from(tables.chat_messages)
+        .select("id")
+        .limit(1);
+      if (!chatErr) {
+        tablesReady.chat_messages = true;
+        console.log("Supabase check: leadium_chat_messages table is ready.");
+      } else {
+        console.warn(
+          "Supabase info: leadium_chat_messages table not ready:",
+          chatErr.message,
         );
       }
     } catch (err: any) {
@@ -436,6 +453,97 @@ async function startServer() {
     }
     const local = fetchLocalDbData();
     return Number(local.faturamento_meta) || 100000;
+  }
+
+  async function loadChatHistory(userEmail: string) {
+    const lowerEmail = (userEmail || "anonymous").toLowerCase();
+    if (supabaseClient && tablesReady.chat_messages) {
+      try {
+        const { data, error } = await supabaseClient
+          .from(tables.chat_messages)
+          .select("*")
+          .eq("user_email", lowerEmail)
+          .order("created_at", { ascending: true });
+        if (!error && data) {
+          return data.map((m: any) => ({
+            sender: m.sender,
+            text: m.text,
+          }));
+        } else if (error) {
+          console.warn("[Supabase Sync Logger] Fetch chat history issue:", error.message);
+        }
+      } catch (err: any) {
+        console.warn("[Supabase Sync Logger] Failed to query chat history:", err.message || err);
+      }
+    }
+    const local = fetchLocalDbData();
+    if (!local.chat_histories) {
+      local.chat_histories = {};
+    }
+    return local.chat_histories[lowerEmail] || [];
+  }
+
+  async function saveChatMessage(userEmail: string, sender: string, text: string) {
+    const lowerEmail = (userEmail || "anonymous").toLowerCase();
+    const newMessage = { sender, text };
+
+    // 1. Save locally
+    const local = fetchLocalDbData();
+    if (!local.chat_histories) {
+      local.chat_histories = {};
+    }
+    if (!local.chat_histories[lowerEmail]) {
+      local.chat_histories[lowerEmail] = [];
+    }
+    local.chat_histories[lowerEmail].push(newMessage);
+    // Keep only the last 100 messages in history to prevent local storage bloat
+    if (local.chat_histories[lowerEmail].length > 100) {
+      local.chat_histories[lowerEmail].shift();
+    }
+    writeLocalDbData(local);
+
+    // 2. Save to Supabase if ready
+    if (supabaseClient && tablesReady.chat_messages) {
+      try {
+        const { error } = await supabaseClient
+          .from(tables.chat_messages)
+          .insert({
+            user_email: lowerEmail,
+            sender: sender,
+            text: text,
+            created_at: new Date().toISOString(),
+          });
+        if (error) {
+          console.warn("[Supabase Sync Logger] Save chat message issue:", error.message);
+        }
+      } catch (err: any) {
+        console.warn("[Supabase Sync Logger] Failed to sync chat message:", err.message || err);
+      }
+    }
+  }
+
+  async function clearChatHistory(userEmail: string) {
+    const lowerEmail = (userEmail || "anonymous").toLowerCase();
+    
+    const local = fetchLocalDbData();
+    if (local.chat_histories && local.chat_histories[lowerEmail]) {
+      local.chat_histories[lowerEmail] = [];
+      writeLocalDbData(local);
+    }
+
+    if (supabaseClient && tablesReady.chat_messages) {
+      try {
+        const { error } = await supabaseClient
+          .from(tables.chat_messages)
+          .delete()
+          .eq("user_email", lowerEmail);
+        if (error) {
+          console.warn("[Supabase Sync Logger] Clear chat history issue:", error.message);
+        }
+      } catch (err: any) {
+        console.warn("[Supabase Sync Logger] Failed to clear chat history in Supabase:", err.message || err);
+      }
+    }
   }
 
   function parseOrGenerateUUID(srcId: string): string {
@@ -1841,6 +1949,12 @@ As análises individuais de consumo apontam os seguintes indicadores de eficiên
       const faturamentoMetaContext = await loadRevenueGoal();
       const clientsContext = await loadClients();
 
+      // Load previous chat messages for this user to pass to Kairos (context memory)
+      const emailToUse = userEmail || "anonymous";
+      const rawHistory = await loadChatHistory(emailToUse);
+      // Take the last 15 messages so we don't exceed model context windows or cause latency
+      const historyToPass = rawHistory.slice(-15);
+
       const gemini = getGemini();
       const openai = getOpenAi();
 
@@ -2234,6 +2348,10 @@ Você pode executar ações no sistema através de funções: adicionar transaç
           model: "gpt-4o-mini",
           messages: [
             { role: "system", content: systemInstruction },
+            ...historyToPass.map((m: any) => ({
+              role: m.sender === "user" ? "user" : "assistant",
+              content: m.text,
+            })),
             { role: "user", content: prompt },
           ],
           tools: openaiTools as any,
@@ -2253,7 +2371,13 @@ Você pode executar ações no sistema através de funções: adicionar transaç
         // Fallback to Gemini if OpenAI Key is not set
         const response = await gemini.models.generateContent({
           model: "gemini-2.5-flash", // Use gemini-2.5-flash for maximum speed and fallback
-          contents: prompt,
+          contents: [
+            ...historyToPass.map((m: any) => ({
+              role: m.sender === "user" ? "user" : "model",
+              parts: [{ text: m.text }]
+            })),
+            { role: "user", parts: [{ text: prompt }] }
+          ],
           config: {
             systemInstruction: systemInstruction,
             temperature: 0.1,
@@ -2376,10 +2500,42 @@ Você pode executar ações no sistema através de funções: adicionar transaç
         }
       }
 
+      // Save user and assistant messages to database memory
+      await saveChatMessage(emailToUse, "user", prompt);
+      await saveChatMessage(emailToUse, "assistant", textResponse);
+
       return res.json({ text: textResponse });
     } catch (err: any) {
       console.error("Chat API Error:", err);
       res.status(500).json({ error: err.message || "Processing failed." });
+    }
+  });
+
+  // Fetch chat history for Kairos memory
+  app.get("/api/gemini/history", async (req, res) => {
+    try {
+      const email = req.query.email as string;
+      if (!email) {
+        return res.status(400).json({ error: "E-mail não fornecido." });
+      }
+      const history = await loadChatHistory(email);
+      res.json(history);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Erro ao carregar histórico." });
+    }
+  });
+
+  // Clear chat history for Kairos memory
+  app.post("/api/gemini/clear", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "E-mail não fornecido." });
+      }
+      await clearChatHistory(email);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Erro ao limpar histórico." });
     }
   });
 

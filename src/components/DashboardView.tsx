@@ -460,7 +460,7 @@ export default function DashboardView({
               title="Exportar relatório consolidado em PDF"
             >
               <Download className="w-3.5 h-3.5 text-[#FF4D00]" />
-              <span>Relatório PDF</span>
+              <span>Relatório</span>
             </button>
 
             {/* Desktop Inputs - always shown on sm and up */}
@@ -569,12 +569,17 @@ export default function DashboardView({
               </span>
             </div>
             {/* Target Goal Column */}
-            <div className="space-y-1 sm:space-y-2 relative group/meta border-l-2 border-[#FF4D00] bg-[#FF4D00]/5 rounded-r-xl p-3 pl-4">
+            <div 
+              onClick={!isEditingRevenue ? startEditingRevenue : undefined}
+              className={`space-y-1 sm:space-y-2 relative group/meta border-l-2 border-[#FF4D00] bg-[#FF4D00]/5 rounded-r-xl p-3 pl-4 transition-all duration-200 ${
+                !isEditingRevenue ? 'cursor-pointer hover:bg-[#FF4D00]/10' : ''
+              }`}
+            >
               <span className="text-[10px] uppercase tracking-[0.14em] font-bold text-gray-400 block">
                 Meta Objetiva de Vendas
               </span>
               {isEditingRevenue ? (
-                <div className="flex items-center gap-1.5 pt-1">
+                <div className="flex items-center gap-1.5 pt-1" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="number"
                     value={editingRevenueValue}
@@ -593,7 +598,10 @@ export default function DashboardView({
                   </button>
                   <button 
                     type="button"
-                    onClick={() => setIsEditingRevenue(false)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsEditingRevenue(false);
+                    }}
                     className="p-1 px-2 text-gray-400 hover:text-white text-[10px] transition-colors"
                   >
                     Cancelar
@@ -604,14 +612,6 @@ export default function DashboardView({
                   <span className="text-2xl sm:text-4xl font-mono font-black text-[#FF4D00] tracking-tight">
                     {formatCurrency(revenueGoal)}
                   </span>
-                  <button
-                    type="button"
-                    onClick={startEditingRevenue}
-                    className="opacity-100 md:opacity-0 group-hover/meta:opacity-100 p-1 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-md transition-all cursor-pointer"
-                    title="Definir nova meta de faturamento"
-                  >
-                    <Pencil className="w-3 h-3" />
-                  </button>
                 </div>
               )}
               <span className="text-[9px] text-[#FF4D00] block font-sans">
@@ -1140,7 +1140,7 @@ export default function DashboardView({
               theme === 'dark' ? 'text-[#F9FAFB]' : 'text-zinc-800'
             }`}>
               <TrendingUp className="w-4 h-4 text-[#FF4D00]" />
-              <span>Análise de Tendência de Consumo: {currentMonthLabel} vs. {prevMonthLabel}</span>
+              <span>Tendência de Consumo: {currentMonthLabel} vs. {prevMonthLabel}</span>
             </h3>
             <p className="text-[10px] text-gray-500 mt-1 font-mono">
               Comparação diária das despesas totais do mês atual em relação ao mês anterior.
@@ -1236,10 +1236,10 @@ export default function DashboardView({
               theme === 'dark' ? 'text-[#F9FAFB]' : 'text-zinc-800'
             }`}>
               <Activity className="w-4 h-4 text-[#FF4D00]" />
-              <span>Análise Comparativa de Metas: Planejado vs. Realizado</span>
+              <span>Comparativa de Metas: Planejado vs. Realizado</span>
             </h3>
             <p className="text-[10px] text-gray-500 mt-1 font-mono">
-              Visualização comparativa em tempo real dos limites alocados em relação às despesas reais para cada categoria.
+              Visualização comparativa dos limites alocados em relação às despesas reais para cada categoria.
             </p>
           </div>
           <span className={`text-[10px] uppercase tracking-wider font-mono px-2.5 py-1 rounded-md bg-white/5 border border-white/10 ${

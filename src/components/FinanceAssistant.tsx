@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, X, Sparkles, MessageSquare, CircleAlert } from 'lucide-react';
+import { Send, X, Sparkles, MessageSquare, CircleAlert, Trash2 } from 'lucide-react';
 import { Transaction, BudgetGoal } from '../types';
 
 interface Message {
@@ -40,11 +40,64 @@ export default function FinanceAssistant({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Load persistent conversation history from the server-side database
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchHistory = async () => {
+      try {
+        const emailToUse = userEmail || "anonymous";
+        const res = await fetch(`/api/gemini/history?email=${encodeURIComponent(emailToUse)}`);
+        if (res.ok) {
+          const historyData = await res.json();
+          if (historyData && historyData.length > 0) {
+            setMessages(historyData);
+          } else {
+            setMessages([
+              { 
+                sender: 'assistant', 
+                text: 'E aí! Sou o Kairos, consultor financeiro do time Leadium. Me diz o que você precisa conferir ou calcular no nosso caixa hoje! É só mandar a sua dúvida.' 
+              }
+            ]);
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao carregar histórico do Kairos:', err);
+      }
+    };
+
+    fetchHistory();
+  }, [isOpen, userEmail]);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isLoading]);
+
+  const handleClearHistory = async () => {
+    if (!window.confirm("Deseja realmente limpar todo o histórico de conversas com o Kairos?")) {
+      return;
+    }
+    try {
+      const emailToUse = userEmail || "anonymous";
+      const res = await fetch('/api/gemini/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailToUse })
+      });
+      if (res.ok) {
+        setMessages([
+          { 
+            sender: 'assistant', 
+            text: 'Histórico limpo com sucesso! Como posso ajudar você agora?' 
+          }
+        ]);
+      }
+    } catch (err) {
+      console.error('Erro ao limpar histórico:', err);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -200,15 +253,26 @@ export default function FinanceAssistant({
             </span>
           </div>
         </div>
-        <button 
-          onClick={onClose}
-          className={`transition-colors cursor-pointer p-1.5 rounded-full ${
-            isDark ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-black hover:bg-black/5'
-          }`}
-          title="Fechar"
-        >
-          <X className="w-4.5 h-4.5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button 
+            onClick={handleClearHistory}
+            className={`transition-colors cursor-pointer p-1.5 rounded-full ${
+              isDark ? 'text-gray-400 hover:text-red-400 hover:bg-white/5' : 'text-gray-500 hover:text-red-500 hover:bg-black/5'
+            }`}
+            title="Limpar Histórico"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+          <button 
+            onClick={onClose}
+            className={`transition-colors cursor-pointer p-1.5 rounded-full ${
+              isDark ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-black hover:bg-black/5'
+            }`}
+            title="Fechar"
+          >
+            <X className="w-4.5 h-4.5" />
+          </button>
+        </div>
       </div>
 
       {/* Messages area similar to WhatsApp */}
