@@ -4,6 +4,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -16,9 +17,24 @@ import {
   Pencil,
   Check,
   X,
-  Plus
+  Plus,
+  Download
 } from 'lucide-react';
 import { Transaction, BudgetGoal } from '../types';
+import AnimatedCounter from './AnimatedCounter';
+import { generateMonthlyReportPDF } from '../utils/pdfGenerator';
+import { 
+  BarChart as ReChartsBarChart, 
+  Bar, 
+  LineChart as ReChartsLineChart,
+  Line,
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer 
+} from 'recharts';
 
 interface DashboardViewProps {
   transactions: Transaction[];
@@ -44,9 +60,39 @@ export default function DashboardView({
 
   const [hoveredCategory, setHoveredCategory] = useState<{ name: string; value: number; percentage: number } | null>(null);
   const [hoveredTrend, setHoveredTrend] = useState<{ month: string; income: number; expense: number } | null>(null);
+  const [lineChartType, setLineChartType] = useState<'cumulative' | 'daily'>('cumulative');
+
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [showMobileDates, setShowMobileDates] = useState(false);
 
   const [isEditingRevenue, setIsEditingRevenue] = useState(false);
   const [editingRevenueValue, setEditingRevenueValue] = useState(revenueGoal.toString());
+
+  const setPresetRange = (preset: 'all' | 'this_month' | 'last_30' | 'this_year') => {
+    const today = new Date();
+    if (preset === 'all') {
+      setStartDate('');
+      setEndDate('');
+    } else if (preset === 'this_month') {
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      setStartDate(`${year}-${month}-01`);
+      
+      const lastDay = new Date(year, today.getMonth() + 1, 0).getDate();
+      setEndDate(`${year}-${month}-${String(lastDay).padStart(2, '0')}`);
+    } else if (preset === 'last_30') {
+      const past30 = new Date();
+      past30.setDate(today.getDate() - 30);
+      
+      setStartDate(past30.toISOString().split('T')[0]);
+      setEndDate(today.toISOString().split('T')[0]);
+    } else if (preset === 'this_year') {
+      const year = today.getFullYear();
+      setStartDate(`${year}-01-01`);
+      setEndDate(`${year}-12-31`);
+    }
+  };
 
   const startEditingRevenue = () => {
     setEditingRevenueValue(revenueGoal.toString());
@@ -61,12 +107,22 @@ export default function DashboardView({
     setIsEditingRevenue(false);
   };
 
+  // Filtered transactions based on the selected date interval
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(tx => {
+      if (!tx.date) return true;
+      if (startDate && tx.date < startDate) return false;
+      if (endDate && tx.date > endDate) return false;
+      return true;
+    });
+  }, [transactions, startDate, endDate]);
+
   // Calculations for total numbers
   const { totalIncome, totalExpenses, netSavings } = useMemo(() => {
     let incomeSum = 0;
     let expenseSum = 0;
     
-    transactions.forEach(tx => {
+    filteredTransactions.forEach(tx => {
       if (tx.type === 'income') {
         incomeSum += tx.amount;
       } else {
@@ -79,7 +135,7 @@ export default function DashboardView({
       totalExpenses: expenseSum,
       netSavings: incomeSum - expenseSum
     };
-  }, [transactions]);
+  }, [filteredTransactions]);
 
   const percentageRevenueReached = useMemo(() => {
     if (revenueGoal === 0) return 0;
@@ -100,7 +156,7 @@ export default function DashboardView({
     const PortugueseMonths = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
     const groups: Record<string, { monthLabel: string; income: number; expense: number; parsedDate: Date }> = {};
     
-    transactions.forEach(tx => {
+    filteredTransactions.forEach(tx => {
       if (!tx.date) return;
       const dateParts = tx.date.split('-');
       if (dateParts.length < 2) return;
@@ -132,7 +188,7 @@ export default function DashboardView({
         income: g.income,
         expense: g.expense
       }));
-  }, [transactions]);
+  }, [filteredTransactions]);
 
   const maxVal = useMemo(() => {
     if (trendData.length === 0) return 100;
@@ -145,7 +201,7 @@ export default function DashboardView({
     const categories: Record<string, number> = {};
     let totalExps = 0;
 
-    transactions
+    filteredTransactions
       .filter(tx => tx.type === 'expense')
       .forEach(tx => {
         categories[tx.category] = (categories[tx.category] || 0) + tx.amount;
@@ -159,7 +215,115 @@ export default function DashboardView({
       value: val,
       percentage: Math.min(100, Math.round((val / totalExps) * 100))
     })).sort((a, b) => b.value - a.value);
-  }, [transactions]);
+  }, [filteredTransactions]);
+
+  // Identify the current month and previous month for comparative line chart
+  const { currentMonthKey, prevMonthKey, currentMonthLabel, prevMonthLabel } = useMemo(() => {
+    const PortugueseMonths = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+    
+    // Find latest month with transactions as Mês Atual, or use real calendar month as fallback
+    let latestKey = "";
+    let latestDate = new Date(0);
+    
+    filteredTransactions.forEach(tx => {
+      if (!tx.date) return;
+      const d = new Date(tx.date);
+      if (!isNaN(d.getTime()) && d.getTime() > latestDate.getTime()) {
+        latestDate = d;
+        const year = d.getFullYear();
+        const month = d.getMonth() + 1;
+        latestKey = `${year}-${String(month).padStart(2, '0')}`;
+      }
+    });
+
+    if (!latestKey) {
+      const today = new Date();
+      latestKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    // Previous month key
+    const [yStr, mStr] = latestKey.split('-');
+    let y = parseInt(yStr, 10);
+    let m = parseInt(mStr, 10);
+    
+    let prevM = m - 1;
+    let prevY = y;
+    if (prevM === 0) {
+      prevM = 12;
+      prevY--;
+    }
+    const previousKey = `${prevY}-${String(prevM).padStart(2, '0')}`;
+
+    const currentLabel = `${PortugueseMonths[m - 1]} ${y}`;
+    const prevLabel = `${PortugueseMonths[prevM - 1]} ${prevY}`;
+
+    return {
+      currentMonthKey: latestKey,
+      prevMonthKey: previousKey,
+      currentMonthLabel: currentLabel,
+      prevMonthLabel: prevLabel
+    };
+  }, [filteredTransactions]);
+
+  const comparativeLineData = useMemo(() => {
+    // We will generate data for days 1 to 31
+    const daysData: any[] = [];
+    
+    // Sum up expenses per day of the month for current and previous month
+    const currentDailySums = Array(32).fill(0);
+    const prevDailySums = Array(32).fill(0);
+
+    filteredTransactions.forEach(tx => {
+      if (tx.type !== 'expense' || !tx.date) return;
+      const dateParts = tx.date.split('-');
+      if (dateParts.length < 3) return;
+      const year = dateParts[0];
+      const month = dateParts[1];
+      const day = parseInt(dateParts[2], 10);
+      if (isNaN(day) || day < 1 || day > 31) return;
+
+      const key = `${year}-${month}`;
+      if (key === currentMonthKey) {
+        currentDailySums[day] += tx.amount;
+      } else if (key === prevMonthKey) {
+        prevDailySums[day] += tx.amount;
+      }
+    });
+
+    // Check if the currentMonthKey is the actual calendar month to hide future days
+    const today = new Date();
+    const realYear = today.getFullYear();
+    const realMonth = today.getMonth() + 1;
+    const realDay = today.getDate();
+    const realMonthKey = `${realYear}-${String(realMonth).padStart(2, '0')}`;
+    const isCurrentRealMonth = currentMonthKey === realMonthKey;
+
+    let currentAccum = 0;
+    let prevAccum = 0;
+
+    for (let day = 1; day <= 31; day++) {
+      // For current month: only include up to today's date if it's the current real month
+      const isFutureDayOfCurrentMonth = isCurrentRealMonth && day > realDay;
+
+      currentAccum += currentDailySums[day];
+      prevAccum += prevDailySums[day];
+
+      const currentVal = isFutureDayOfCurrentMonth 
+        ? undefined 
+        : (lineChartType === 'cumulative' ? currentAccum : currentDailySums[day]);
+        
+      const prevVal = lineChartType === 'cumulative' ? prevAccum : prevDailySums[day];
+
+      daysData.push({
+        dayLabel: `Dia ${day}`,
+        "Mês Atual": currentVal,
+        "Mês Anterior": prevVal,
+        dayNum: day
+      });
+    }
+
+    return daysData;
+  }, [filteredTransactions, currentMonthKey, prevMonthKey, lineChartType]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -167,6 +331,71 @@ export default function DashboardView({
       currency: 'BRL',
       maximumFractionDigits: 0
     }).format(val);
+  };
+
+  const rechartsData = useMemo(() => {
+    return budgetGoals.map(goal => {
+      const spent = filteredTransactions
+        .filter(tx => tx.type === 'expense' && tx.category === goal.name)
+        .reduce((sum, tx) => sum + tx.amount, 0);
+      return {
+        name: goal.name,
+        Planejado: goal.allocated,
+        Realizado: spent
+      };
+    });
+  }, [budgetGoals, filteredTransactions]);
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className={`p-3 rounded-lg border shadow-xl font-mono text-xs ${
+          theme === 'dark' 
+            ? 'bg-[#18181B]/95 border-white/10 text-white' 
+            : 'bg-white border-gray-200 text-zinc-900'
+        }`}>
+          <p className="font-bold mb-1.5 uppercase text-[10px] tracking-wider">{label}</p>
+          <div className="space-y-1">
+            <p className="flex justify-between gap-4">
+              <span className="text-blue-400">Planejado:</span>
+              <span className="font-bold">{formatCurrency(payload[0].value)}</span>
+            </p>
+            <p className="flex justify-between gap-4">
+              <span className="text-[#FF4D00]">Realizado:</span>
+              <span className={`font-bold ${payload[1].value > payload[0].value ? 'text-rose-500 font-black' : 'text-emerald-400'}`}>
+                {formatCurrency(payload[1].value)}
+              </span>
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const LineTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className={`p-3 rounded-lg border shadow-xl font-mono text-xs ${
+          theme === 'dark' 
+            ? 'bg-[#18181B]/95 border-white/10 text-white' 
+            : 'bg-white border-gray-200 text-zinc-900'
+        }`}>
+          <p className="font-bold mb-1.5 uppercase text-[10px] tracking-wider">{label}</p>
+          <div className="space-y-1.5">
+            {payload.map((p: any) => (
+              <p key={p.name} className="flex justify-between gap-4">
+                <span style={{ color: p.color || (p.name.includes('Atual') ? '#FF4D00' : '#888') }}>{p.name}:</span>
+                <span className="font-bold">
+                  {p.value !== undefined ? formatCurrency(p.value) : 'Sem dados'}
+                </span>
+              </p>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    return null;
   };
 
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
@@ -196,6 +425,127 @@ export default function DashboardView({
 
   return (
     <div className="space-y-10 py-4 animate-fadeIn">
+      {/* Date Interval Selector Control Bar - Ultra Minimalist Edition with Mobile Toggling */}
+      <div className="flex flex-col gap-2 pb-4 border-b border-white/5" style={{ borderColor: theme !== 'dark' ? 'rgba(0,0,0,0.06)' : '' }}>
+        <div className="flex items-center justify-between w-full">
+          {/* Left Side: Title and Active Filter Status */}
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[10px] font-mono font-bold uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'}`}>
+              Filtrar Período
+            </span>
+            {(startDate || endDate) && (
+              <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider shrink-0">
+                Filtrado
+              </span>
+            )}
+          </div>
+
+          {/* Right Side Controls */}
+          <div className="flex items-center gap-2">
+            {/* Download PDF button */}
+            <button
+              type="button"
+              onClick={() => generateMonthlyReportPDF({
+                transactions: filteredTransactions,
+                budgetGoals,
+                revenueGoal,
+                startDate,
+                endDate
+              })}
+              className={`flex items-center gap-1.5 px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider rounded-lg border transition-all cursor-pointer ${
+                theme === 'dark'
+                  ? 'bg-white/5 border-white/10 text-white hover:bg-[#FF4D00]/10 hover:border-[#FF4D00]/40'
+                  : 'bg-black text-[#FFFFFF] border-transparent hover:bg-gray-800'
+              }`}
+              title="Exportar relatório consolidado em PDF"
+            >
+              <Download className="w-3.5 h-3.5 text-[#FF4D00]" />
+              <span>Relatório PDF</span>
+            </button>
+
+            {/* Desktop Inputs - always shown on sm and up */}
+            <div className="hidden sm:flex items-center gap-1.5">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className={`bg-transparent border border-white/10 hover:border-white/20 focus:border-[#FF4D00] rounded px-1.5 py-0.5 text-[11px] font-mono focus:outline-none transition-colors w-[105px] text-center cursor-pointer ${
+                  theme === 'dark' ? 'text-white border-white/10 [color-scheme:dark]' : 'text-zinc-800 border-gray-200 [color-scheme:light]'
+                }`}
+              />
+              <span className="text-gray-500 font-mono text-[9px] uppercase shrink-0">a</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className={`bg-transparent border border-white/10 hover:border-white/20 focus:border-[#FF4D00] rounded px-1.5 py-0.5 text-[11px] font-mono focus:outline-none transition-colors w-[105px] text-center cursor-pointer ${
+                  theme === 'dark' ? 'text-white border-white/10 [color-scheme:dark]' : 'text-zinc-800 border-gray-200 [color-scheme:light]'
+                }`}
+              />
+
+              {(startDate || endDate) && (
+                <button
+                  type="button"
+                  onClick={() => { setStartDate(''); setEndDate(''); }}
+                  className="p-1 hover:bg-rose-500/10 text-rose-400 rounded transition-colors cursor-pointer shrink-0"
+                  title="Limpar período"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Calendar toggle button on mobile (visible only on mobile, aligned to the right) */}
+            <div className="flex items-center gap-1 sm:hidden">
+              {(startDate || endDate) && (
+                <button
+                  type="button"
+                  onClick={() => { setStartDate(''); setEndDate(''); }}
+                  className="p-1 hover:bg-rose-500/10 text-rose-400 rounded transition-colors cursor-pointer shrink-0"
+                  title="Limpar período"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowMobileDates(!showMobileDates)}
+                className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                  showMobileDates || startDate || endDate
+                    ? 'border-[#FF4D00] text-[#FF4D00] bg-[#FF4D00]/5'
+                    : 'border-white/10 text-gray-400 bg-transparent'
+                }`}
+              >
+                <Calendar className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile Inputs Drawer (visible only on mobile when toggled) */}
+        {showMobileDates && (
+          <div className="flex sm:hidden items-center justify-end gap-1.5 py-1.5 animate-fadeIn">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className={`bg-black/40 border rounded px-1.5 py-0.5 text-[11px] font-mono focus:outline-none transition-colors w-[105px] text-center cursor-pointer ${
+                theme === 'dark' ? 'text-white border-white/10 [color-scheme:dark]' : 'text-zinc-800 border-gray-200 [color-scheme:light]'
+              }`}
+            />
+            <span className="text-gray-500 font-mono text-[9px] uppercase shrink-0">a</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className={`bg-black/40 border rounded px-1.5 py-0.5 text-[11px] font-mono focus:outline-none transition-colors w-[105px] text-center cursor-pointer ${
+                theme === 'dark' ? 'text-white border-white/10 [color-scheme:dark]' : 'text-zinc-800 border-gray-200 [color-scheme:light]'
+              }`}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Objetivo de Faturamento (Billing Goal) Spotlight Card */}
       <div className="glass-container px-6 pt-6 pb-6 sm:p-8 flex flex-col md:flex-row gap-4 md:gap-8 justify-between relative overflow-hidden group hover:border-[#FF4D00]/25 transition-all duration-300 mb-4 sm:mb-0">
         {/* Animated decorative corner aura */}
@@ -400,8 +750,19 @@ export default function DashboardView({
             <span className="text-[9px] uppercase font-bold tracking-[0.2em]">Saldo Líquido</span>
             <DollarSign className="w-4 h-4 text-emerald-500" />
           </div>
-          <h3 className={`text-3xl font-serif italic font-light ${netSavings >= 0 ? 'text-white' : 'text-rose-400'}`}>
-            {netSavings < 0 ? '-' : ''}{formatCurrency(Math.abs(netSavings))}
+          <h3 className={`text-3xl font-serif italic font-light ${netSavings >= 0 ? 'text-white' : 'text-rose-400'} flex items-center overflow-hidden h-9`}>
+            <AnimatePresence mode="popLayout">
+              <motion.span
+                key={netSavings}
+                initial={{ opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.94 }}
+                transition={{ duration: 0.25, ease: 'easeOut' }}
+                className="inline-block"
+              >
+                {netSavings < 0 ? '-' : ''}{formatCurrency(Math.abs(netSavings))}
+              </motion.span>
+            </AnimatePresence>
           </h3>
           <p className="text-[9px] uppercase tracking-wider text-[#666666] mt-2 font-mono">
             {netSavings >= 0 ? 'Superávit acumulado' : 'Déficit registrado'} neste período
@@ -471,6 +832,87 @@ export default function DashboardView({
           </p>
         </div>
 
+      </div>
+
+      {/* Real-time Budget Goals Progress Bars */}
+      <div className="space-y-4 text-left">
+        <div className="flex justify-between items-center">
+          <h3 className={`text-xs uppercase font-bold tracking-widest flex items-center gap-2 ${
+            theme === 'dark' ? 'text-[#F9FAFB]' : 'text-zinc-800'
+          }`}>
+            <Activity className="w-4 h-4 text-[#FF4D00]" />
+            <span>Progresso das Metas Orçamentárias</span>
+          </h3>
+          <button
+            type="button"
+            onClick={() => onNavigateToTab('budgeting')}
+            className="text-[10px] font-mono font-bold uppercase text-[#FF4D00] hover:underline cursor-pointer bg-transparent border-0"
+          >
+            Ajustar Alocações →
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+          {budgetGoals.map((goal, idx) => {
+            const spent = filteredTransactions
+              .filter(tx => tx.type === 'expense' && tx.category === goal.name)
+              .reduce((sum, tx) => sum + tx.amount, 0);
+            
+            const percent = goal.allocated > 0 ? Math.round((spent / goal.allocated) * 100) : 0;
+            const cappedPercent = Math.min(100, percent);
+            
+            let barColor = 'bg-[#10B981]'; // Green default
+            let textColor = 'text-emerald-400';
+            if (percent > 100) {
+              barColor = 'bg-rose-500';
+              textColor = 'text-rose-400';
+            } else if (percent > 80) {
+              barColor = 'bg-amber-500';
+              textColor = 'text-amber-400';
+            }
+
+            return (
+              <div 
+                key={goal.id} 
+                className="glass-container rounded-xl p-5 flex flex-col justify-between hover:border-white/10 transition-all duration-300 relative overflow-hidden"
+              >
+                <div className="space-y-3">
+                  <div className="flex justify-between items-start">
+                    <span className={`text-[10px] uppercase font-bold tracking-wider truncate max-w-[120px] ${
+                      theme === 'dark' ? 'text-gray-400' : 'text-zinc-600'
+                    }`} title={goal.name}>
+                      {goal.name}
+                    </span>
+                    <span className={`text-[11px] font-mono font-black ${textColor}`}>
+                      <AnimatedCounter value={percent} formatter={(val) => `${Math.round(val)}%`} />
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {/* Progress Bar */}
+                    <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden relative border border-white/5">
+                      <div 
+                        className={`h-full ${barColor} rounded-full transition-all duration-500`}
+                        style={{ width: `${cappedPercent}%` }}
+                      ></div>
+                    </div>
+
+                    <div className="flex justify-between items-baseline pt-1">
+                      <span className={`text-sm font-mono font-bold ${
+                        theme === 'dark' ? 'text-white' : 'text-zinc-900'
+                      }`}>
+                        <AnimatedCounter value={spent} formatter={formatCurrency} />
+                      </span>
+                      <span className="text-[10px] text-gray-500 font-mono">
+                        limite {formatCurrency(goal.allocated)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Charts section with dynamic layouts */}
@@ -689,6 +1131,171 @@ export default function DashboardView({
         </div>
 
       </div>
+
+      {/* Trend Analysis Comparative Line Chart (Recharts Line Chart) */}
+      <div className="glass-container rounded-xl p-6 text-left mt-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <div>
+            <h3 className={`text-xs uppercase font-bold tracking-widest flex items-center gap-2 ${
+              theme === 'dark' ? 'text-[#F9FAFB]' : 'text-zinc-800'
+            }`}>
+              <TrendingUp className="w-4 h-4 text-[#FF4D00]" />
+              <span>Análise de Tendência de Consumo: {currentMonthLabel} vs. {prevMonthLabel}</span>
+            </h3>
+            <p className="text-[10px] text-gray-500 mt-1 font-mono">
+              Comparação diária das despesas totais do mês atual em relação ao mês anterior.
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-2 self-stretch sm:self-auto bg-white/5 p-1 rounded-lg border border-white/10" style={{ backgroundColor: theme !== 'dark' ? 'rgba(0,0,0,0.03)' : '', borderColor: theme !== 'dark' ? 'rgba(0,0,0,0.08)' : '' }}>
+            <button
+              type="button"
+              onClick={() => setLineChartType('cumulative')}
+              className={`px-3 py-1 rounded text-[10px] font-mono font-bold uppercase transition-all cursor-pointer ${
+                lineChartType === 'cumulative'
+                  ? 'bg-[#FF4D00] text-black font-black'
+                  : theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-zinc-500 hover:text-zinc-900'
+              }`}
+            >
+              Acumulado
+            </button>
+            <button
+              type="button"
+              onClick={() => setLineChartType('daily')}
+              className={`px-3 py-1 rounded text-[10px] font-mono font-bold uppercase transition-all cursor-pointer ${
+                lineChartType === 'daily'
+                  ? 'bg-[#FF4D00] text-black font-black'
+                  : theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-zinc-500 hover:text-zinc-900'
+              }`}
+            >
+              Diário
+            </button>
+          </div>
+        </div>
+
+        <div className="h-80 w-full mt-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <ReChartsLineChart
+              data={comparativeLineData}
+              margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
+              <XAxis 
+                dataKey="dayLabel" 
+                stroke={theme === 'dark' ? '#71717a' : '#71717a'} 
+                fontSize={10}
+                tickLine={false}
+                tickFormatter={(value) => value.replace('Dia ', '')}
+              />
+              <YAxis 
+                stroke={theme === 'dark' ? '#71717a' : '#71717a'} 
+                fontSize={10}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(value) => `R$ ${value}`}
+              />
+              <Tooltip 
+                content={<LineTooltip />} 
+                cursor={{ stroke: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', strokeWidth: 1 }} 
+              />
+              <Legend 
+                verticalAlign="top" 
+                height={36} 
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: '10px', fontFamily: 'monospace', textTransform: 'uppercase' }}
+              />
+              <Line 
+                name={`Mês Anterior (${prevMonthLabel})`}
+                type="monotone"
+                dataKey="Mês Anterior" 
+                stroke={theme === 'dark' ? '#71717a' : '#a1a1aa'} 
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4 }}
+              />
+              <Line 
+                name={`Mês Atual (${currentMonthLabel})`}
+                type="monotone"
+                dataKey="Mês Atual" 
+                stroke="#FF4D00" 
+                strokeWidth={3}
+                dot={false}
+                activeDot={{ r: 6 }}
+              />
+            </ReChartsLineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Comparative Budget Goals and Spent (Recharts Bar Chart) */}
+      <div className="glass-container rounded-xl p-6 text-left mt-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-2">
+          <div>
+            <h3 className={`text-xs uppercase font-bold tracking-widest flex items-center gap-2 ${
+              theme === 'dark' ? 'text-[#F9FAFB]' : 'text-zinc-800'
+            }`}>
+              <Activity className="w-4 h-4 text-[#FF4D00]" />
+              <span>Análise Comparativa de Metas: Planejado vs. Realizado</span>
+            </h3>
+            <p className="text-[10px] text-gray-500 mt-1 font-mono">
+              Visualização comparativa em tempo real dos limites alocados em relação às despesas reais para cada categoria.
+            </p>
+          </div>
+          <span className={`text-[10px] uppercase tracking-wider font-mono px-2.5 py-1 rounded-md bg-white/5 border border-white/10 ${
+            theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'
+          }`}>
+            Recharts Ativo
+          </span>
+        </div>
+
+        <div className="h-80 w-full mt-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <ReChartsBarChart
+              data={rechartsData}
+              margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
+              <XAxis 
+                dataKey="name" 
+                stroke={theme === 'dark' ? '#71717a' : '#71717a'} 
+                fontSize={10}
+                tickLine={false}
+              />
+              <YAxis 
+                stroke={theme === 'dark' ? '#71717a' : '#71717a'} 
+                fontSize={10}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(value) => `R$ ${value}`}
+              />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }} />
+              <Legend 
+                verticalAlign="top" 
+                height={36} 
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: '10px', fontFamily: 'monospace', textTransform: 'uppercase' }}
+              />
+              <Bar 
+                name="Planejado"
+                dataKey="Planejado" 
+                fill={theme === 'dark' ? '#3B82F6' : '#2563EB'} 
+                radius={[4, 4, 0, 0]} 
+                maxBarSize={40}
+              />
+              <Bar 
+                name="Realizado"
+                dataKey="Realizado" 
+                fill="#FF4D00" 
+                radius={[4, 4, 0, 0]} 
+                maxBarSize={40}
+              />
+            </ReChartsBarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
     </div>
   );
 }

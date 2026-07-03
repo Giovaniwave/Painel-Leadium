@@ -4,8 +4,14 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { Camera, Save, User, Sparkles, Upload, Moon, Sun } from 'lucide-react';
+import { Camera, Save, User, Sparkles, Upload, Moon, Sun, Bell, BellOff, CheckCircle2 } from 'lucide-react';
 import { BudgetGoal } from '../types';
+import { 
+  isNotificationSupported, 
+  getNotificationPermissionStatus, 
+  requestNotificationPermission, 
+  sendBrowserNotification 
+} from '../utils/notifications';
 
 interface SettingsViewProps {
   budgetGoals: BudgetGoal[]; // Unused now but kept interface intact to prevent build failures
@@ -28,6 +34,30 @@ export default function SettingsView({
   const [tempName, setTempName] = useState(userProfile.name);
   const [avatarPreview, setAvatarPreview] = useState(userProfile.avatarUrl);
   
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() => {
+    return getNotificationPermissionStatus();
+  });
+
+  const handleRequestPermission = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    const perm = await requestNotificationPermission();
+    setNotificationPermission(perm);
+    if (perm === 'granted') {
+      sendBrowserNotification(
+        'Notificações Ativas! 🔔',
+        'Parabéns! Você receberá alertas em tempo real quando novas transações forem inseridas ou limites forem atingidos.'
+      );
+    }
+  };
+
+  const handleSendTestNotification = (e: React.MouseEvent) => {
+    e.preventDefault();
+    sendBrowserNotification(
+      'Notificação de Teste 🧪',
+      'As notificações do Leadium Finance estão ativas e funcionando perfeitamente!'
+    );
+  };
+
   // Sync state if userProfile changes from parent component (e.g. after database load)
   React.useEffect(() => {
     setTempName(userProfile.name);
@@ -266,6 +296,62 @@ export default function SettingsView({
                       : 'bg-gray-100 border-gray-200 text-gray-500'
                   }`}
                 />
+              </div>
+
+              {/* Web Notifications Setup */}
+              <div className="space-y-2 pt-4 border-t border-white/5" style={{ borderColor: !isDark ? 'rgba(0,0,0,0.06)' : '' }}>
+                <label className={`text-[10px] uppercase tracking-[0.2em] font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'} block`}>
+                  Notificações no Navegador (Web Notification API)
+                </label>
+                <div className={`p-4 rounded-xl border ${
+                  isDark ? 'bg-white/[0.02] border-white/5' : 'bg-zinc-50 border-gray-150'
+                } flex flex-col md:flex-row md:items-center justify-between gap-4`}>
+                  <div className="space-y-1 flex-1 text-left">
+                    <div className="flex items-center gap-2">
+                      {notificationPermission === 'granted' ? (
+                        <span className="flex items-center gap-1 text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Ativado
+                        </span>
+                      ) : notificationPermission === 'denied' ? (
+                        <span className="flex items-center gap-1 text-[10px] font-mono font-bold uppercase tracking-wider text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                          <BellOff className="w-3 h-3 text-rose-400" /> Bloqueado / Não Suportado
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                          <Bell className="w-3 h-3 text-amber-400" /> Pendente de Permissão
+                        </span>
+                      )}
+                    </div>
+                    <p className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'} leading-relaxed font-sans mt-1.5 max-w-md`}>
+                      Receba alertas instantâneos no seu sistema operacional quando uma nova transação for inserida ou quando os limites das metas orçamentárias forem atingidos/excedidos.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 shrink-0 justify-start sm:justify-end">
+                    {notificationPermission !== 'granted' && (
+                      <button
+                        type="button"
+                        onClick={handleRequestPermission}
+                        className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer bg-[#FF4D00] text-black hover:bg-[#FF6622] font-mono"
+                      >
+                        Permitir Notificações
+                      </button>
+                    )}
+                    {notificationPermission === 'granted' && (
+                      <button
+                        type="button"
+                        onClick={handleSendTestNotification}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer font-mono border ${
+                          isDark 
+                            ? 'bg-white/5 border-white/10 hover:bg-white/10 text-white' 
+                            : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-700'
+                        }`}
+                      >
+                        Enviar Notificação de Teste 🧪
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 

@@ -21,6 +21,8 @@ import MobileNav from './components/MobileNav';
 import { ActiveTab, Transaction, BudgetGoal, Client } from './types';
 import { INITIAL_TRANSACTIONS } from './data/seedData';
 import { LayoutDashboard, Wallet, ArrowLeftRight, Settings as SettingsIcon, MessageSquare, X, Users, Receipt } from 'lucide-react';
+import { sendBrowserNotification } from './utils/notifications';
+import { OfflineDb } from './utils/offlineDb';
 
 // Default "Caixinha" budget goals limits config
 const DEFAULT_GOALS: BudgetGoal[] = [
@@ -90,28 +92,126 @@ export default function App() {
     fetchUserProfile();
   }, [userEmail]);
 
+  // Background synchronization when online
+  const syncOfflineChanges = async () => {
+    if (!navigator.onLine) return;
+    try {
+      const queue = await OfflineDb.getSyncQueue();
+      if (queue.length === 0) return;
+
+      console.log(`[Offline Sync] Found ${queue.length} pending items to synchronize.`);
+      
+      for (const item of queue) {
+        let success = false;
+        try {
+          if (item.store === 'transactions') {
+            const res = await fetch('/api/transactions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ transactions: item.data })
+            });
+            if (res.ok) success = true;
+          } else if (item.store === 'budgetGoals') {
+            const res = await fetch('/api/budget-goals', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ budgetGoals: item.data })
+            });
+            if (res.ok) success = true;
+          } else if (item.store === 'clients') {
+            const res = await fetch('/api/clients', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ clients: item.data })
+            });
+            if (res.ok) success = true;
+          } else if (item.store === 'revenueGoal') {
+            const res = await fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ value: item.data })
+            });
+            if (res.ok) success = true;
+          }
+
+          if (success) {
+            await OfflineDb.removeSyncItem(item.id);
+            console.log(`[Offline Sync] Synchronized ${item.store} successfully.`);
+          }
+        } catch (fetchErr) {
+          console.error(`[Offline Sync] Failed to sync ${item.store}:`, fetchErr);
+        }
+      }
+    } catch (err) {
+      console.error('[Offline Sync] Error during queue sync process:', err);
+    }
+  };
+
   const handleUpdateRevenueGoal = async (val: number) => {
     setRevenueGoal(val);
+    
+    // Save locally
     try {
-      await fetch('/api/settings', {
+      await OfflineDb.saveRevenueGoal(val);
+    } catch (dbErr) {
+      console.error('Failed to save revenue goal offline:', dbErr);
+    }
+
+    try {
+      const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: val })
       });
+      if (!res.ok) {
+        throw new Error('Server returned non-ok status');
+      }
     } catch (err) {
-      console.error('Error writing faturamento meta setting:', err);
+      console.warn('Could not sync revenue goal, queued for sync:', err);
+      try {
+        await OfflineDb.queueSync('revenueGoal', val);
+      } catch (queueErr) {
+        console.error('Failed to queue revenue goal sync:', queueErr);
+      }
     }
   };
 
   // Sync on startup from database / Supabase
   useEffect(() => {
     async function loadFullStackData() {
+      // 1. Fast load from offline IndexedDB storage first
+      try {
+        const localTxs = await OfflineDb.getTransactions();
+        if (localTxs.length > 0) {
+          setTransactions(localTxs);
+        }
+
+        const localGoals = await OfflineDb.getBudgetGoals();
+        if (localGoals.length > 0) {
+          setBudgetGoals(localGoals);
+        }
+
+        const localRevenue = await OfflineDb.getRevenueGoal();
+        if (localRevenue !== null) {
+          setRevenueGoal(localRevenue);
+        }
+
+        const localClients = await OfflineDb.getClients();
+        if (localClients.length > 0) {
+          setClients(localClients);
+        }
+      } catch (dbErr) {
+        console.error('Failed to load initial offline state:', dbErr);
+      }
+
+      // 2. Fetch fresh data from backend if connected
       try {
         const txRes = await fetch('/api/transactions');
         if (txRes.ok) {
           const txData = await txRes.json();
           if (Array.isArray(txData)) {
             setTransactions(txData);
+            await OfflineDb.saveTransactions(txData);
           }
         }
         
@@ -119,7 +219,9 @@ export default function App() {
         if (goalsRes.ok) {
           const goalsData = await goalsRes.json();
           if (Array.isArray(goalsData)) {
-            setBudgetGoals(goalsData.length > 0 ? goalsData : DEFAULT_GOALS);
+            const finalGoals = goalsData.length > 0 ? goalsData : DEFAULT_GOALS;
+            setBudgetGoals(finalGoals);
+            await OfflineDb.saveBudgetGoals(finalGoals);
           }
         }
 
@@ -129,6 +231,7 @@ export default function App() {
           if (settingsData && typeof settingsData.faturamento_meta !== 'undefined') {
             const num = Number(settingsData.faturamento_meta);
             setRevenueGoal(num);
+            await OfflineDb.saveRevenueGoal(num);
           }
         }
 
@@ -137,13 +240,27 @@ export default function App() {
           const clientsData = await clientsRes.json();
           if (Array.isArray(clientsData)) {
             setClients(clientsData);
+            await OfflineDb.saveClients(clientsData);
           }
         }
+
+        // Trigger synchronization of any pending offline changes
+        await syncOfflineChanges();
       } catch (err) {
-        console.error('Failed to sync initial state from database server:', err);
+        console.warn('Failed to sync initial state from database server (running offline):', err);
       }
     }
+
     loadFullStackData();
+
+    // Set up listeners for online/offline synchronization
+    window.addEventListener('online', syncOfflineChanges);
+    const syncInterval = setInterval(syncOfflineChanges, 20000);
+
+    return () => {
+      window.removeEventListener('online', syncOfflineChanges);
+      clearInterval(syncInterval);
+    };
   }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -269,13 +386,27 @@ export default function App() {
     setClients(updated);
 
     try {
-      await fetch('/api/clients', {
+      await OfflineDb.saveClients(updated);
+    } catch (dbErr) {
+      console.error('Failed to save clients locally:', dbErr);
+    }
+
+    try {
+      const res = await fetch('/api/clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clients: updated })
       });
+      if (!res.ok) {
+        throw new Error('Server returned non-ok status');
+      }
     } catch (err) {
-      console.error('Failed to sync added client:', err);
+      console.warn('Could not sync added client, queuing sync:', err);
+      try {
+        await OfflineDb.queueSync('clients', updated);
+      } catch (queueErr) {
+        console.error('Failed to queue clients sync:', queueErr);
+      }
     }
   };
 
@@ -284,13 +415,27 @@ export default function App() {
     setClients(updated);
 
     try {
-      await fetch('/api/clients', {
+      await OfflineDb.saveClients(updated);
+    } catch (dbErr) {
+      console.error('Failed to save clients locally:', dbErr);
+    }
+
+    try {
+      const res = await fetch('/api/clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clients: updated })
       });
+      if (!res.ok) {
+        throw new Error('Server returned non-ok status');
+      }
     } catch (err) {
-      console.error('Failed to sync updated client:', err);
+      console.warn('Could not sync updated client, queuing sync:', err);
+      try {
+        await OfflineDb.queueSync('clients', updated);
+      } catch (queueErr) {
+        console.error('Failed to queue clients sync:', queueErr);
+      }
     }
   };
 
@@ -311,6 +456,45 @@ export default function App() {
     const updated = [newTx, ...transactions];
     setTransactions(updated);
 
+    // Trigger browser notification for newly added transaction
+    try {
+      const formattedAmount = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(newTx.amount);
+      const txTypeLabel = newTx.type === 'income' ? 'Nova Receita' : 'Nova Despesa';
+      sendBrowserNotification(
+        `💸 ${txTypeLabel} Registrada`,
+        `${newTx.description || 'Sem descrição'}: ${formattedAmount} na categoria ${newTx.category}`
+      );
+
+      // Check if a budget goal limit is reached or exceeded
+      if (newTx.type === 'expense') {
+        const goal = budgetGoals.find(g => g.name === newTx.category);
+        if (goal && goal.allocated > 0) {
+          const previousSpent = transactions
+            .filter(tx => tx.type === 'expense' && tx.category === goal.name)
+            .reduce((sum, tx) => sum + tx.amount, 0);
+
+          const currentSpent = previousSpent + newTx.amount;
+
+          if (currentSpent >= goal.allocated && previousSpent < goal.allocated) {
+            const formattedLimit = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(goal.allocated);
+            const formattedCurrent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentSpent);
+            sendBrowserNotification(
+              `🚨 Meta Orçamentária Excedida: ${goal.name}`,
+              `Os gastos com "${goal.name}" atingiram ${formattedCurrent}, superando o limite alocado de ${formattedLimit}!`
+            );
+          }
+        }
+      }
+    } catch (notifyErr) {
+      console.warn('Could not dispatch browser notification:', notifyErr);
+    }
+
+    try {
+      await OfflineDb.saveTransactions(updated);
+    } catch (dbErr) {
+      console.error('Failed to save transaction locally:', dbErr);
+    }
+
     try {
       const res = await fetch('/api/transactions', {
         method: 'POST',
@@ -320,12 +504,15 @@ export default function App() {
         body: JSON.stringify({ transactions: updated })
       });
       if (!res.ok) {
-        const errObj = await res.json().catch(() => ({}));
-        alert("Erro no Supabase: " + (errObj.error || "Falha ao sincronizar"));
-        setTransactions(transactions); // revert
+        throw new Error('Server returned non-ok status');
       }
     } catch (err) {
-      console.error('Error syncing transactions to server:', err);
+      console.warn('Could not sync added transaction, queuing sync:', err);
+      try {
+        await OfflineDb.queueSync('transactions', updated);
+      } catch (queueErr) {
+        console.error('Failed to queue transactions sync:', queueErr);
+      }
     }
   };
 
@@ -335,6 +522,12 @@ export default function App() {
     setTransactions(updated);
 
     try {
+      await OfflineDb.saveTransactions(updated);
+    } catch (dbErr) {
+      console.error('Failed to save transactions locally after deletion:', dbErr);
+    }
+
+    try {
       const res = await fetch('/api/transactions', {
         method: 'POST',
         headers: {
@@ -343,18 +536,27 @@ export default function App() {
         body: JSON.stringify({ transactions: updated })
       });
       if (!res.ok) {
-        const errObj = await res.json().catch(() => ({}));
-        alert("Erro no Supabase: " + (errObj.error || "Falha ao sincronizar a deleção"));
-        setTransactions(transactions); // revert
+        throw new Error('Server returned non-ok status');
       }
     } catch (err) {
-      console.error('Error syncing transactions to server:', err);
+      console.warn('Could not sync deleted transaction, queuing sync:', err);
+      try {
+        await OfflineDb.queueSync('transactions', updated);
+      } catch (queueErr) {
+        console.error('Failed to queue transactions sync:', queueErr);
+      }
     }
   };
 
   // Command CRUD Operations: Update whole transactions roster (for linking clients, etc.)
   const handleUpdateTransactions = async (updatedList: Transaction[]) => {
     setTransactions(updatedList);
+
+    try {
+      await OfflineDb.saveTransactions(updatedList);
+    } catch (dbErr) {
+      console.error('Failed to save updated transactions list locally:', dbErr);
+    }
 
     try {
       const res = await fetch('/api/transactions', {
@@ -365,12 +567,15 @@ export default function App() {
         body: JSON.stringify({ transactions: updatedList })
       });
       if (!res.ok) {
-        const errObj = await res.json().catch(() => ({}));
-        alert("Erro no Supabase: " + (errObj.error || "Falha ao sincronizar as transações"));
-        setTransactions(transactions); // revert
+        throw new Error('Server returned non-ok status');
       }
     } catch (err) {
-      console.error('Error syncing transactions to server:', err);
+      console.warn('Could not sync updated transactions list, queuing sync:', err);
+      try {
+        await OfflineDb.queueSync('transactions', updatedList);
+      } catch (queueErr) {
+        console.error('Failed to queue transactions sync:', queueErr);
+      }
     }
   };
 
@@ -385,6 +590,12 @@ export default function App() {
     setBudgetGoals(updated);
 
     try {
+      await OfflineDb.saveBudgetGoals(updated);
+    } catch (dbErr) {
+      console.error('Failed to save budget goals locally:', dbErr);
+    }
+
+    try {
       const res = await fetch('/api/budget-goals', {
         method: 'POST',
         headers: {
@@ -393,12 +604,15 @@ export default function App() {
         body: JSON.stringify({ budgetGoals: updated })
       });
       if (!res.ok) {
-        const errObj = await res.json().catch(() => ({}));
-        alert("Erro no Supabase: " + (errObj.error || "Falha ao sincronizar metas."));
-        setBudgetGoals(budgetGoals);
+        throw new Error('Server returned non-ok status');
       }
     } catch (err) {
-      console.error('Error syncing goals to server:', err);
+      console.warn('Could not sync updated goal, queuing sync:', err);
+      try {
+        await OfflineDb.queueSync('budgetGoals', updated);
+      } catch (queueErr) {
+        console.error('Failed to queue budgetGoals sync:', queueErr);
+      }
     }
   };
 
@@ -407,6 +621,14 @@ export default function App() {
     setTransactions([]);
     setBudgetGoals(DEFAULT_GOALS);
     setRevenueGoal(100000);
+
+    try {
+      await OfflineDb.saveTransactions([]);
+      await OfflineDb.saveBudgetGoals(DEFAULT_GOALS);
+      await OfflineDb.saveRevenueGoal(100000);
+    } catch (dbErr) {
+      console.error('Failed to clear local database storage:', dbErr);
+    }
 
     try {
       await fetch('/api/transactions', {
@@ -425,7 +647,7 @@ export default function App() {
         body: JSON.stringify({ value: 100000 })
       });
     } catch (err) {
-      console.error('Error resetting database data:', err);
+      console.warn('Could not sync wiped cache with server (logged offline):', err);
     }
   };
 

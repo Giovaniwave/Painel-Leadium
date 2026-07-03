@@ -1973,7 +1973,7 @@ ${Object.keys(dateBalances)
 ${JSON.stringify(transactionsContext, null, 2)}
 
 Lembre-se: Você é o Kairos, membro do time Leadium. Converse como um profissional humano de altíssimo nível, amigável, ágil e livre de scripts robóticos!
-Você pode executar ações no sistema através de funções: adicionar transações, adicionar despesas (viagens), adicionar clientes. Caso não consiga extrair as informações necessárias, peça para o usuário complementar.`;
+Você pode executar ações no sistema através de funções: adicionar transações, adicionar despesas (viagens), adicionar clientes, definir alocação planejada e excluir transações/despesas. Caso não consiga extrair as informações necessárias, peça para o usuário complementar.`;
 
       const openaiTools = [
         {
@@ -2068,6 +2068,63 @@ Você pode executar ações no sistema através de funções: adicionar transaç
             },
           },
         },
+        {
+          type: "function",
+          function: {
+            name: "updatePlannedAllocation",
+            description: "Atualiza o valor de alocação planejada (limite) de uma meta de orçamento/caixinha.",
+            parameters: {
+              type: "object",
+              properties: {
+                goalId: { type: "string", description: "O ID da meta/caixinha (ex: goal_1)." },
+                allocated: { type: "number", description: "O novo valor de alocação planejada em Reais." }
+              },
+              required: ["goalId", "allocated"]
+            }
+          }
+        },
+        {
+          type: "function",
+          function: {
+            name: "deleteTransaction",
+            description: "Exclui uma transação (receita ou despesa).",
+            parameters: {
+              type: "object",
+              properties: {
+                id: { type: "string", description: "O ID da transação a ser excluída." }
+              },
+              required: ["id"]
+            }
+          }
+        },
+        {
+          type: "function",
+          function: {
+            name: "deleteDisplacement",
+            description: "Exclui um deslocamento/viagem registrada da frota por ID.",
+            parameters: {
+              type: "object",
+              properties: {
+                id: { type: "string", description: "O ID do deslocamento a ser excluído." }
+              },
+              required: ["id"]
+            }
+          }
+        },
+        {
+          type: "function",
+          function: {
+            name: "deleteGeneralExpense",
+            description: "Exclui uma despesa geral (não frota) registrada por ID.",
+            parameters: {
+              type: "object",
+              properties: {
+                id: { type: "string", description: "O ID da despesa geral a ser excluída." }
+              },
+              required: ["id"]
+            }
+          }
+        }
       ];
 
       const geminiTools: FunctionDeclaration[] = [
@@ -2120,6 +2177,51 @@ Você pode executar ações no sistema através de funções: adicionar transaç
             required: ["name", "contractValue", "isRecurring", "category"],
           },
         },
+        {
+          name: "updatePlannedAllocation",
+          description: "Atualiza o valor de alocação planejada (limite) de uma meta de orçamento/caixinha.",
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              goalId: { type: Type.STRING },
+              allocated: { type: Type.NUMBER }
+            },
+            required: ["goalId", "allocated"]
+          }
+        },
+        {
+          name: "deleteTransaction",
+          description: "Exclui uma transação (receita ou despesa).",
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING }
+            },
+            required: ["id"]
+          }
+        },
+        {
+          name: "deleteDisplacement",
+          description: "Exclui um deslocamento/viagem registrada da frota por ID.",
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING }
+            },
+            required: ["id"]
+          }
+        },
+        {
+          name: "deleteGeneralExpense",
+          description: "Exclui uma despesa geral (não frota) registrada por ID.",
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING }
+            },
+            required: ["id"]
+          }
+        }
       ];
 
       let toolName: string | null = null;
@@ -2140,8 +2242,8 @@ Você pode executar ações no sistema através de funções: adicionar transaç
 
         const msg = response.choices[0]?.message;
         if (msg?.tool_calls?.length) {
-          toolName = msg.tool_calls[0].function.name;
-          toolArgs = JSON.parse(msg.tool_calls[0].function.arguments);
+          toolName = (msg.tool_calls[0] as any).function.name;
+          toolArgs = JSON.parse((msg.tool_calls[0] as any).function.arguments);
         } else {
           textResponse =
             msg?.content ||
@@ -2217,6 +2319,57 @@ Você pode executar ações no sistema através de funções: adicionar transaç
             });
             await saveExpensesData(expenses);
             textResponse = `Certo! Deslocamento registrado (${toolArgs.distanceKm} km, Rota: ${toolArgs.route}).`;
+          } else if (toolName === "updatePlannedAllocation") {
+            const goals = await loadGoals();
+            const goal = goals.find((g: any) => g.id === toolArgs.goalId);
+            if (goal) {
+              goal.allocated = toolArgs.allocated;
+              await saveGoals(goals);
+              textResponse = `Pronto! A alocação planejada para a caixinha "${goal.name}" foi atualizada para R$ ${toolArgs.allocated.toFixed(2)}.`;
+            } else {
+              textResponse = `Não encontrei a meta com o ID informado.`;
+            }
+          } else if (toolName === "deleteTransaction") {
+            let txs = await loadTransactions();
+            const initialLen = txs.length;
+            txs = txs.filter((t: any) => t.id !== toolArgs.id);
+            if (txs.length < initialLen) {
+              await saveTransactions(txs);
+              textResponse = `Feito! A transação foi excluída com sucesso.`;
+            } else {
+              textResponse = `Não encontrei nenhuma transação com esse ID para excluir.`;
+            }
+          } else if (toolName === "deleteDisplacement") {
+            const expenses = await getExpensesData();
+            const initialLen = expenses.displacements.length;
+            expenses.displacements = expenses.displacements.filter(
+              (d: any) => d.id !== toolArgs.id
+            );
+            if (expenses.displacements.length < initialLen) {
+              await saveExpensesData(expenses);
+              textResponse = `Feito! O deslocamento foi excluído do sistema de frotas com sucesso.`;
+            } else {
+              textResponse = `Não encontrei nenhum deslocamento com esse ID para excluir.`;
+            }
+          } else if (toolName === "deleteGeneralExpense") {
+            const local = fetchLocalDbData();
+            let arr = local.generalExpenses || [];
+            const initialLen = arr.length;
+            arr = arr.filter((x: any) => x.id !== toolArgs.id);
+            if (arr.length < initialLen) {
+              local.generalExpenses = arr;
+              writeLocalDbData(local);
+              
+              if (supabaseClient && tablesReady.general_expenses) {
+                await supabaseClient
+                  .from(tables.general_expenses)
+                  .delete()
+                  .eq("id", toolArgs.id);
+              }
+              textResponse = `Feito! A despesa geral foi excluída com sucesso.`;
+            } else {
+              textResponse = `Não encontrei nenhuma despesa geral com esse ID para excluir.`;
+            }
           }
         } catch (e: any) {
           textResponse = `Ocorreu um erro ao tentar executar a ação: ${e.message}`;

@@ -24,12 +24,12 @@ export function formatSystemDate(dateStr: string): string {
         if (!isNaN(d.getTime())) {
           const hours = String(d.getHours()).padStart(2, '0');
           const minutes = String(d.getMinutes()).padStart(2, '0');
-          return `${day}//${month} - ${hours}:${minutes}`;
+          return `${day}/${month} - ${hours}:${minutes}`;
         }
       }
       
       // Default time for non-time-specific entries as explicitly requested: "10:30"
-      return `${day}//${month} - 10:30`;
+      return `${day}/${month} - 10:30`;
     }
     
     // Fallback standard Date parser
@@ -42,12 +42,12 @@ export function formatSystemDate(dateStr: string): string {
     let minutes = d.getMinutes();
     
     if (hours === 0 && minutes === 0) {
-      return `${day}//${month} - 10:30`;
+      return `${day}/${month} - 10:30`;
     }
     
     const hoursStr = String(hours).padStart(2, '0');
     const minutesStr = String(minutes).padStart(2, '0');
-    return `${day}//${month} - ${hoursStr}:${minutesStr}`;
+    return `${day}/${month} - ${hoursStr}:${minutesStr}`;
   } catch (e) {
     return dateStr;
   }

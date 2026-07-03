@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Transaction, BudgetGoal } from '../types';
 import { formatSystemDate } from '../utils/date';
+import { generateTransactionsPDF } from '../utils/pdfGenerator';
 
 interface TransactionsViewProps {
   transactions: Transaction[];
@@ -58,15 +59,13 @@ export default function TransactionsView({
     });
   }, [transactions, searchQuery, internalCategoryFilter, internalSortDirection]);
 
-  // Export JSON of current list
+  // Export PDF of filtered list
   const handleExport = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(filteredList, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "leadiumfy_transactions.json");
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+    generateTransactionsPDF({
+      transactions: filteredList,
+      categoryFilter: internalCategoryFilter,
+      searchQuery: searchQuery
+    });
   };
 
   const formatCurrency = (val: number) => {
@@ -94,7 +93,7 @@ export default function TransactionsView({
                 ? 'bg-black text-[#FFFFFF] hover:bg-gray-800'
                 : 'bg-white text-black hover:bg-gray-200'
             }`}
-            title="Exportar JSON"
+            title="Exportar PDF"
           >
             Exportar Dados
           </button>
