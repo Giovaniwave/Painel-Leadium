@@ -82,7 +82,10 @@ export default defineConfig(() => {
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // data-store.json is ignored because the API rewrites it as a local cache on every
+      // request; without this, each request triggers a full dev-server page reload that
+      // resets in-memory state (e.g. the active tab snaps back to the dashboard).
+      watch: process.env.DISABLE_HMR === 'true' ? null : { ignored: ['**/data-store.json'] },
     },
   };
 });
