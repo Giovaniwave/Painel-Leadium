@@ -4,8 +4,24 @@
  */
 
 import React, { useState } from 'react';
-import { X, User, FileText, DollarSign, Calendar, Tag, Plus } from 'lucide-react';
+import { X, User, FileText, DollarSign, Calendar, Tag, Plus, Sparkles, Repeat } from 'lucide-react';
 import { Transaction, BudgetGoal, Client } from '../types';
+
+function calculateNextOccurrence(startDateStr: string, freq: 'weekly' | 'monthly' | 'quarterly'): string {
+  if (!startDateStr) return '';
+  const dateObj = new Date(startDateStr + 'T12:00:00');
+  if (isNaN(dateObj.getTime())) return '';
+
+  if (freq === 'weekly') {
+    dateObj.setDate(dateObj.getDate() + 7);
+  } else if (freq === 'monthly') {
+    dateObj.setMonth(dateObj.getMonth() + 1);
+  } else if (freq === 'quarterly') {
+    dateObj.setMonth(dateObj.getMonth() + 3);
+  }
+
+  return dateObj.toISOString().substring(0, 10);
+}
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -24,16 +40,45 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
   const [date, setDate] = useState(new Date().toISOString().substring(0, 10));
   const [clientId, setClientId] = useState<string>('');
   const [error, setError] = useState('');
+  const [isSuggestingCategory, setIsSuggestingCategory] = useState(false);
+  const [suggestedByIA, setSuggestedByIA] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [frequency, setFrequency] = useState<'weekly' | 'monthly' | 'quarterly'>('monthly');
 
   if (!isOpen) return null;
+
+  const suggestCategory = async (descToUse?: string) => {
+    const text = descToUse !== undefined ? descToUse : description;
+    if (!text || text.trim().length < 3) return;
+
+    setIsSuggestingCategory(true);
+    try {
+      const res = await fetch('/api/transactions/suggest-category', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: text, type })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.category) {
+          setCategory(data.category);
+          setSuggestedByIA(true);
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao sugerir categoria:', err);
+    } finally {
+      setIsSuggestingCategory(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     let resolvedSender = sender;
-    if (type === 'income' && clientId) {
+    if (clientId) {
       const client = clients.find(c => c.id === clientId);
-      if (client) {
+      if (client && !resolvedSender.trim()) {
         resolvedSender = client.name;
       }
     }
@@ -56,7 +101,10 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
       amount: numericAmount,
       date,
       account: category, // Maintain backward compatibility
-      clientId: type === 'income' && clientId ? clientId : undefined
+      clientId: clientId ? clientId : undefined,
+      isRecurring,
+      frequency: isRecurring ? frequency : undefined,
+      nextOccurrenceDate: isRecurring ? calculateNextOccurrence(date, frequency) : undefined
     });
 
     // Reset Form fields
@@ -65,17 +113,19 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
     setAmount('');
     setDate(new Date().toISOString().substring(0, 10));
     setClientId('');
+    setIsRecurring(false);
+    setFrequency('monthly');
     setError('');
     onClose();
   };
 
   const handleTypeChange = (newType: 'income' | 'expense') => {
     setType(newType);
+    setSuggestedByIA(false);
     if (newType === 'income') {
       setCategory('Venda de Serviços');
     } else {
       setCategory('Custo Mensal');
-      setClientId('');
     }
   };
 
@@ -84,9 +134,9 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
       className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn" 
       id="add-transaction-modal"
     >
-      <div className="bg-[#0F0F0F] border border-white/10 w-full max-w-lg rounded-2xl overflow-hidden shadow-[0_15px_60px_rgba(0,0,0,0.9)] relative">
+      <div className="bg-[#0F0F0F] border border-white/10 w-full max-w-lg rounded-2xl overflow-hidden shadow-[0_15px_60px_rgba(0,0,0,0.9)] relative max-h-[92vh] flex flex-col">
         {/* Header Block */}
-        <div className="px-6 py-5 bg-[#141414] border-b border-white/10 flex justify-between items-center">
+        <div className="px-6 py-5 bg-[#141414] border-b border-white/10 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-3 bg-[#B43C00] rounded-full"></span>
             <h3 className="text-[11px] uppercase tracking-[0.25em] font-bold text-white">
@@ -102,7 +152,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-500 p-3.5 rounded-xl text-xs font-semibold font-mono">
               {error}
@@ -151,35 +201,34 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
             <div className="space-y-1.5 text-left">
               <label className="text-[9px] uppercase font-bold tracking-[0.25em] text-gray-400 flex items-center gap-1.5 label-icon">
                 <User className="w-3.5 h-3.5 text-[#B43C00]" />
-                {type === 'income' ? 'Cliente / Pagador' : 'Favorecido'}
+                {type === 'income' ? 'Cliente / Pagador' : 'Favorecido / Cliente'}
               </label>
-              {type === 'income' && clients && clients.length > 0 && (
+              {clients && clients.length > 0 && (
                 <select
                   value={clientId}
                   onChange={(e) => {
                     setClientId(e.target.value);
-                    if (e.target.value) {
-                      setSender(''); // clear custom text if predefined selected
+                    const selectedClient = clients.find(c => c.id === e.target.value);
+                    if (selectedClient && !sender) {
+                      setSender(selectedClient.name);
                     }
                   }}
                   className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white focus:outline-none focus:border-[#B43C00] focus:ring-1 focus:ring-[#B43C00]/20 transition-all cursor-pointer font-sans mb-2"
                 >
-                  <option value="">-- Selecione um Cliente --</option>
+                  <option value="">-- Vincular a um Cliente (Opcional) --</option>
                   {clients.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
               )}
-              {(!clientId || type === 'expense') && (
-                <input
-                  type="text"
-                  required={!clientId}
-                  value={sender}
-                  onChange={(e) => setSender(e.target.value)}
-                  placeholder={type === 'income' ? "Ex: Outra origem se não for cliente..." : "Ex: Fornecedor de servidores"}
-                  className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#B43C00] focus:ring-1 focus:ring-[#B43C00]/20 transition-all font-sans"
-                />
-              )}
+              <input
+                type="text"
+                required={!clientId}
+                value={sender}
+                onChange={(e) => setSender(e.target.value)}
+                placeholder={type === 'income' ? "Ex: Outra origem se não for cliente..." : "Ex: Fornecedor ou Favorecido..."}
+                className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#B43C00] focus:ring-1 focus:ring-[#B43C00]/20 transition-all font-sans"
+              />
             </div>
 
             {/* Description Area */}
@@ -192,7 +241,11 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
                 type="text"
                 required
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => {
+                  setDescription(e.target.value);
+                  setSuggestedByIA(false);
+                }}
+                onBlur={() => suggestCategory()}
                 placeholder="Ex: Mensalidade de serviços ou despesas extras"
                 className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#B43C00] focus:ring-1 focus:ring-[#B43C00]/20 transition-all font-sans"
               />
@@ -235,13 +288,29 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
 
             {/* Category Select Block */}
             <div className="space-y-1.5 text-left">
-              <label className="text-[9px] uppercase font-bold tracking-[0.25em] text-gray-400 flex items-center gap-1.5 label-icon">
-                <Tag className="w-3.5 h-3.5 text-[#B43C00]" />
-                Categoria
-              </label>
+              <div className="flex justify-between items-center">
+                <label className="text-[9px] uppercase font-bold tracking-[0.25em] text-gray-400 flex items-center gap-1.5 label-icon">
+                  <Tag className="w-3.5 h-3.5 text-[#B43C00]" />
+                  Categoria
+                </label>
+                {description.trim().length >= 3 && (
+                  <button
+                    type="button"
+                    onClick={() => suggestCategory()}
+                    disabled={isSuggestingCategory}
+                    className="flex items-center gap-1 text-[9px] uppercase font-bold tracking-wider text-[#FF4D00] hover:text-[#FF661A] transition-colors bg-white/5 hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer disabled:opacity-50"
+                  >
+                    <Sparkles className={`w-2.5 h-2.5 ${isSuggestingCategory ? 'animate-pulse' : ''}`} />
+                    {isSuggestingCategory ? 'Sugerindo...' : 'Sugerir com IA'}
+                  </button>
+                )}
+              </div>
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                onChange={(e) => {
+                  setCategory(e.target.value);
+                  setSuggestedByIA(false);
+                }}
                 className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white focus:outline-none focus:border-[#B43C00] focus:ring-1 focus:ring-[#B43C00]/20 transition-all cursor-pointer font-sans"
               >
                 {type === 'income' ? (
@@ -268,6 +337,74 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
                   </>
                 )}
               </select>
+              {suggestedByIA && (
+                <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono mt-1">
+                  <Sparkles className="w-3 h-3 text-emerald-400" />
+                  Sugerido
+                </span>
+              )}
+            </div>
+
+            {/* Recurrency toggle and details */}
+            <div className="border-t border-white/5 pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5 text-left">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
+                    <Repeat className="w-3.5 h-3.5 text-amber-500" />
+                    Transação Recorrente
+                  </span>
+                  <p className="text-[9px] text-gray-500 font-sans">
+                    Repetir automaticamente este lançamento no fluxo de caixa
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsRecurring(!isRecurring)}
+                  className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    isRecurring ? 'bg-amber-500' : 'bg-white/10'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                      isRecurring ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {isRecurring && (
+                <div className="grid grid-cols-2 gap-4 animate-fadeIn">
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-[9px] uppercase font-bold tracking-[0.25em] text-gray-400">
+                      Frequência
+                    </label>
+                    <select
+                      value={frequency}
+                      onChange={(e) => setFrequency(e.target.value as any)}
+                      className="w-full bg-[#141414] border border-white/10 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-[#B43C00] cursor-pointer"
+                    >
+                      <option value="weekly">Semanal</option>
+                      <option value="monthly">Mensal</option>
+                      <option value="quarterly">Trimestral</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-[9px] uppercase font-bold tracking-[0.25em] text-gray-400">
+                      Próxima Ocorrência
+                    </label>
+                    <div className="w-full bg-white/5 border border-white/5 rounded-xl py-2.5 px-3 text-xs text-amber-500 font-mono flex items-center h-10">
+                      {calculateNextOccurrence(date, frequency) ? (
+                        <span>
+                          {calculateNextOccurrence(date, frequency).split('-').reverse().join('/')}
+                        </span>
+                      ) : (
+                        <span className="text-gray-500">--</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
           </div>

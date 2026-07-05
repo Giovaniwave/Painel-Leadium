@@ -1,5 +1,18 @@
 {
-  "transactions": [],
+  "transactions": [
+    {
+      "sender": "Porto Outlet",
+      "description": "Mensalidade Serviço",
+      "type": "income",
+      "category": "Venda de Serviços",
+      "amount": 1500,
+      "date": "2026-06-11",
+      "account": "Venda de Serviços",
+      "clientId": "11186bd9-190b-457a-86a3-783ca0aee0b0",
+      "isRecurring": false,
+      "id": "23d43a51-ecbd-4ee2-aaac-e00e77d3d7ce"
+    }
+  ],
   "budgetGoals": [
     {
       "id": "Investimentos",
@@ -32,7 +45,22 @@
       "spent": 0
     }
   ],
-  "clients": [],
+  "clients": [
+    {
+      "id": "11186bd9-190b-457a-86a3-783ca0aee0b0",
+      "name": "Porto Outlet",
+      "contract_value": 1500,
+      "is_recurring": true,
+      "status": "active",
+      "email": "gtloutlet@gmail.com",
+      "phone": "15997779929",
+      "segment": "Loja Fisica Outlet",
+      "start_date": "2026-06-11",
+      "notes": "",
+      "nextPaymentDate": "day:10",
+      "logo": "/uploads/1ed19950-ba78-42f0-b76d-68e05b3793ec.png"
+    }
+  ],
   "faturamento_meta": 100000,
   "user_profiles": {
     "giovani@leadium.com": {
@@ -205,5 +233,17 @@
       }
     ]
   },
-  "generalExpenses": []
+  "generalExpenses": [],
+  "chat_histories": {
+    "giovani@leadium.com": [
+      {
+        "sender": "user",
+        "text": "Karios quantos clientes temos?"
+      },
+      {
+        "sender": "assistant",
+        "text": "Fala Giovani! No momento, estamos com 0 clientes ativos. Precisamos trabalhar nisso, né? Se precisar de ajuda para captar novos clientes, é só avisar!"
+      }
+    ]
+  }
 }

@@ -155,6 +155,14 @@
   background-color: #F9FAFB !important;
 }
 
+.light-theme .bg-\[\#121212\]\/90,
+.light-theme .bg-\[\#121212\] {
+  background-color: #FFFFFF !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: #111827 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03) !important;
+}
+
 .light-theme .bg-\[\#141414\] {
   background-color: #FFFFFF !important;
   border-color: rgba(0, 0, 0, 0.08) !important;

@@ -330,19 +330,37 @@ async function startServer() {
           .select("*")
           .order("date", { ascending: false });
         if (!error && data) {
-          return data.map((t: any) => ({
-            id: t.id,
-            date: t.date,
-            description: t.description || "",
-            sender: t.sender || "",
-            type: t.type,
-            amount: Number(t.amount) || 0,
-            category: t.category || "",
-            account: t.account || "",
-            avatarUrl: t.avatar_url || "",
-            notes: t.notes || "",
-            clientId: t.client_id || undefined,
-          }));
+          return data.map((t: any) => {
+            let notes = t.notes || "";
+            let isRecurring = false;
+            let frequency = undefined;
+            let nextOccurrenceDate = undefined;
+            if (notes.startsWith("__RECURRING_METADATA__:")) {
+              try {
+                const meta = JSON.parse(notes.substring("__RECURRING_METADATA__:".length));
+                isRecurring = !!meta.isRecurring;
+                frequency = meta.frequency;
+                nextOccurrenceDate = meta.nextOccurrenceDate;
+                notes = meta.notes || "";
+              } catch (e) {}
+            }
+            return {
+              id: t.id,
+              date: t.date,
+              description: t.description || "",
+              sender: t.sender || "",
+              type: t.type,
+              amount: Number(t.amount) || 0,
+              category: t.category || "",
+              account: t.account || "",
+              avatarUrl: t.avatar_url || "",
+              notes,
+              clientId: t.client_id || undefined,
+              isRecurring,
+              frequency,
+              nextOccurrenceDate,
+            };
+          });
         } else if (error) {
           console.warn(
             "[Supabase Sync Logger] Fetch transactions issue:",
@@ -409,7 +427,7 @@ async function startServer() {
             segment: c.segment || "",
             start_date: c.start_date || "",
             notes: c.notes || "",
-            nextPaymentDate: c.nextPaymentDate || "",
+            nextPaymentDate: c.next_payment_date || c.nextPaymentDate || "",
           }));
         } else if (error) {
           console.warn(
@@ -608,6 +626,15 @@ async function startServer() {
 
         if (updatedTxList.length > 0) {
           const formatted = updatedTxList.map((t: any) => {
+            let notesValue = t.notes || null;
+            if (t.isRecurring) {
+              notesValue = "__RECURRING_METADATA__:" + JSON.stringify({
+                isRecurring: t.isRecurring,
+                frequency: t.frequency,
+                nextOccurrenceDate: t.nextOccurrenceDate,
+                notes: t.notes || ""
+              });
+            }
             const row: any = {
               id: t.id,
               date: t.date,
@@ -616,7 +643,7 @@ async function startServer() {
               amount: Number(t.amount) || 0,
               category: t.category || "",
               account: t.account || "",
-              notes: t.notes || null,
+              notes: notesValue,
               client_id: t.clientId || null,
             };
             if (tables.transactions === "leadium_transactions") {
@@ -715,19 +742,51 @@ async function startServer() {
         }
 
         if (updatedClientList.length > 0) {
-          const formatted = updatedClientList.map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            contract_value: Number(c.contract_value) || 0,
-            is_recurring: c.is_recurring !== undefined ? c.is_recurring : true,
-            status: c.status || "active",
-            email: c.email || "",
-            phone: c.phone || "",
-            segment: c.segment || "",
-            start_date: c.start_date || "",
-            notes: c.notes || "",
-            nextPaymentDate: c.nextPaymentDate || "",
-          }));
+          const formatted = updatedClientList.map((c: any) => {
+            let dbDate = null;
+            if (c.nextPaymentDate) {
+              if (/^\d{4}-\d{2}-\d{2}$/.test(c.nextPaymentDate)) {
+                dbDate = c.nextPaymentDate;
+              } else {
+                // It is a fixed day like "day:15" or "15"
+                let dayNum = 10;
+                if (c.nextPaymentDate.startsWith("day:")) {
+                  dayNum = parseInt(c.nextPaymentDate.replace("day:", ""), 10) || 10;
+                } else if (!isNaN(Number(c.nextPaymentDate))) {
+                  dayNum = parseInt(c.nextPaymentDate, 10) || 10;
+                }
+                dayNum = Math.min(28, Math.max(1, dayNum)); // Avoid Feb 29/30/31 issues
+                const now = new Date();
+                let year = now.getFullYear();
+                let month = now.getMonth() + 1; // 1-indexed
+                
+                // If dayNum is less than today, set to next month to make it a valid future payment date
+                if (dayNum < now.getDate()) {
+                  month += 1;
+                  if (month > 12) {
+                    month = 1;
+                    year += 1;
+                  }
+                }
+                
+                dbDate = `${year}-${String(month).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+              }
+            }
+
+            return {
+              id: c.id,
+              name: c.name,
+              contract_value: Number(c.contract_value) || 0,
+              is_recurring: c.is_recurring !== undefined ? c.is_recurring : true,
+              status: c.status || "active",
+              email: c.email || "",
+              phone: c.phone || "",
+              segment: c.segment || "",
+              start_date: c.start_date ? c.start_date : null,
+              notes: c.notes || "",
+              next_payment_date: dbDate,
+            };
+          });
           const { error: insertError } = await supabaseClient
             .from(tables.clients)
             .insert(formatted);
@@ -2536,6 +2595,139 @@ Você pode executar ações no sistema através de funções: adicionar transaç
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Erro ao limpar histórico." });
+    }
+  });
+
+  // Suggest a category from description using GPT-4o-mini
+  app.post("/api/transactions/suggest-category", async (req, res) => {
+    try {
+      const { description, type } = req.body;
+      if (!description) {
+        return res.status(400).json({ error: "Descrição não fornecida." });
+      }
+
+      const validIncomeCategories = [
+        "Venda de Serviços",
+        "Investimentos",
+        "Other"
+      ];
+
+      const validExpenseCategories = [
+        "Custo Mensal",
+        "Salários",
+        "Investimentos",
+        "Emergências",
+        "Despesa Variável",
+        "Cafe & Restaurants",
+        "Groceries",
+        "Money Transfer",
+        "Utilities",
+        "Other"
+      ];
+
+      const categories = type === "income" ? validIncomeCategories : validExpenseCategories;
+      const defaultCategory = type === "income" ? "Venda de Serviços" : "Custo Mensal";
+
+      const openai = getOpenAi();
+      if (openai) {
+        try {
+          const systemPrompt = `You are a financial classification assistant for the Leadium platform.
+Classify the given transaction description into exactly ONE of the following valid categories:
+${categories.map(c => `- "${c}"`).join("\n")}
+
+Rules:
+- Respond ONLY with the exact category name.
+- Do not add any explanation, punctuation, or extra characters.
+- If it does not fit any of the specialized categories, output "Other" or the closest match.`;
+
+          const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: `Description: "${description}"` }
+            ],
+            temperature: 0.1,
+            max_tokens: 20,
+          });
+
+          const suggestedCategory = response.choices[0]?.message?.content?.trim().replace(/^"|"$/g, '') || defaultCategory;
+          if (categories.includes(suggestedCategory)) {
+            return res.json({ category: suggestedCategory });
+          }
+        } catch (openaiErr: any) {
+          console.warn("OpenAI category suggestion failed, trying Gemini fallback:", openaiErr.message || openaiErr);
+        }
+      }
+
+      // Fallback 1: Gemini
+      const gemini = getGemini();
+      if (gemini) {
+        try {
+          const systemPrompt = `Você é um assistente de classificação financeira.
+Classifique a descrição do lançamento em exatamente UMA das seguintes categorias:
+${categories.map(c => `- "${c}"`).join("\n")}
+
+Responda APENAS com o nome exato da categoria, sem explicações ou aspas.`;
+
+          const response = await gemini.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: `Descrição: "${description}"`,
+            config: {
+              systemInstruction: systemPrompt,
+              temperature: 0.1,
+              maxOutputTokens: 20
+            }
+          });
+
+          const text = response.text?.trim().replace(/^"|"$/g, '') || "";
+          if (categories.includes(text)) {
+            return res.json({ category: text });
+          }
+        } catch (geminiErr: any) {
+          console.warn("Gemini category suggestion fallback failed:", geminiErr.message || geminiErr);
+        }
+      }
+
+      // Fallback 2: Simple heuristic/keyword fallback
+      const lower = description.toLowerCase();
+      if (type === "income") {
+        if (lower.includes("venda") || lower.includes("serviço") || lower.includes("mensalidade") || lower.includes("fatura") || lower.includes("projeto")) {
+          return res.json({ category: "Venda de Serviços" });
+        }
+        if (lower.includes("rendimento") || lower.includes("invest") || lower.includes("juros") || lower.includes("dividendo")) {
+          return res.json({ category: "Investimentos" });
+        }
+        return res.json({ category: "Venda de Serviços" });
+      } else {
+        if (lower.includes("aluguel") || lower.includes("luz") || lower.includes("água") || lower.includes("internet") || lower.includes("energia") || lower.includes("telefone") || lower.includes("hospedagem") || lower.includes("servidor") || lower.includes("aws") || lower.includes("cloud") || lower.includes("digitalocean") || lower.includes("vercel")) {
+          return res.json({ category: "Utilities" });
+        }
+        if (lower.includes("almoço") || lower.includes("jantar") || lower.includes("restaurante") || lower.includes("café") || lower.includes("comida") || lower.includes("ifood") || lower.includes("padaria") || lower.includes("lanche") || lower.includes("bistrô") || lower.includes("uber eats")) {
+          return res.json({ category: "Cafe & Restaurants" });
+        }
+        if (lower.includes("supermercado") || lower.includes("mercado") || lower.includes("compras") || lower.includes("groceries") || lower.includes("feira") || lower.includes("carrefour") || lower.includes("pão de açúcar")) {
+          return res.json({ category: "Groceries" });
+        }
+        if (lower.includes("salário") || lower.includes("pagamento") || lower.includes("folha") || lower.includes("equipe") || lower.includes("honorários") || lower.includes("pro labore") || lower.includes("clt") || lower.includes("pj") || lower.includes("colaborador")) {
+          return res.json({ category: "Salários" });
+        }
+        if (lower.includes("invest") || lower.includes("ações") || lower.includes("cripto") || lower.includes("tesouro") || lower.includes("fundo") || lower.includes("cdb")) {
+          return res.json({ category: "Investimentos" });
+        }
+        if (lower.includes("urgente") || lower.includes("emergência") || lower.includes("conserto") || lower.includes("médico") || lower.includes("hospital") || lower.includes("reparo") || lower.includes("manutenção urgente")) {
+          return res.json({ category: "Emergências" });
+        }
+        if (lower.includes("transferência") || lower.includes("pix") || lower.includes("ted") || lower.includes("banco") || lower.includes("envio")) {
+          return res.json({ category: "Money Transfer" });
+        }
+        if (lower.includes("mensal") || lower.includes("fixo") || lower.includes("licença") || lower.includes("mensalidade") || lower.includes("sass") || lower.includes("software") || lower.includes("ferramenta")) {
+          return res.json({ category: "Custo Mensal" });
+        }
+        return res.json({ category: "Despesa Variável" });
+      }
+    } catch (err: any) {
+      console.error("Suggest Category API Error:", err);
+      res.status(500).json({ error: err.message || "Failed to suggest category." });
     }
   });
 

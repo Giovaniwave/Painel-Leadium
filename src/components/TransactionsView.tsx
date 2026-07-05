@@ -13,7 +13,8 @@ import {
   ArrowUpRight, 
   ArrowDownLeft, 
   Download,
-  ChevronDown
+  ChevronDown,
+  Repeat
 } from 'lucide-react';
 import { Transaction, BudgetGoal } from '../types';
 import { formatSystemDate } from '../utils/date';
@@ -238,9 +239,17 @@ export default function TransactionsView({
                               }`}>
                                 {tx.sender || 'Favorecido Desconhecido'}
                               </span>
-                              <span className="text-[10px] text-gray-400 font-mono block">
-                                {formatSystemDate(tx.date)}
-                              </span>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[10px] text-gray-400 font-mono">
+                                  {formatSystemDate(tx.date)}
+                                </span>
+                                {tx.isRecurring && (
+                                  <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-amber-500/10 text-amber-500 text-[8px] uppercase tracking-wider font-extrabold shrink-0">
+                                    <Repeat className="w-2.5 h-2.5" />
+                                    Recorrente
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -262,7 +271,7 @@ export default function TransactionsView({
                       {isExpanded && (
                         <tr className={isDark ? 'bg-white/[0.015]' : 'bg-gray-50/50'}>
                           <td colSpan={2} className="py-4 px-6 border-l-2 border-[#FF4D00]">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left py-2 animate-fadeIn">
+                            <div className={`grid grid-cols-1 ${tx.isRecurring ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-6 text-left py-2 animate-fadeIn`}>
                               
                               {/* Option A: Description details */}
                               <div>
@@ -281,6 +290,23 @@ export default function TransactionsView({
                                   {tx.category === 'Cafe & Restaurants' ? 'Café e Restaurantes' : tx.category === 'Groceries' ? 'Supermercado' : tx.category === 'Money Transfer' ? 'Transferência' : tx.category === 'Salary' ? 'Salário/Depósito' : tx.category === 'Utilities' ? 'Serviços Públicos' : tx.category === 'Other' ? 'Outros' : tx.category}
                                 </span>
                               </div>
+
+                              {/* Option B2: Recurrency info */}
+                              {tx.isRecurring && (
+                                <div>
+                                  <span className="text-gray-500 block uppercase tracking-wider text-[9px] font-bold mb-1">Recorrência</span>
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className={`text-xs ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
+                                      Frequência: <span className="font-semibold">{tx.frequency === 'weekly' ? 'Semanal' : tx.frequency === 'monthly' ? 'Mensal' : tx.frequency === 'quarterly' ? 'Trimestral' : tx.frequency}</span>
+                                    </span>
+                                    {tx.nextOccurrenceDate && (
+                                      <span className="text-[10px] text-amber-500 font-mono">
+                                        Prox: {tx.nextOccurrenceDate.split('-').reverse().join('/')}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
 
                               {/* Option C: Real value + quick delete controls */}
                               <div className="flex translate-y-[-2px] justify-between items-center sm:items-start md:items-center">

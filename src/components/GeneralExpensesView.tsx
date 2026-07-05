@@ -28,6 +28,7 @@ export default function GeneralExpensesView({ theme, clients }: GeneralExpensesV
   const [expenses, setExpenses] = useState<GeneralExpense[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<GeneralExpense>>({
@@ -87,7 +88,7 @@ export default function GeneralExpensesView({ theme, clients }: GeneralExpensesV
   };
 
   const deleteExpense = async (id: string) => {
-    if(!confirm('Deseja excluir esta despesa?')) return;
+    setExpenses(prev => (prev || []).filter(e => String(e.id) !== String(id)));
     try {
       const res = await fetch(`/api/general-expenses/${id}`, { method: 'DELETE' });
       if (res.ok) fetchExpenses();
@@ -212,8 +213,33 @@ export default function GeneralExpensesView({ theme, clients }: GeneralExpensesV
                       {expense.status === 'reimbursed' ? 'Reembolsado' : 'Pendente'}
                     </button>
                   </td>
-                  <td className="p-4 text-right opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => deleteExpense(expense.id)} className="text-[10px] text-red-500 uppercase font-mono font-bold hover:underline active:scale-95">Excluir</button>
+                  <td className="p-4 text-right">
+                    {deletingId === expense.id ? (
+                      <div className="flex items-center gap-2 justify-end animate-fadeIn">
+                        <button 
+                          onClick={() => {
+                            deleteExpense(expense.id);
+                            setDeletingId(null);
+                          }} 
+                          className="text-[10px] text-red-600 dark:text-red-400 uppercase font-mono font-extrabold hover:underline active:scale-95 bg-red-100 dark:bg-red-950/40 px-2 py-1 rounded"
+                        >
+                          Confirmar?
+                        </button>
+                        <button 
+                          onClick={() => setDeletingId(null)} 
+                          className="text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-mono font-bold hover:underline active:scale-95 bg-neutral-100 dark:bg-neutral-850 px-2 py-1 rounded"
+                        >
+                          Não
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => setDeletingId(expense.id)} 
+                        className="text-[10px] text-neutral-400 hover:text-red-500 uppercase font-mono font-bold hover:underline active:scale-95 transition-colors"
+                      >
+                        Excluir
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

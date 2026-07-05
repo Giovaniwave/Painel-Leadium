@@ -709,7 +709,7 @@ export default function App() {
           onToggleMobileMenu={() => setIsSidebarOpenMobile(!isSidebarOpenMobile)}
           userProfile={userProfile}
           theme={theme}
-          onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
           onLogout={handleLogout}
           onNavigateToTab={(tab) => setActiveTab(tab)}
         />

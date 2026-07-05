@@ -17,6 +17,89 @@ interface ClientsViewProps {
   theme: 'dark' | 'light';
 }
 
+function getPaymentInfo(nextPaymentDate: string | undefined): {
+  displayStr: string;
+  daysLeft: number | null;
+  isFixedDay: boolean;
+} {
+  if (!nextPaymentDate) {
+    return { displayStr: '--', daysLeft: null, isFixedDay: false };
+  }
+
+  // Check if it's a fixed day of month (either "day:10", "10", or "Todo dia 10")
+  let fixedDayNum: number | null = null;
+  if (nextPaymentDate.startsWith('day:')) {
+    fixedDayNum = parseInt(nextPaymentDate.replace('day:', ''), 10);
+  } else if (!isNaN(Number(nextPaymentDate)) && Number(nextPaymentDate) >= 1 && Number(nextPaymentDate) <= 31) {
+    fixedDayNum = parseInt(nextPaymentDate, 10);
+  } else if (nextPaymentDate.toLowerCase().includes('todo dia')) {
+    const matched = nextPaymentDate.match(/\d+/);
+    if (matched) {
+      fixedDayNum = parseInt(matched[0], 10);
+    }
+  }
+
+  if (fixedDayNum !== null && fixedDayNum >= 1 && fixedDayNum <= 31) {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    
+    // Adjust day for months with fewer days
+    let targetMonth = currentMonth;
+    let targetYear = currentYear;
+    let target = new Date(targetYear, targetMonth, fixedDayNum);
+    target.setHours(0,0,0,0);
+    
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    if (target.getTime() < today.getTime()) {
+      targetMonth += 1;
+      if (targetMonth > 11) {
+        targetMonth = 0;
+        targetYear += 1;
+      }
+    }
+    
+    // Find maximum days in target month
+    const maxDays = new Date(targetYear, targetMonth + 1, 0).getDate();
+    const actualDay = Math.min(fixedDayNum, maxDays);
+    target = new Date(targetYear, targetMonth, actualDay);
+    target.setHours(0,0,0,0);
+    
+    const daysLeft = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
+    const dayFormatted = actualDay.toString().padStart(2, '0');
+    const monthFormatted = (target.getMonth() + 1).toString().padStart(2, '0');
+    return {
+      displayStr: `Todo dia ${fixedDayNum} (Prox: ${dayFormatted}/${monthFormatted})`,
+      daysLeft,
+      isFixedDay: true
+    };
+  }
+
+  // Fallback to standard calendar date string
+  try {
+    const target = new Date(nextPaymentDate);
+    if (!isNaN(target.getTime())) {
+      target.setHours(0,0,0,0);
+      const now = new Date();
+      now.setHours(0,0,0,0);
+      const daysLeft = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      
+      const dayFormatted = target.getDate().toString().padStart(2, '0');
+      const monthFormatted = (target.getMonth() + 1).toString().padStart(2, '0');
+      return {
+        displayStr: `${dayFormatted}/${monthFormatted}/${target.getFullYear()}`,
+        daysLeft,
+        isFixedDay: false
+      };
+    }
+  } catch (e) {}
+
+  return { displayStr: nextPaymentDate, daysLeft: null, isFixedDay: false };
+}
+
 export default function ClientsView({ 
   clients, 
   transactions = [], 
@@ -31,6 +114,7 @@ export default function ClientsView({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
+  const [dueDateType, setDueDateType] = useState<'fixed' | 'specific'>('fixed');
   
   // Collapsible and expanded toggles
   const [showDesktopFilters, setShowDesktopFilters] = useState(false);
@@ -50,6 +134,7 @@ export default function ClientsView({
   const [quickDescription, setQuickDescription] = useState('Mensalidade de Serviços');
   const [quickDate, setQuickDate] = useState(new Date().toISOString().substring(0, 10));
   const [isRecordingPayment, setIsRecordingPayment] = useState(false);
+  const [unlinkingTxId, setUnlinkingTxId] = useState<string | null>(null);
 
   const [generalExpenses, setGeneralExpenses] = useState<any[]>([]);
 
@@ -125,6 +210,7 @@ export default function ClientsView({
       nextPaymentDate: '',
       logo: ''
     });
+    setDueDateType('fixed');
     setIsAdding(false);
     setEditingId(null);
   };
@@ -215,6 +301,10 @@ export default function ClientsView({
       }
     }
 
+    const dateVal = c.nextPaymentDate || cachedMeta.nextPaymentDate || '';
+    const isFixed = dateVal.startsWith('day:') || (!isNaN(Number(dateVal)) && Number(dateVal) >= 1 && Number(dateVal) <= 31);
+    setDueDateType(isFixed ? 'fixed' : 'specific');
+
     setFormData({
       name: c.name,
       contract_value: c.contract_value.toString(),
@@ -225,7 +315,7 @@ export default function ClientsView({
       segment: cachedMeta.segment,
       start_date: cachedMeta.start_date,
       notes: cachedMeta.notes,
-      nextPaymentDate: c.nextPaymentDate || cachedMeta.nextPaymentDate || '',
+      nextPaymentDate: dateVal,
       logo: cachedMeta.logo
     });
     setEditingId(c.id);
@@ -745,14 +835,65 @@ export default function ClientsView({
                 </div>
                 <div>
                   <label className={`block text-[9px] uppercase font-bold tracking-wider mb-1 opacity-70 ${isDark ? 'text-white' : 'text-gray-900'}`}>Data de Vencimento</label>
-                  <input
-                    type="date"
-                    value={formData.nextPaymentDate}
-                    onChange={(e) => setFormData({ ...formData, nextPaymentDate: e.target.value })}
-                    className={`w-full px-3 py-2 rounded-lg text-sm border focus:ring-1 focus:ring-amber-500 outline-none ${
-                      isDark ? 'bg-[#161616] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'
-                    }`}
-                  />
+                  <div className="flex gap-1.5 mb-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDueDateType('fixed');
+                        if (!formData.nextPaymentDate || formData.nextPaymentDate.includes('-')) {
+                          setFormData(prev => ({ ...prev, nextPaymentDate: 'day:10' }));
+                        }
+                      }}
+                      className={`flex-1 py-1 px-1.5 rounded text-[10px] font-bold uppercase transition-all ${
+                        dueDateType === 'fixed'
+                          ? 'bg-amber-500/20 text-amber-500 border border-amber-500/40'
+                          : isDark ? 'bg-white/5 text-gray-400 border border-transparent' : 'bg-gray-100 text-gray-650 border border-transparent'
+                      }`}
+                    >
+                      Dia Fixo Mensal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDueDateType('specific');
+                        if (!formData.nextPaymentDate || !formData.nextPaymentDate.includes('-')) {
+                          setFormData(prev => ({ ...prev, nextPaymentDate: new Date().toISOString().substring(0, 10) }));
+                        }
+                      }}
+                      className={`flex-1 py-1 px-1.5 rounded text-[10px] font-bold uppercase transition-all ${
+                        dueDateType === 'specific'
+                          ? 'bg-amber-500/20 text-amber-500 border border-amber-500/40'
+                          : isDark ? 'bg-white/5 text-gray-400 border border-transparent' : 'bg-gray-100 text-gray-650 border border-transparent'
+                      }`}
+                    >
+                      Data Específica
+                    </button>
+                  </div>
+
+                  {dueDateType === 'fixed' ? (
+                    <select
+                      value={formData.nextPaymentDate.startsWith('day:') ? formData.nextPaymentDate.replace('day:', '') : (isNaN(Number(formData.nextPaymentDate)) || Number(formData.nextPaymentDate) < 1 || Number(formData.nextPaymentDate) > 31 ? '10' : formData.nextPaymentDate)}
+                      onChange={(e) => setFormData({ ...formData, nextPaymentDate: `day:${e.target.value}` })}
+                      className={`w-full px-3 py-1.5 rounded-lg text-sm border focus:ring-1 focus:ring-amber-500 outline-none cursor-pointer ${
+                        isDark ? 'bg-[#161616] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'
+                      }`}
+                    >
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                        <option key={`day-option-${day}`} value={day}>
+                          Todo dia {day}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="date"
+                      value={formData.nextPaymentDate.startsWith('day:') ? new Date().toISOString().substring(0, 10) : formData.nextPaymentDate}
+                      onChange={(e) => setFormData({ ...formData, nextPaymentDate: e.target.value })}
+                      className={`w-full px-3 py-1.5 rounded-lg text-sm border focus:ring-1 focus:ring-amber-500 outline-none ${
+                        isDark ? 'bg-[#161616] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'
+                      }`}
+                    />
+                  )}
                 </div>
               </div>
 
@@ -863,6 +1004,8 @@ export default function ClientsView({
         <div className="block md:hidden space-y-4" id="clients-mobile-list">
           {filtered.map(c => {
             const clientPayments = transactions.filter(t => t.clientId === c.id && t.type === 'income');
+            const sortedPayments = [...clientPayments].sort((a, b) => b.date.localeCompare(a.date));
+            const lastPayment = sortedPayments[0];
             const totalPaidAmount = clientPayments.reduce((acc, t) => acc + t.amount, 0);
             const isExpanded = expandedClientId === c.id;
 
@@ -872,14 +1015,8 @@ export default function ClientsView({
               ? (totalPaidAmount / totalHistoricalRevenue) * 100 
               : 0;
             
-            let paymentDaysLeft: number | null = null;
-            if (c.nextPaymentDate) {
-              const target = new Date(c.nextPaymentDate);
-              target.setHours(0,0,0,0);
-              const now = new Date();
-              now.setHours(0,0,0,0);
-              paymentDaysLeft = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            }
+            const paymentInfo = getPaymentInfo(c.nextPaymentDate);
+            const paymentDaysLeft = paymentInfo.daysLeft;
 
             return (
               <div 
@@ -960,27 +1097,44 @@ export default function ClientsView({
                     </div>
                   </div>
 
-                  {paymentDaysLeft !== null && (
-                    <div className="col-span-2 pt-2 border-t border-dashed border-white/5" style={{ borderColor: !isDark ? 'rgba(0,0,0,0.06)' : '' }}>
-                      <div className="flex justify-between items-center">
-                        <span className={`text-[8.5px] uppercase tracking-wider font-extrabold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                          Data de Pagamento:
-                        </span>
+                  <div className="col-span-2 pt-2.5 border-t border-dashed border-white/5 space-y-1.5" style={{ borderColor: !isDark ? 'rgba(0,0,0,0.06)' : '' }}>
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className={`text-[8.5px] uppercase tracking-wider font-extrabold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        Próximo Pgto:
+                      </span>
+                      {c.nextPaymentDate ? (
                         <div className="flex items-center gap-2">
                           <span className={`text-[10px] font-mono font-bold ${
-                            paymentDaysLeft < 0 ? 'text-red-500' : paymentDaysLeft <= 5 ? 'text-orange-500' : (isDark ? 'text-gray-300' : 'text-gray-700')
+                            paymentDaysLeft !== null && paymentDaysLeft < 0 ? 'text-red-500' : paymentDaysLeft !== null && paymentDaysLeft <= 5 ? 'text-orange-500' : (isDark ? 'text-gray-300' : 'text-gray-700')
                           }`}>
-                            {new Date(c.nextPaymentDate!).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                            {paymentInfo.displayStr}
                           </span>
-                          <span className={`text-[9px] uppercase font-bold tracking-wider ${
-                            paymentDaysLeft < 0 ? 'text-red-500/70' : paymentDaysLeft <= 5 ? 'text-orange-500/70' : 'text-gray-500'
-                          }`}>
-                            {paymentDaysLeft < 0 ? `Vencido há ${Math.abs(paymentDaysLeft)} d` : paymentDaysLeft === 0 ? 'Vence Hoje' : `Em ${paymentDaysLeft} d`}
-                          </span>
+                          {paymentDaysLeft !== null && (
+                            <span className={`text-[9px] uppercase font-bold tracking-wider ${
+                              paymentDaysLeft < 0 ? 'text-red-500/70' : paymentDaysLeft <= 5 ? 'text-orange-500/70' : 'text-gray-500'
+                            }`}>
+                              {paymentDaysLeft < 0 ? `vencido` : paymentDaysLeft === 0 ? 'hoje' : `${paymentDaysLeft}d`}
+                            </span>
+                          )}
                         </div>
-                      </div>
+                      ) : (
+                        <span className="text-[10px] text-gray-500 font-mono">--</span>
+                      )}
                     </div>
-                  )}
+
+                    <div className="flex justify-between items-center text-[10px] pt-1 border-t border-white/5" style={{ borderColor: !isDark ? 'rgba(0,0,0,0.03)' : '' }}>
+                      <span className={`text-[8.5px] uppercase tracking-wider font-extrabold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        Último Pgto:
+                      </span>
+                      {lastPayment ? (
+                        <span className={`text-[10px] font-mono font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                          {lastPayment.date.split('T')[0].split('-').reverse().join('/')} (R$ {lastPayment.amount})
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-gray-500 font-mono italic">Nenhum recebimento</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Touch Tap targets for Client Sheet Drawer */}
@@ -1108,16 +1262,33 @@ export default function ClientsView({
                                 <span className="text-emerald-500 font-mono font-bold">
                                   + R$ {t.amount}
                                 </span>
-                                <button
-                                  onClick={() => {
-                                    if (confirm("Deseja realmente desvincular este faturamento desta ficha?")) {
-                                      handleUnlinkTransaction(t.id);
-                                    }
-                                  }}
-                                  className="text-gray-500 hover:text-red-400 p-1 cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                {unlinkingTxId === t.id ? (
+                                  <div className="flex items-center gap-1.5 animate-fadeIn">
+                                    <button
+                                      onClick={() => {
+                                        handleUnlinkTransaction(t.id);
+                                        setUnlinkingTxId(null);
+                                      }}
+                                      className="text-[10px] text-red-500 font-bold hover:underline"
+                                    >
+                                      Desvincular?
+                                    </button>
+                                    <button
+                                      onClick={() => setUnlinkingTxId(null)}
+                                      className="text-[10px] text-gray-400 font-bold hover:underline"
+                                    >
+                                      Não
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setUnlinkingTxId(t.id)}
+                                    className="text-gray-500 hover:text-red-400 p-1 cursor-pointer"
+                                    title="Desvincular"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -1170,11 +1341,7 @@ export default function ClientsView({
                            <button
                              onClick={() => handleRecordQuickPayment(c.id, c.name)}
                              disabled={isRecordingPayment}
-                             className={`w-full py-2.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all cursor-pointer ${
-                               isDark 
-                                 ? 'bg-white text-black hover:bg-gray-200' 
-                                 : 'bg-black text-white hover:bg-gray-800'
-                             }`}
+                             className="w-full py-2.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all cursor-pointer bg-[#FF4D00] text-white hover:bg-[#e04500]" style={{ color: "#FFFFFF" }}
                            >
                              {isRecordingPayment ? 'Registrando...' : 'Registrar e Creditar LTV'}
                            </button>
@@ -1250,6 +1417,8 @@ export default function ClientsView({
             <tbody className={`divide-y ${isDark ? 'divide-white/5' : 'divide-gray-100'}`}>
               {filtered.map(c => {
                 const clientPayments = transactions.filter(t => t.clientId === c.id && t.type === 'income');
+                const sortedPayments = [...clientPayments].sort((a, b) => b.date.localeCompare(a.date));
+                const lastPayment = sortedPayments[0];
                 const totalPaidAmount = clientPayments.reduce((acc, t) => acc + t.amount, 0);
                 const isExpanded = expandedClientId === c.id;
 
@@ -1262,14 +1431,8 @@ export default function ClientsView({
                   ? (totalPaidAmount / totalHistoricalRevenue) * 100 
                   : 0;
 
-                let paymentDaysLeft: number | null = null;
-                if (c.nextPaymentDate) {
-                  const target = new Date(c.nextPaymentDate);
-                  target.setHours(0,0,0,0);
-                  const now = new Date();
-                  now.setHours(0,0,0,0);
-                  paymentDaysLeft = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                }
+                const paymentInfo = getPaymentInfo(c.nextPaymentDate);
+                const paymentDaysLeft = paymentInfo.daysLeft;
 
                 return (
                   <React.Fragment key={c.id}>
@@ -1335,22 +1498,42 @@ export default function ClientsView({
 
                       {/* Payment Date Col */}
                       <td className="py-4 px-4">
-                        {paymentDaysLeft !== null ? (
-                          <div className="flex flex-col">
-                            <span className={`text-[10px] font-mono font-bold ${
-                              paymentDaysLeft < 0 ? 'text-red-500' : paymentDaysLeft <= 5 ? 'text-orange-500' : (isDark ? 'text-gray-300' : 'text-gray-700')
-                            }`}>
-                              {new Date(c.nextPaymentDate!).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                            </span>
-                            <span className={`text-[9px] uppercase font-bold tracking-wider ${
-                              paymentDaysLeft < 0 ? 'text-red-500/70' : paymentDaysLeft <= 5 ? 'text-orange-500/70' : 'text-gray-500'
-                            }`}>
-                              {paymentDaysLeft < 0 ? `Vencido há ${Math.abs(paymentDaysLeft)} d` : paymentDaysLeft === 0 ? 'Vence Hoje' : `Em ${paymentDaysLeft} d`}
-                            </span>
+                        <div className="flex flex-col gap-1.5">
+                          {/* Próximo Pgto */}
+                          <div>
+                            <span className="text-[9px] uppercase tracking-wider font-extrabold text-gray-500 block mb-0.5">Próximo:</span>
+                            {c.nextPaymentDate ? (
+                              <div className="flex flex-col">
+                                <span className={`text-[10px] font-mono font-bold ${
+                                  paymentDaysLeft !== null && paymentDaysLeft < 0 ? 'text-red-500' : paymentDaysLeft !== null && paymentDaysLeft <= 5 ? 'text-orange-500' : (isDark ? 'text-gray-300' : 'text-gray-700')
+                                }`}>
+                                  {paymentInfo.displayStr}
+                                </span>
+                                {paymentDaysLeft !== null && (
+                                  <span className={`text-[9px] uppercase font-bold tracking-wider ${
+                                    paymentDaysLeft < 0 ? 'text-red-500/70' : paymentDaysLeft <= 5 ? 'text-orange-500/70' : 'text-gray-500'
+                                  }`}>
+                                    {paymentDaysLeft < 0 ? `Vencido` : paymentDaysLeft === 0 ? 'Vence Hoje' : `Em ${paymentDaysLeft} d`}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-gray-500 font-mono">--</span>
+                            )}
                           </div>
-                        ) : (
-                          <span className="text-[10px] text-gray-500 font-mono">--</span>
-                        )}
+
+                          {/* Último Pgto */}
+                          <div className="border-t border-dashed border-white/5 pt-1" style={{ borderColor: !isDark ? 'rgba(0,0,0,0.06)' : '' }}>
+                            <span className="text-[9px] uppercase tracking-wider font-extrabold text-gray-500 block mb-0.5">Último:</span>
+                            {lastPayment ? (
+                              <span className={`text-[10px] font-mono font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                {lastPayment.date.split('T')[0].split('-').reverse().join('/')} (R$ {lastPayment.amount})
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-gray-500 font-mono italic">Nenhum</span>
+                            )}
+                          </div>
+                        </div>
                       </td>
 
                       {/* Contract value */}
@@ -1540,17 +1723,33 @@ export default function ClientsView({
                                             <span className="text-emerald-500 font-mono font-bold">
                                               + R$ {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                             </span>
-                                            <button
-                                              onClick={() => {
-                                                if (confirm("Deseja desvincular este faturamento do faturamento oficial deste cliente?")) {
-                                                  handleUnlinkTransaction(t.id);
-                                                }
-                                              }}
-                                              className="text-gray-500 hover:text-red-400 transition-colors p-1"
-                                              title="Desvincular do Cliente (Tornar Avulso)"
-                                            >
-                                              <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                            {unlinkingTxId === t.id ? (
+                                              <div className="flex items-center gap-1.5 animate-fadeIn">
+                                                <button
+                                                  onClick={() => {
+                                                    handleUnlinkTransaction(t.id);
+                                                    setUnlinkingTxId(null);
+                                                  }}
+                                                  className="text-[10px] text-red-500 font-bold hover:underline"
+                                                >
+                                                  Desvincular?
+                                                </button>
+                                                <button
+                                                  onClick={() => setUnlinkingTxId(null)}
+                                                  className="text-[10px] text-gray-400 font-bold hover:underline"
+                                                >
+                                                  Não
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <button
+                                                onClick={() => setUnlinkingTxId(t.id)}
+                                                className="text-gray-500 hover:text-red-400 transition-colors p-1"
+                                                title="Desvincular do Cliente (Tornar Avulso)"
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                              </button>
+                                            )}
                                           </div>
                                         </div>
                                       ))}
@@ -1637,11 +1836,8 @@ export default function ClientsView({
                                       <button
                                         onClick={() => handleRecordQuickPayment(c.id, c.name)}
                                         disabled={isRecordingPayment}
-                                        className={`w-full py-1.5 rounded text-[10px] uppercase font-bold tracking-wider transition-all cursor-pointer ${
-                                          isDark 
-                                            ? 'bg-white text-black hover:bg-gray-200' 
-                                            : 'bg-black text-white hover:bg-gray-800'
-                                        }`}
+                                        className="w-full py-1.5 rounded text-[10px] uppercase font-bold tracking-wider transition-all cursor-pointer bg-[#FF4D00] text-white hover:bg-[#e04500]"
+                                        style={{ color: '#FFFFFF' }}
                                       >
                                         {isRecordingPayment ? 'Registrando...' : 'Registrar e Creditar LTV'}
                                       </button>

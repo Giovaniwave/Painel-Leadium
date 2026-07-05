@@ -807,6 +807,11 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   };
 
   const deleteEmployee = async (id: string, name: string) => {
+    setRawData(prev => ({
+      ...prev,
+      employees: (prev.employees || []).filter((e: any) => String(e.id) !== String(id)),
+      vehicles: (prev.vehicles || []).filter((v: any) => String(v.employeeId) !== String(id))
+    }));
     try {
       const res = await fetch(`/api/expenses/employees/${id}`, { method: 'DELETE' });
       if (res.ok) await fetchExpenses();
@@ -816,6 +821,10 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   };
 
   const deleteVehicle = async (id: string, name: string) => {
+    setRawData(prev => ({
+      ...prev,
+      vehicles: (prev.vehicles || []).filter((v: any) => String(v.id) !== String(id))
+    }));
     try {
       const res = await fetch(`/api/expenses/vehicles/${id}`, { method: 'DELETE' });
       if (res.ok) await fetchExpenses();
@@ -825,6 +834,10 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   };
 
   const deleteDisplacement = async (id: string) => {
+    setRawData(prev => ({
+      ...prev,
+      displacements: (prev.displacements || []).filter((d: any) => String(d.id) !== String(id))
+    }));
     try {
       const res = await fetch(`/api/expenses/displacements/${id}`, { method: 'DELETE' });
       if (res.ok) await fetchExpenses();

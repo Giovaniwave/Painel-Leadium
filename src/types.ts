@@ -15,6 +15,9 @@ export interface Transaction {
   avatarUrl?: string;
   notes?: string;
   clientId?: string; // Links transaction to a specific client
+  isRecurring?: boolean;
+  frequency?: 'weekly' | 'monthly' | 'quarterly';
+  nextOccurrenceDate?: string;
 }
 
 export interface BudgetGoal {

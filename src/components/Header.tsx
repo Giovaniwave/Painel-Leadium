@@ -85,13 +85,17 @@ export default function Header({
           <button
             id="header-theme-toggle"
             onClick={onToggleTheme}
-            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-all cursor-pointer"
-            title={theme === 'dark' ? "Ativar Modo Branco" : "Ativar Modo Escuro"}
+            className={`p-2 rounded-lg transition-all cursor-pointer ${
+              theme === 'light' 
+                ? 'text-gray-900 hover:bg-gray-100' 
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }`}
+            title={theme === 'dark' ? "Ativar Modo Claro" : "Ativar Modo Escuro"}
           >
             {theme === 'dark' ? (
               <Sun className="w-5 h-5 text-gray-300 hover:text-white transition-colors" />
             ) : (
-              <Moon className="w-5 h-5 text-gray-600 hover:text-black transition-colors" />
+              <Moon className="w-5 h-5 text-gray-900 hover:text-black transition-colors" />
             )}
           </button>
 
@@ -100,11 +104,17 @@ export default function Header({
             <button
               id="header-notification-btn"
               onClick={() => setShowNotifications(!showNotifications)}
-              className="relative p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-all cursor-pointer"
+              className={`relative p-2 rounded-lg transition-all cursor-pointer ${
+                theme === 'light' 
+                  ? 'text-gray-900 hover:bg-gray-100' 
+                  : 'text-gray-400 hover:text-white hover:bg-white/5'
+              }`}
               title="Notifications"
             >
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-white rounded-full ring-2 ring-[#0D0D0D] animate-pulse"></span>
+              <span className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full animate-pulse ${
+                theme === 'light' ? 'bg-[#FF4D00] ring-2 ring-white' : 'bg-white ring-2 ring-[#0D0D0D]'
+              }`}></span>
             </button>
 
             {showNotifications && (

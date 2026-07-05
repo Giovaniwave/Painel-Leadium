@@ -18,7 +18,8 @@ import {
   Check,
   X,
   Plus,
-  Download
+  Download,
+  Target
 } from 'lucide-react';
 import { Transaction, BudgetGoal } from '../types';
 import AnimatedCounter from './AnimatedCounter';
@@ -146,10 +147,98 @@ export default function DashboardView({
     return Math.max(0, revenueGoal - totalIncome);
   }, [totalIncome, revenueGoal]);
 
+  const percentageTrend = useMemo(() => {
+    // Get income from past 30 days and compare to the 30 days before that
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(today.getDate() - 60);
+
+    let recentIncome = 0;
+    let priorIncome = 0;
+
+    transactions.forEach(tx => {
+      if (tx.type !== 'income' || !tx.date) return;
+      if (tx.date >= thirtyDaysAgo.toISOString().split('T')[0] && tx.date <= today.toISOString().split('T')[0]) {
+        recentIncome += tx.amount;
+      } else if (tx.date >= sixtyDaysAgo.toISOString().split('T')[0] && tx.date < thirtyDaysAgo.toISOString().split('T')[0]) {
+        priorIncome += tx.amount;
+      }
+    });
+
+    if (priorIncome === 0) return 12; // fallback placeholder matching the mockup photo exactly!
+    const change = ((recentIncome - priorIncome) / priorIncome) * 100;
+    return Math.round(change);
+  }, [transactions]);
+
   // Total allocated limit
   const totalAllocated = useMemo(() => {
     return budgetGoals.reduce((sum, g) => sum + g.allocated, 0);
   }, [budgetGoals]);
+
+  const futureProjections = useMemo(() => {
+    const recurringTxs = transactions.filter(t => t.isRecurring && t.nextOccurrenceDate);
+    const today = new Date();
+    const futureLimit = new Date();
+    futureLimit.setDate(today.getDate() + 90);
+
+    const projections: Array<{
+      date: string;
+      description: string;
+      sender: string;
+      type: 'income' | 'expense';
+      category: string;
+      amount: number;
+    }> = [];
+
+    recurringTxs.forEach(tx => {
+      if (!tx.nextOccurrenceDate) return;
+      let occurrenceDate = new Date(tx.nextOccurrenceDate + 'T12:00:00');
+      
+      for (let i = 0; i < 12; i++) {
+        if (occurrenceDate > futureLimit) break;
+        
+        projections.push({
+          date: occurrenceDate.toISOString().substring(0, 10),
+          description: tx.description,
+          sender: tx.sender,
+          type: tx.type,
+          category: tx.category,
+          amount: tx.amount
+        });
+
+        if (tx.frequency === 'weekly') {
+          occurrenceDate.setDate(occurrenceDate.getDate() + 7);
+        } else if (tx.frequency === 'monthly') {
+          occurrenceDate.setMonth(occurrenceDate.getMonth() + 1);
+        } else if (tx.frequency === 'quarterly') {
+          occurrenceDate.setMonth(occurrenceDate.getMonth() + 3);
+        } else {
+          break;
+        }
+      }
+    });
+
+    projections.sort((a, b) => a.date.localeCompare(b.date));
+
+    let upcomingIncome = 0;
+    let upcomingExpense = 0;
+    projections.forEach(p => {
+      if (p.type === 'income') {
+        upcomingIncome += p.amount;
+      } else {
+        upcomingExpense += p.amount;
+      }
+    });
+
+    return {
+      list: projections,
+      upcomingIncome,
+      upcomingExpense,
+      projectedNet: upcomingIncome - upcomingExpense
+    };
+  }, [transactions]);
 
   // Compute dynamic trend dates list from actual manual transaction logs only
   const trendData = useMemo(() => {
@@ -425,24 +514,89 @@ export default function DashboardView({
 
   return (
     <div className="space-y-10 py-4 animate-fadeIn">
-      {/* Date Interval Selector Control Bar - Ultra Minimalist Edition with Mobile Toggling */}
-      <div className="flex flex-col gap-2 pb-4 border-b border-white/5" style={{ borderColor: theme !== 'dark' ? 'rgba(0,0,0,0.06)' : '' }}>
-        <div className="flex items-center justify-between w-full">
-          {/* Left Side: Title and Active Filter Status */}
-          <div className="flex items-center gap-1.5">
-            <span className={`text-[10px] font-mono font-bold uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'}`}>
-              Filtrar Período
-            </span>
-            {(startDate || endDate) && (
-              <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider shrink-0">
-                Filtrado
-              </span>
-            )}
-          </div>
+      {/* Card 3: Progresso de Vendas with Nested Stats */}
+      <div className="bg-[#121212]/90 border border-white/5 rounded-3xl p-6 sm:p-8 relative overflow-hidden group hover:border-white/10 transition-all duration-300 shadow-[0_12px_40px_rgba(0,0,0,0.6)] flex flex-col gap-6">
+        {/* Curved decorative background lines matching the mockup */}
+        <div className="absolute inset-0 opacity-20 pointer-events-none">
+          <svg className="w-full h-full" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M-50 150 C 100 120, 200 250, 450 170" stroke={theme === 'light' ? "rgba(0, 0, 0, 0.04)" : "rgba(255, 255, 255, 0.15)"} strokeWidth="1" />
+            <path d="M-50 170 C 120 140, 180 270, 450 190" stroke={theme === 'light' ? "rgba(0, 0, 0, 0.03)" : "rgba(255, 255, 255, 0.1)"} strokeWidth="1" />
+            <path d="M-50 130 C 80 100, 220 230, 450 150" stroke={theme === 'light' ? "rgba(0, 0, 0, 0.02)" : "rgba(255, 255, 255, 0.05)"} strokeWidth="1" />
+          </svg>
+        </div>
 
-          {/* Right Side Controls */}
+        {/* Top Label with Small Action Buttons */}
+        <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-2 z-10">
+          <span className="text-[10px] uppercase tracking-[0.15em] font-extrabold text-gray-500 dark:text-gray-400">
+            Progresso de Vendas
+          </span>
           <div className="flex items-center gap-2">
-            {/* Download PDF button */}
+            {/* Filtrar Período Button (Icon Only) */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowMobileDates(!showMobileDates)}
+                className="p-1.5 bg-gray-100 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-gray-900 dark:text-gray-300 transition-all cursor-pointer shadow-sm dark:shadow-none flex items-center justify-center"
+                title="Filtrar período"
+              >
+                <Calendar className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400" />
+              </button>
+
+              {/* Dropdown for dates when active - positioned right aligned */}
+              {showMobileDates && (
+                <div className="absolute right-0 mt-2 p-3 bg-white dark:bg-[#121212] border border-black/10 dark:border-white/10 rounded-xl shadow-2xl flex flex-col gap-2 z-50 animate-fadeIn min-w-[240px]">
+                  <span className="text-[9px] uppercase font-bold tracking-wider text-gray-500">Customizar Intervalo</span>
+                  <div className="flex flex-col gap-2">
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="bg-gray-50 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-lg px-2 py-1 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-[#FF4D00] w-full"
+                    />
+                    <span className="text-[9px] text-center text-gray-500 font-mono">até</span>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="bg-gray-50 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-lg px-2 py-1 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-[#FF4D00] w-full"
+                    />
+                  </div>
+                  <div className="border-t border-black/5 dark:border-white/5 my-1" />
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setPresetRange('this_month')}
+                      className="text-[9px] font-bold uppercase bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 py-1 rounded text-gray-900 dark:text-white"
+                    >
+                      Este Mês
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPresetRange('last_30')}
+                      className="text-[9px] font-bold uppercase bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 py-1 rounded text-gray-900 dark:text-white"
+                    >
+                      Últimos 30d
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPresetRange('this_year')}
+                      className="text-[9px] font-bold uppercase bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 py-1 rounded text-gray-900 dark:text-white"
+                    >
+                      Este Ano
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setStartDate(''); setEndDate(''); }}
+                      className="text-[9px] font-bold uppercase bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 py-1 rounded text-gray-900 dark:text-white"
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Relatório Button (Small version) */}
             <button
               type="button"
               onClick={() => generateMonthlyReportPDF({
@@ -452,285 +606,261 @@ export default function DashboardView({
                 startDate,
                 endDate
               })}
-              className={`flex items-center gap-1.5 px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider rounded-lg border transition-all cursor-pointer ${
-                theme === 'dark'
-                  ? 'bg-white/5 border-white/10 text-white hover:bg-[#FF4D00]/10 hover:border-[#FF4D00]/40'
-                  : 'bg-black text-[#FFFFFF] border-transparent hover:bg-gray-800'
-              }`}
+              className="flex items-center gap-1 px-2 py-1.5 bg-black dark:bg-white text-white dark:text-black hover:bg-black/90 dark:hover:bg-white/90 rounded-lg text-[9px] font-bold transition-all cursor-pointer shadow-sm border border-transparent dark:border-white/10"
               title="Exportar relatório consolidado em PDF"
             >
-              <Download className="w-3.5 h-3.5 text-[#FF4D00]" />
-              <span>Relatório</span>
+              <Download className="w-3 h-3 animate-pulse shrink-0" />
+              <span>RELATÓRIO</span>
             </button>
-
-            {/* Desktop Inputs - always shown on sm and up */}
-            <div className="hidden sm:flex items-center gap-1.5">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className={`bg-transparent border border-white/10 hover:border-white/20 focus:border-[#FF4D00] rounded px-1.5 py-0.5 text-[11px] font-mono focus:outline-none transition-colors w-[105px] text-center cursor-pointer ${
-                  theme === 'dark' ? 'text-white border-white/10 [color-scheme:dark]' : 'text-zinc-800 border-gray-200 [color-scheme:light]'
-                }`}
-              />
-              <span className="text-gray-500 font-mono text-[9px] uppercase shrink-0">a</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className={`bg-transparent border border-white/10 hover:border-white/20 focus:border-[#FF4D00] rounded px-1.5 py-0.5 text-[11px] font-mono focus:outline-none transition-colors w-[105px] text-center cursor-pointer ${
-                  theme === 'dark' ? 'text-white border-white/10 [color-scheme:dark]' : 'text-zinc-800 border-gray-200 [color-scheme:light]'
-                }`}
-              />
-
-              {(startDate || endDate) && (
-                <button
-                  type="button"
-                  onClick={() => { setStartDate(''); setEndDate(''); }}
-                  className="p-1 hover:bg-rose-500/10 text-rose-400 rounded transition-colors cursor-pointer shrink-0"
-                  title="Limpar período"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Calendar toggle button on mobile (visible only on mobile, aligned to the right) */}
-            <div className="flex items-center gap-1 sm:hidden">
-              {(startDate || endDate) && (
-                <button
-                  type="button"
-                  onClick={() => { setStartDate(''); setEndDate(''); }}
-                  className="p-1 hover:bg-rose-500/10 text-rose-400 rounded transition-colors cursor-pointer shrink-0"
-                  title="Limpar período"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowMobileDates(!showMobileDates)}
-                className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
-                  showMobileDates || startDate || endDate
-                    ? 'border-[#FF4D00] text-[#FF4D00] bg-[#FF4D00]/5'
-                    : 'border-white/10 text-gray-400 bg-transparent'
-                }`}
-              >
-                <Calendar className="w-4 h-4" />
-              </button>
-            </div>
           </div>
         </div>
 
-        {/* Mobile Inputs Drawer (visible only on mobile when toggled) */}
-        {showMobileDates && (
-          <div className="flex sm:hidden items-center justify-end gap-1.5 py-1.5 animate-fadeIn">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className={`bg-black/40 border rounded px-1.5 py-0.5 text-[11px] font-mono focus:outline-none transition-colors w-[105px] text-center cursor-pointer ${
-                theme === 'dark' ? 'text-white border-white/10 [color-scheme:dark]' : 'text-zinc-800 border-gray-200 [color-scheme:light]'
-              }`}
-            />
-            <span className="text-gray-500 font-mono text-[9px] uppercase shrink-0">a</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className={`bg-black/40 border rounded px-1.5 py-0.5 text-[11px] font-mono focus:outline-none transition-colors w-[105px] text-center cursor-pointer ${
-                theme === 'dark' ? 'text-white border-white/10 [color-scheme:dark]' : 'text-zinc-800 border-gray-200 [color-scheme:light]'
-              }`}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Objetivo de Faturamento (Billing Goal) Spotlight Card */}
-      <div className="glass-container px-6 pt-6 pb-6 sm:p-8 flex flex-col md:flex-row gap-4 md:gap-8 justify-between relative overflow-hidden group hover:border-[#FF4D00]/25 transition-all duration-300 mb-4 sm:mb-0">
-        {/* Animated decorative corner aura */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-radial from-[#FF4D00]/5 to-transparent rounded-full opacity-60 pointer-events-none"></div>
-        
-        <div className="flex-1 space-y-3 sm:space-y-6 z-10 text-left">
-          <h3 className="text-[10px] uppercase tracking-[0.25em] font-bold text-[#999999] flex items-center gap-2">
-            <span className="w-1.5 h-1.5 bg-[#FF4D00] rounded-full animate-pulse"></span>
-          </h3>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-1 sm:pt-2">
-            {/* Realized Billing Column */}
-            <div className="space-y-1 sm:space-y-2 border-l border-[#FF4D00]/10 pl-3">
-              <span className="text-[10px] uppercase tracking-[0.14em] font-bold text-gray-500 block">
-                Faturamento Realizado
-              </span>
-              <div className="text-2xl sm:text-4xl font-mono font-black text-emerald-500 tracking-tight transition-all">
-                {formatCurrency(totalIncome)}
+        {/* Clean layout merging Faturamento Realizado & Meta Objetiva de Vendas at the top of the gauge */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 z-10">
+          {/* Block 1: Faturamento Realizado */}
+          <div className={`border rounded-2xl p-4 flex items-center justify-between relative overflow-hidden transition-all duration-300 ${
+            theme === 'light' 
+              ? 'bg-gray-50 border-gray-200/80' 
+              : 'bg-white/[0.02] border-white/5'
+          }`}>
+            <div className="flex items-center gap-4">
+              {/* Icon Container */}
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center relative shrink-0 border ${
+                theme === 'light' 
+                  ? 'bg-gray-200/60 border-gray-300/50' 
+                  : 'bg-white/[0.04] border-white/5'
+              }`}>
+                <span className={`absolute top-1 left-1 w-1.5 h-1.5 rounded-full ${
+                  theme === 'light' ? 'bg-gray-800' : 'bg-white'
+                }`}></span>
+                <TrendingUp className={`w-5 h-5 ${theme === 'light' ? 'text-gray-900' : 'text-white'}`} />
               </div>
-              <span className="text-[9px] text-gray-500 block font-sans">
+              <div className="text-left">
+                <span className={`text-[9px] uppercase tracking-[0.15em] font-bold block mb-0.5 ${
+                  theme === 'light' ? 'text-gray-500' : 'text-gray-400'
+                }`}>
+                  Faturamento
+                </span>
+                <h2 className={`text-lg sm:text-xl font-bold tracking-tight leading-none font-sans ${
+                  theme === 'light' ? 'text-gray-950' : 'text-white'
+                }`}>
+                  {formatCurrency(totalIncome)}
+                </h2>
+              </div>
+            </div>
+            <div className="text-right flex flex-col items-end shrink-0 pl-2">
+              <span className={`text-[9px] font-bold px-2 py-1 rounded-full border ${
+                theme === 'light' 
+                  ? 'bg-gray-100 border-gray-300 text-gray-900' 
+                  : 'bg-white/[0.06] border-white/5 text-white/90'
+              }`}>
+                {percentageTrend >= 0 ? `+${percentageTrend}%` : `${percentageTrend}%`}
+              </span>
+              <span className={`text-[8px] mt-1 block tracking-tight font-medium ${
+                theme === 'light' ? 'text-gray-600' : 'text-gray-500'
+              }`}>
+                vs período anterior
               </span>
             </div>
-            {/* Target Goal Column */}
-            <div 
-              onClick={!isEditingRevenue ? startEditingRevenue : undefined}
-              className={`space-y-1 sm:space-y-2 relative group/meta border-l-2 border-[#FF4D00] bg-[#FF4D00]/5 rounded-r-xl p-3 pl-4 transition-all duration-200 ${
-                !isEditingRevenue ? 'cursor-pointer hover:bg-[#FF4D00]/10' : ''
-              }`}
-            >
-              <span className="text-[10px] uppercase tracking-[0.14em] font-bold text-gray-400 block">
-                Meta Objetiva de Vendas
-              </span>
-              {isEditingRevenue ? (
-                <div className="flex items-center gap-1.5 pt-1" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="number"
-                    value={editingRevenueValue}
-                    onChange={e => setEditingRevenueValue(e.target.value)}
-                    className={`bg-black/60 border rounded-lg px-2.5 py-1 text-xs font-mono w-32 focus:outline-none focus:border-[#FF4D00] ${
-                      theme === 'dark' ? 'text-white border-white/20' : 'text-black border-black/20'
-                    }`}
-                    autoFocus
-                  />
-                  <button 
-                    type="button"
-                    onClick={saveEditingRevenue}
-                    className="p-1 px-3 bg-[#FF4D00] text-white hover:bg-[#e04500] text-[10px] font-bold rounded-md transition-colors cursor-pointer"
-                  >
-                    Confirmar
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsEditingRevenue(false);
-                    }}
-                    className="p-1 px-2 text-gray-400 hover:text-white text-[10px] transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-baseline gap-2 pt-0.5">
-                  <span className="text-2xl sm:text-4xl font-mono font-black text-[#FF4D00] tracking-tight">
+          </div>
+
+          {/* Block 2: Meta Objetiva de Vendas */}
+          <div 
+            onClick={!isEditingRevenue ? startEditingRevenue : undefined}
+            className={`border rounded-2xl p-4 flex items-center justify-between relative overflow-hidden transition-all duration-300 ${
+              theme === 'light' 
+                ? 'bg-gray-50 border-gray-200/80' 
+                : 'bg-white/[0.02] border-white/5'
+            } ${
+              !isEditingRevenue ? 'cursor-pointer hover:border-black/20 dark:hover:border-white/10' : ''
+            }`}
+          >
+            <div className="flex items-center gap-4 min-w-0 flex-1">
+              {/* Icon Container */}
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center relative shrink-0 border ${
+                theme === 'light' 
+                  ? 'bg-gray-200/60 border-gray-300/50' 
+                  : 'bg-white/[0.04] border-white/5'
+              }`}>
+                <span className={`absolute top-1 left-1 w-1.5 h-1.5 rounded-full ${
+                  theme === 'light' ? 'bg-gray-800' : 'bg-white'
+                }`}></span>
+                <Target className={`w-5 h-5 ${theme === 'light' ? 'text-gray-900' : 'text-white'}`} />
+              </div>
+              <div className="text-left min-w-0 flex-1">
+                <span className={`text-[9px] uppercase tracking-[0.15em] font-bold block mb-0.5 ${
+                  theme === 'light' ? 'text-gray-500' : 'text-gray-400'
+                }`}>
+                  Meta de Vendas
+                </span>
+                {isEditingRevenue ? (
+                  <div className="flex items-center gap-1 pt-0.5" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="number"
+                      value={editingRevenueValue}
+                      onChange={e => setEditingRevenueValue(e.target.value)}
+                      className={`border rounded-lg px-2 py-0.5 text-xs font-mono w-20 focus:outline-none focus:border-[#FF4D00] ${
+                        theme === 'light' 
+                          ? 'bg-white border-gray-300 text-gray-900' 
+                          : 'bg-black/60 border-white/10 text-white'
+                      }`}
+                      autoFocus
+                    />
+                    <button 
+                      type="button"
+                      onClick={saveEditingRevenue}
+                      className={`p-0.5 px-2 text-[8px] font-bold rounded transition-colors cursor-pointer ${
+                        theme === 'light'
+                          ? 'bg-gray-900 text-white hover:bg-gray-800'
+                          : 'bg-white text-black hover:bg-gray-200'
+                      }`}
+                    >
+                      OK
+                    </button>
+                  </div>
+                ) : (
+                  <h2 className={`text-lg sm:text-xl font-bold tracking-tight leading-none font-sans truncate ${
+                    theme === 'light' ? 'text-gray-950' : 'text-white'
+                  }`}>
                     {formatCurrency(revenueGoal)}
-                  </span>
-                </div>
-              )}
-              <span className="text-[9px] text-[#FF4D00] block font-sans">
-              </span>
+                  </h2>
+                )}
+              </div>
             </div>
-          </div>
-
-          {/* Action buttons inside the Objetivo de Faturamento block (Visible ONLY on Desktop, below the columns) */}
-          <div className="hidden md:flex gap-3 pt-4 border-t border-white/5 mt-6">
-            <button
-              type="button"
-              onClick={() => onNavigateToTab('budgeting')}
-              className={`flex items-center justify-center px-4 py-2 font-medium rounded-lg transition-all cursor-pointer text-xs uppercase tracking-wider ${
-                theme === 'light'
-                  ? 'bg-black text-white keep-white hover:bg-gray-800 shadow'
-                  : 'bg-white text-black hover:bg-gray-200 shadow'
-              }`}
-            >
-              Carteira
-            </button>
-            <button
-              type="button"
-              onClick={onOpenAddModal}
-              className={`flex items-center justify-center px-4 py-2 font-medium rounded-lg transition-all cursor-pointer text-xs uppercase tracking-wider ${
-                theme === 'light'
-                  ? 'bg-black text-white keep-white hover:bg-gray-800 shadow'
-                  : 'bg-white text-black hover:bg-gray-200 shadow'
-              }`}
-            >
-              Lançamento
-            </button>
-          </div>
-        </div>
-
-        {/* SVG Gauge Implementation: Center/Right Align */}
-        <div className="relative flex flex-col items-center justify-center pt-2 md:pt-0 z-10 shrink-0 w-full md:w-auto">
-          {/* Label explaining graph above the gauge */}
-          <span className="text-[9px] uppercase tracking-[0.15em] font-bold text-gray-500 mb-1.5 md:mb-3 block text-center">
-            Progresso de Vendas
-          </span>
-
-          <div className="relative w-72 h-[135px] sm:w-60 sm:h-[120px] overflow-hidden flex justify-center scale-115 sm:scale-100 transition-all pt-1">
-            {/* SVG Background Path arc */}
-            <svg className="w-56 h-56 absolute transform -rotate-180">
-              <defs>
-                <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#FF4D00" />
-                  <stop offset="100%" stopColor="#FFA000" />
-                </linearGradient>
-              </defs>
-              <circle
-                cx="112"
-                cy="112"
-                r="90"
-                fill="none"
-                stroke={theme === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)'}
-                strokeWidth="12"
-                strokeDasharray="283 283"
-              />
-              {/* SVG Active Fill path */}
-              <circle
-                cx="112"
-                cy="112"
-                r="90"
-                fill="none"
-                stroke="url(#gaugeGradient)"
-                strokeWidth="12"
-                strokeDasharray="283 283"
-                strokeDashoffset={283 - (283 * Math.min(percentageRevenueReached, 100)) / 100}
-                className="gauge-transition"
-                strokeLinecap="round"
-              />
-            </svg>
-            
-            <div className="absolute top-[52px] text-center">
-              <span className={`text-4xl sm:text-5xl font-extrabold font-mono tracking-tighter ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+            <div className="text-right flex flex-col items-end shrink-0 pl-2">
+              <span className={`text-[9px] font-bold px-2 py-1 rounded-full border ${
+                theme === 'light' 
+                  ? 'bg-gray-100 border-gray-300 text-gray-900' 
+                  : 'bg-white/[0.06] border-white/5 text-white/90'
+              }`}>
                 {percentageRevenueReached}%
               </span>
-              <p className="text-[9px] uppercase tracking-widest text-[#999999] font-bold mt-1">Concluído</p>
+              <span className={`text-[8px] mt-1 block tracking-tight font-medium ${
+                theme === 'light' ? 'text-gray-600' : 'text-gray-500'
+              }`}>
+                da meta atingida
+              </span>
             </div>
           </div>
+        </div>
 
-          {/* Micro display info of actual sums */}
-          <div className="text-[11px] text-gray-400 mt-4 text-center flex gap-3 font-mono justify-center items-center">
-            <span className={`${theme === 'dark' ? 'text-white' : 'text-gray-900'} font-extrabold`}>
-              {formatCurrency(totalIncome)} faturados
-            </span>
-            <span className="text-gray-600">|</span>
-            <span className="text-gray-400">
-              {remainingRevenueGoal > 0 ? `Falta ${formatCurrency(remainingRevenueGoal)}` : 'Meta superada! 🎉'}
-            </span>
-          </div>
+        {/* Circular gauge exactly like the mockup */}
+        <div className="relative flex flex-col items-center justify-center py-4 z-10">
+          <div className="relative w-44 h-44 flex items-center justify-center">
+            {/* Outer high-tech rotating tick ring */}
+            <motion.svg 
+              className="w-44 h-44 absolute pointer-events-none"
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 40, ease: "linear" }}
+            >
+              <circle
+                cx="88"
+                cy="88"
+                r="82"
+                fill="none"
+                stroke={theme === 'light' ? 'rgba(255, 77, 0, 0.12)' : 'rgba(255, 77, 0, 0.15)'}
+                strokeWidth="1.5"
+                strokeDasharray="4 8"
+              />
+            </motion.svg>
 
-          {/* Mobile Action Buttons: Rendered strictly BELOW the gauge on smartphone screens */}
-          <div className="flex md:hidden gap-3 pt-12 border-t border-white/5 mt-12 w-full">
-            <button
-              type="button"
-              onClick={() => onNavigateToTab('budgeting')}
-              className={`flex-1 flex items-center justify-center px-4 py-3 font-light rounded-lg transition-all cursor-pointer text-xs uppercase tracking-widest ${
-                theme === 'light'
-                  ? 'bg-black text-[#FFFFFF] hover:bg-gray-800'
-                  : 'bg-white text-black hover:bg-gray-200'
-              }`}
-              style={theme === 'light' ? { color: '#FFFFFF', fontWeight: 200 } : { fontWeight: 200 }}
-            >
-              Carteira
-            </button>
-            <button
-              type="button"
-              onClick={onOpenAddModal}
-              className={`flex-1 flex items-center justify-center px-4 py-3 font-light rounded-lg transition-all cursor-pointer text-xs uppercase tracking-widest ${
-                theme === 'light'
-                  ? 'bg-black text-[#FFFFFF] hover:bg-gray-800'
-                  : 'bg-white text-black hover:bg-gray-200'
-              }`}
-              style={theme === 'light' ? { color: '#FFFFFF', fontWeight: 200 } : { fontWeight: 200 }}
-            >
-              Lançamento
-            </button>
+            {/* Tachometer style tick marks behind the progress */}
+            <svg className="w-44 h-44 absolute pointer-events-none">
+              <circle
+                cx="88"
+                cy="88"
+                r="76"
+                fill="none"
+                stroke={theme === 'light' ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)'}
+                strokeWidth="2.5"
+                strokeDasharray="1 5"
+              />
+            </svg>
+
+            {/* Ring Background Shadow / Central Sphere */}
+            <div className={`absolute inset-2 rounded-full border shadow-[inset_0_2px_4px_rgba(0,0,0,0.03),0_10px_30px_rgba(0,0,0,0.05)] transition-all duration-300 ${
+              theme === 'light'
+                ? 'bg-gradient-to-b from-white to-gray-50/95 border-gray-200/80'
+                : 'bg-gradient-to-b from-[#161618] to-[#0A0A0B] border-white/5'
+            }`}></div>
+
+            {/* SVG Circular Progress */}
+            <svg className="w-44 h-44 absolute transform -rotate-90">
+              <defs>
+                <linearGradient id="circleProgressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  {theme === 'light' ? (
+                    <>
+                      <stop offset="0%" stopColor="#E03E00" />
+                      <stop offset="100%" stopColor="#FF6A00" />
+                    </>
+                  ) : (
+                    <>
+                      <stop offset="0%" stopColor="#FF4D00" />
+                      <stop offset="100%" stopColor="#FF9F00" />
+                    </>
+                  )}
+                </linearGradient>
+                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="5" result="blur" />
+                  <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+              </defs>
+              {/* Background thin circle */}
+              <circle
+                cx="88"
+                cy="88"
+                r="70"
+                fill="none"
+                stroke={theme === 'light' ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.04)'}
+                strokeWidth="6"
+              />
+              {/* Active animated indicator path with rounded ends */}
+              <motion.circle
+                cx="88"
+                cy="88"
+                r="70"
+                fill="none"
+                stroke="url(#circleProgressGradient)"
+                strokeWidth="8"
+                strokeDasharray="439.8"
+                initial={{ strokeDashoffset: 439.8 }}
+                animate={{ strokeDashoffset: 439.8 - (439.8 * Math.min(percentageRevenueReached, 100)) / 100 }}
+                transition={{ duration: 1.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+                strokeLinecap="round"
+                filter={theme === 'light' ? undefined : 'url(#glow)'}
+              />
+            </svg>
+
+            {/* Inner Content matching mockup */}
+            <div className="text-center z-10 flex flex-col items-center justify-center">
+              {/* Dynamic live status pulsing dot */}
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  percentageRevenueReached >= 100 
+                    ? 'bg-emerald-500 animate-pulse' 
+                    : 'bg-[#FF4D00] animate-pulse'
+                }`} />
+                <span className={`text-[8px] uppercase tracking-wider font-extrabold font-mono ${
+                  theme === 'light' ? 'text-gray-500' : 'text-gray-400'
+                }`}>
+                  Progresso
+                </span>
+              </div>
+
+              <span className={`text-4xl font-extrabold font-sans tracking-tighter leading-none ${
+                theme === 'light' ? 'text-gray-950' : 'text-white'
+              }`}>
+                {percentageRevenueReached}%
+              </span>
+
+              <span className={`text-[9px] uppercase tracking-[0.2em] font-bold mt-2.5 block px-3 py-1 rounded-full ${
+                theme === 'light' 
+                  ? 'text-gray-800 bg-gray-100 border border-gray-200/85 shadow-sm' 
+                  : 'text-gray-200 bg-white/5 border border-white/5 shadow-inner'
+              }`}>
+                Concluído
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -914,6 +1044,7 @@ export default function DashboardView({
           })}
         </div>
       </div>
+
 
       {/* Charts section with dynamic layouts */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

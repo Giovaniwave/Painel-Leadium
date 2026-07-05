@@ -38,6 +38,7 @@ export default function FinanceAssistant({
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Load persistent conversation history from the server-side database
@@ -76,7 +77,9 @@ export default function FinanceAssistant({
   }, [messages, isLoading]);
 
   const handleClearHistory = async () => {
-    if (!window.confirm("Deseja realmente limpar todo o histórico de conversas com o Kairos?")) {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      setTimeout(() => setConfirmClear(false), 4000);
       return;
     }
     try {
@@ -93,6 +96,7 @@ export default function FinanceAssistant({
             text: 'Histórico limpo com sucesso! Como posso ajudar você agora?' 
           }
         ]);
+        setConfirmClear(false);
       }
     } catch (err) {
       console.error('Erro ao limpar histórico:', err);
@@ -256,12 +260,15 @@ export default function FinanceAssistant({
         <div className="flex items-center gap-1">
           <button 
             onClick={handleClearHistory}
-            className={`transition-colors cursor-pointer p-1.5 rounded-full ${
-              isDark ? 'text-gray-400 hover:text-red-400 hover:bg-white/5' : 'text-gray-500 hover:text-red-500 hover:bg-black/5'
+            className={`transition-all duration-300 cursor-pointer p-1.5 rounded-full flex items-center gap-1 ${
+              confirmClear
+                ? 'text-red-500 bg-red-500/10 scale-105 ring-1 ring-red-500/30'
+                : (isDark ? 'text-gray-400 hover:text-red-400 hover:bg-white/5' : 'text-gray-500 hover:text-red-500 hover:bg-black/5')
             }`}
-            title="Limpar Histórico"
+            title={confirmClear ? "Clique novamente para confirmar a limpeza" : "Limpar Histórico"}
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className={`w-4 h-4 ${confirmClear ? 'animate-bounce' : ''}`} />
+            {confirmClear && <span className="text-[9px] font-bold uppercase font-sans pr-1">Confirmar?</span>}
           </button>
           <button 
             onClick={onClose}
