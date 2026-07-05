@@ -23,7 +23,6 @@ import {
   User,
   Sliders,
   FileText,
-  DollarSign,
   TrendingUp,
   ShieldCheck,
   Calendar,
@@ -234,7 +233,7 @@ const RouteAuditMap: React.FC<RouteAuditMapProps> = ({
       if (endLat !== undefined && endLng !== undefined) {
         // Add end marker
         const endIcon = L.divIcon({
-          html: `<div class="w-6 h-6 rounded-full bg-[#FF4D00] border-2 border-white flex items-center justify-center text-white font-bold text-[10px] shadow-lg">B</div>`,
+          html: `<div class="w-6 h-6 rounded-full bg-black border-2 border-white flex items-center justify-center text-white font-bold text-[10px] shadow-lg">B</div>`,
           className: '',
           iconSize: [24, 24],
           iconAnchor: [12, 12]
@@ -245,7 +244,7 @@ const RouteAuditMap: React.FC<RouteAuditMapProps> = ({
 
         // Draw polyline connecting them
         const polyline = L.polyline([[startLat, startLng], [endLat, endLng]], {
-          color: '#FF4D00',
+          color: '#111111',
           weight: 4,
           opacity: 0.8,
           dashArray: '5, 10'
@@ -355,10 +354,6 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   const [refundReceiptTargetId, setRefundReceiptTargetId] = useState<string | null>(null);
 
   const [selectedAuditTripId, setSelectedAuditTripId] = useState<string | null>(null);
-  const [calcDistance, setCalcDistance] = useState<string>('100');
-  const [calcVehicleId, setCalcVehicleId] = useState<string>('');
-  const [calcConsumption, setCalcConsumption] = useState<string>('12');
-  const [calcFuelPrice, setCalcFuelPrice] = useState<string>('6.29');
 
   const [tripMode, setTripMode] = useState<'gps' | 'manual'>('gps');
   const activeTrip = data.displacements.find(d => d.status === 'Pendente' && d.startLat != null && !d.endTime);
@@ -1191,12 +1186,12 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
             </div>
 
             <div className={`p-4 rounded-xl border ${
-              isDark 
-                ? 'border-neutral-800 bg-neutral-850 text-white' 
+              isDark
+                ? 'border-neutral-800 bg-neutral-900 text-white'
                 : 'border-neutral-200 bg-neutral-950 text-white'
             }`}>
               <span className={`block text-[10px] font-mono uppercase tracking-wider ${isDark ? 'text-neutral-400' : 'text-neutral-300'}`}>Média Consumo Frota</span>
-              <span className="text-xl font-sans font-bold mt-1.5 block text-white !text-white">
+              <span className="text-xl font-sans font-bold mt-1.5 block text-white keep-white">
                 {metrics.averageConsumption.toFixed(1)} km/l
               </span>
             </div>
@@ -1210,7 +1205,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               onClick={() => setActiveSubTab('dashboard')}
               className={`pb-3 px-3 text-sm font-sans font-medium transition-all relative border-b-2 whitespace-nowrap ${
                 activeSubTab === 'dashboard'
-                  ? `border-[#FF4D00] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
+                  ? `border-[#FFFFFF] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
                   : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
               }`}
             >
@@ -1220,7 +1215,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               onClick={() => setActiveSubTab('entries')}
               className={`pb-3 px-3 text-sm font-sans font-medium transition-all relative border-b-2 whitespace-nowrap ${
                 activeSubTab === 'entries'
-                  ? `border-[#FF4D00] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
+                  ? `border-[#FFFFFF] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
                   : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
               }`}
             >
@@ -1230,7 +1225,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               onClick={() => setActiveSubTab('fuel_reimbursement')}
               className={`pb-3 px-3 text-sm font-sans font-medium transition-all relative border-b-2 whitespace-nowrap ${
                 activeSubTab === 'fuel_reimbursement'
-                  ? `border-[#FF4D00] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
+                  ? `border-[#FFFFFF] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
                   : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
               }`}
             >
@@ -1240,7 +1235,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               onClick={() => setActiveSubTab('employees')}
               className={`pb-3 px-3 text-sm font-sans font-medium transition-all relative border-b-2 whitespace-nowrap ${
                 activeSubTab === 'employees'
-                  ? `border-[#FF4D00] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
+                  ? `border-[#FFFFFF] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
                   : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
               }`}
             >
@@ -1250,7 +1245,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               onClick={() => setActiveSubTab('vehicles')}
               className={`pb-3 px-3 text-sm font-sans font-medium transition-all relative border-b-2 whitespace-nowrap ${
                 activeSubTab === 'vehicles'
-                  ? `border-[#FF4D00] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
+                  ? `border-[#FFFFFF] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
                   : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
               }`}
             >
@@ -1260,7 +1255,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               onClick={() => setActiveSubTab('routes_audit')}
               className={`pb-3 px-3 text-sm font-sans font-medium transition-all relative border-b-2 whitespace-nowrap ${
                 activeSubTab === 'routes_audit'
-                  ? `border-[#FF4D00] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
+                  ? `border-[#FFFFFF] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
                   : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
               }`}
             >
@@ -1274,14 +1269,14 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
             <div className="space-y-6">
               {activeTrip && (
                 <div className={`p-5 rounded-2xl border-2 flex flex-col gap-4 shadow-lg transition-all duration-300 ${
-                  isDark 
-                    ? 'border-[#FF4D00]/40 bg-[#1A0C05]/95 text-white shadow-[0_8px_30px_rgba(255,77,0,0.15)]' 
-                    : 'border-[#FF4D00]/30 bg-orange-50/90 text-neutral-900 shadow-[0_8px_30px_rgba(255,77,0,0.08)]'
+                  isDark
+                    ? 'border-white/40 bg-black/95 text-white shadow-[0_8px_30px_rgba(255,255,255,0.1)]'
+                    : 'border-black/20 bg-neutral-100/90 text-neutral-900 shadow-[0_8px_30px_rgba(0,0,0,0.08)]'
                 }`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full bg-[#FF4D00] animate-ping" />
-                      <span className="text-xs font-bold uppercase tracking-wider text-[#FF4D00] font-mono">
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#FFFFFF] animate-ping" />
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#FFFFFF] font-mono">
                         📍 Deslocamento Ativo (Viagem Iniciada)
                       </span>
                     </div>
@@ -1312,7 +1307,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
 
                     <div className="space-y-1">
                       <p className="text-[10px] font-mono opacity-60 uppercase">🏢 Cliente a ser Visitado</p>
-                      <p className="font-bold text-sm text-[#FF4D00]">
+                      <p className="font-bold text-sm text-[#FFFFFF]">
                         {activeTrip.clientVisited}
                       </p>
                     </div>
@@ -1330,7 +1325,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       type="button"
                       onClick={finishGpsTrip}
                       disabled={gpsLoading}
-                      className="flex-1 bg-[#FF4D00] hover:bg-[#E64500] text-white py-3 px-4 rounded-xl font-black uppercase tracking-widest text-xs shadow-md transition-all duration-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                      className="flex-1 bg-white hover:bg-neutral-200 text-black py-3 px-4 rounded-xl font-black uppercase tracking-widest text-xs shadow-md transition-all duration-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
                     >
                       {gpsLoading ? (
                         <>
@@ -1347,7 +1342,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     <button
                       type="button"
                       onClick={cancelGpsTrip}
-                      className="sm:w-32 bg-transparent border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-900 text-neutral-500 hover:text-[#FF4D00] dark:hover:text-[#FF4D00] py-3 px-4 rounded-xl font-bold uppercase tracking-wider text-[10px] transition-all duration-200"
+                      className="sm:w-32 bg-transparent border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-900 text-neutral-500 hover:text-[#FFFFFF] dark:hover:text-[#FFFFFF] py-3 px-4 rounded-xl font-bold uppercase tracking-wider text-[10px] transition-all duration-200"
                     >
                       Cancelar
                     </button>
@@ -1401,7 +1396,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                         <div className="flex items-start sm:items-center gap-4 text-xs font-mono">
                           <div className="space-y-0.5">
                             <span className={`block text-[9px] uppercase font-bold ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>A pagar</span>
-                            <span className="font-bold text-sm text-[#FF4D00] block text-left sm:text-right">
+                            <span className="font-bold text-sm text-[#FFFFFF] block text-left sm:text-right">
                               R$ {totalOwed.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </span>
                           </div>
@@ -1431,7 +1426,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               } space-y-3`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4.5 h-4.5 text-[#FF4D00]" />
+                    <ShieldCheck className="w-4.5 h-4.5 text-[#FFFFFF]" />
                     <span className={`text-xs font-mono font-bold uppercase tracking-wider ${isDark ? 'text-neutral-200' : 'text-neutral-900'}`}>
                       Auditoria e Validação Fiscal
                     </span>
@@ -1439,7 +1434,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   <span className={`text-[10px] font-mono ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>Gasolina de referência: R$ 6,29/L</span>
                 </div>
                 
-                <p className={`text-xs leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-750'}`}>
+                <p className={`text-xs leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-700'}`}>
                   Avalie o cumprimento de rotas com base na quilometragem declarada e na eficiência cadastrada de cada veículo. O auditor inteligente analisa desperdícios ou faturamentos anômalos.
                 </p>
 
@@ -1449,7 +1444,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   className={`w-full sm:w-auto px-4 py-2 rounded-lg font-mono font-bold text-xs uppercase tracking-wider transition ${
                     isDark 
                       ? 'bg-white text-black !text-black hover:opacity-90' 
-                      : 'bg-neutral-950 text-white !text-white hover:opacity-90'
+                      : 'bg-neutral-950 text-white keep-white hover:opacity-90'
                   } disabled:opacity-50`}
                 >
                   {isAnalyzing ? 'Processando auditoria...' : 'Emitir Relatório de Auditoria'}
@@ -1465,7 +1460,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       {/* Header bar */}
                       <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-neutral-800">
                         <div className="flex items-center gap-2">
-                          <BrainCircuit className="w-4.5 h-4.5 text-[#FF4D00]" />
+                          <BrainCircuit className="w-4.5 h-4.5 text-[#FFFFFF]" />
                           <span className={`text-[11px] font-mono font-bold uppercase tracking-wider ${isDark ? 'text-white' : 'text-neutral-900'}`}>
                             Análise de Inteligência Leadium
                           </span>
@@ -1491,7 +1486,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
 
                       {/* Exec Summary Block */}
                       {parsed.summary && (
-                        <div className={`p-4 rounded-lg text-xs leading-relaxed border-l-2 border-[#FF4D00] ${
+                        <div className={`p-4 rounded-lg text-xs leading-relaxed border-l-2 border-[#FFFFFF] ${
                           isDark ? 'bg-neutral-900/30 text-neutral-300' : 'bg-neutral-50 text-neutral-700'
                         }`}>
                           {parsed.summary}
@@ -1635,7 +1630,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Filtrar por data, cliente visitado, cidade, motivo..."
-                    className="w-full pl-9 pr-4 py-2 border border-neutral-200 dark:border-neutral-800 rounded-lg text-xs bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:border-[#FF4D00] transition"
+                    className="w-full pl-9 pr-4 py-2 border border-neutral-200 dark:border-neutral-800 rounded-lg text-xs bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:border-[#FFFFFF] transition"
                   />
                 </div>
                 
@@ -1644,7 +1639,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     onClick={() => setShowFilters(!showFilters)}
                     className={`px-3 py-2 rounded-lg border text-xs font-sans font-medium flex items-center gap-1.5 transition ${
                       showFilters 
-                        ? 'bg-[#FF4D00]/10 border-[#FF4D00] text-[#FF4D00]' 
+                        ? 'bg-[#FFFFFF]/10 border-[#FFFFFF] text-[#FFFFFF]' 
                         : 'border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
                     }`}
                   >
@@ -1731,7 +1726,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                           </span>
                         </div>
                         <div className="text-right flex flex-col items-end">
-                          <span className="font-mono font-bold text-sm text-[#FF4D00]">
+                          <span className="font-mono font-bold text-sm text-[#FFFFFF]">
                             R$ {disp.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                           <span className="block text-[10px] font-mono text-neutral-400 mt-0.5">{disp.kmTraveled} km declarados</span>
@@ -1803,8 +1798,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                               rel="noreferrer"
                               className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-mono font-medium transition cursor-pointer ${
                                 isDark
-                                  ? 'bg-[#FF4D00]/10 text-[#FF4D00] border border-[#FF4D00]/20 hover:bg-[#FF4D00]/20'
-                                  : 'bg-[#FF4D00]/10 text-[#FF4D00] border border-[#FF4D00]/20 hover:bg-[#FF4D00]/20'
+                                  ? 'bg-[#FFFFFF]/10 text-[#FFFFFF] border border-[#FFFFFF]/20 hover:bg-[#FFFFFF]/20'
+                                  : 'bg-[#FFFFFF]/10 text-[#FFFFFF] border border-[#FFFFFF]/20 hover:bg-[#FFFFFF]/20'
                               }`}
                               title="Visualizar Rota no Mapa"
                             >
@@ -1873,7 +1868,9 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 <span className="text-xs font-mono text-neutral-400 uppercase tracking-wider font-bold">Colaboradores no sistema</span>
                 <button
                   onClick={openAddEmployee}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-neutral-900 dark:bg-white text-white dark:text-black hover:opacity-90 transition text-xs font-mono font-bold uppercase tracking-wider"
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg hover:opacity-90 transition text-xs font-mono font-bold uppercase tracking-wider ${
+                    isDark ? 'bg-white text-black' : 'bg-neutral-900 text-white keep-white'
+                  }`}
                 >
                   <Plus className="w-3.5 h-3.5" /> Adicionar Colaborador
                 </button>
@@ -1914,7 +1911,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       </button>
                       <button
                         onClick={() => deleteEmployee(emp.id, emp.name)}
-                        className="p-1 hover:bg-rose-500/10 rounded text-neutral-450 hover:text-rose-500 transition"
+                        className="p-1 hover:bg-rose-500/10 rounded text-neutral-400 hover:text-rose-500 transition"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1933,7 +1930,9 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 <span className={`text-xs font-mono uppercase tracking-widest font-bold ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>Veículos cadastrados</span>
                 <button
                   onClick={openAddVehicle}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-neutral-900 dark:bg-white text-white dark:text-black hover:opacity-90 transition text-xs font-mono font-bold uppercase tracking-wider"
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg hover:opacity-90 transition text-xs font-mono font-bold uppercase tracking-wider ${
+                    isDark ? 'bg-white text-black' : 'bg-neutral-900 text-white keep-white'
+                  }`}
                 >
                   <Plus className="w-3.5 h-3.5" /> Adicionar Veículo
                 </button>
@@ -1972,7 +1971,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                         </button>
                         <button
                           onClick={() => deleteVehicle(v.id, v.name)}
-                          className="p-1 hover:bg-rose-500/10 rounded text-neutral-450 hover:text-rose-500 transition"
+                          className="p-1 hover:bg-rose-500/10 rounded text-neutral-400 hover:text-rose-500 transition"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -2021,88 +2020,6 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 </div>
               </div>
 
-              {/* Dynamic Simulator / Calculator */}
-              <div className={`p-5 rounded-xl border ${isDark ? 'border-neutral-800 bg-[#111111]/40' : 'border-neutral-200 bg-neutral-50 shadow-xs'} space-y-4`}>
-                <div className="flex items-center gap-2 pb-2 border-b border-neutral-200 dark:border-neutral-800">
-                  <DollarSign className="w-4 h-4 text-[#FF4D00]" />
-                  <span className={`text-xs font-mono font-bold uppercase tracking-wider ${isDark ? 'text-neutral-200' : 'text-neutral-900'}`}>
-                    Calculadora de Reembolso Instantâneo
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-mono text-neutral-400">Veículo Referência</label>
-                    <select
-                      value={calcVehicleId}
-                      onChange={(e) => {
-                        setCalcVehicleId(e.target.value);
-                        const v = data.vehicles.find(x => x.id === e.target.value);
-                        if (v) setCalcConsumption(v.avgConsumption || '12');
-                      }}
-                      className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
-                    >
-                      <option value="">-- Selecionar veículo --</option>
-                      {data.vehicles.map(v => (
-                        <option key={v.id} value={v.id}>{v.name} ({v.avgConsumption} km/l)</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-mono text-neutral-400">Consumo (km / L)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={calcConsumption}
-                      onChange={(e) => setCalcConsumption(e.target.value)}
-                      className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-mono text-neutral-400">Distância (KM)</label>
-                    <input
-                      type="number"
-                      value={calcDistance}
-                      onChange={(e) => setCalcDistance(e.target.value)}
-                      className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-mono text-neutral-400">Preço do Litro (R$)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={calcFuelPrice}
-                      onChange={(e) => setCalcFuelPrice(e.target.value)}
-                      className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
-                    />
-                  </div>
-                </div>
-
-                {/* Calculator Results */}
-                {calcDistance && calcConsumption && calcFuelPrice && (
-                  <div className={`p-4 rounded-lg flex items-center justify-between text-xs font-mono border ${
-                    isDark ? 'bg-neutral-900/50 border-neutral-800' : 'bg-white border-neutral-200 shadow-xs'
-                  }`}>
-                    <div>
-                      <span className="block text-neutral-450 text-[10px] uppercase font-bold">Consumo Previsto</span>
-                      <span className={`text-sm font-bold block mt-0.5 ${isDark ? 'text-white' : 'text-black'}`}>
-                        {(Number(calcDistance) / Number(calcConsumption)).toFixed(1)} Litros
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="block text-[#FF4D00] text-[10px] uppercase font-bold">Total do Reembolso</span>
-                      <span className="text-base font-bold text-[#FF4D00] block mt-0.5">
-                        R$ {((Number(calcDistance) / Number(calcConsumption)) * Number(calcFuelPrice)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Fuel Refund Table */}
               <div className={`rounded-xl border overflow-hidden ${isDark ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white shadow-xs'}`}>
                 <div className={`p-4 border-b ${isDark ? 'bg-neutral-900/50 border-neutral-800' : 'bg-neutral-100 border-neutral-200'}`}>
@@ -2119,7 +2036,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                         <th className="p-3 font-mono font-bold uppercase text-[10px]">Veículo / Eficiência</th>
                         <th className="p-3 font-mono font-bold uppercase text-[10px] text-right">KM Percorrido</th>
                         <th className="p-3 font-mono font-bold uppercase text-[10px] text-right">Litros Consumidos</th>
-                        <th className="p-3 font-mono font-bold uppercase text-[10px] text-right text-[#FF4D00]">Reembolso Comb.</th>
+                        <th className="p-3 font-mono font-bold uppercase text-[10px] text-right text-[#FFFFFF]">Reembolso Comb.</th>
                       </tr>
                     </thead>
                     <tbody className={`divide-y ${isDark ? 'divide-neutral-800' : 'divide-neutral-200'}`}>
@@ -2142,7 +2059,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                             </td>
                             <td className="p-3 text-right font-mono font-semibold">{d.kmTraveled.toFixed(1)} km</td>
                             <td className="p-3 text-right font-mono text-neutral-500">{liters.toFixed(1)} L</td>
-                            <td className="p-3 text-right font-mono font-bold text-[#FF4D00]">R$ {fuelReimbursementAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td className="p-3 text-right font-mono font-bold text-[#FFFFFF]">R$ {fuelReimbursementAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           </tr>
                         );
                       })}
@@ -2183,7 +2100,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                         onClick={() => setSelectedAuditTripId(d.id)}
                         className={`p-3 rounded-lg border text-left cursor-pointer transition active:scale-[0.98] ${
                           isSelected
-                            ? 'border-[#FF4D00] bg-[#FF4D00]/5'
+                            ? 'border-[#FFFFFF] bg-[#FFFFFF]/5'
                             : isDark
                             ? 'border-neutral-800 bg-[#141414] hover:border-neutral-700'
                             : 'border-neutral-200 bg-white hover:border-neutral-300 shadow-xs'
@@ -2294,14 +2211,14 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
                           <div className="space-y-3">
                             <div>
-                              <span className="block text-neutral-450 text-[10px] uppercase font-bold">Endereço de Partida</span>
+                              <span className="block text-neutral-400 text-[10px] uppercase font-bold">Endereço de Partida</span>
                               <span className={`block mt-0.5 text-[11px] leading-relaxed ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`}>
                                 {selectedTrip.startAddress || 'Não fornecido (Viagem Manual)'}
                               </span>
                             </div>
 
                             <div>
-                              <span className="block text-neutral-450 text-[10px] uppercase font-bold">Endereço de Chegada</span>
+                              <span className="block text-neutral-400 text-[10px] uppercase font-bold">Endereço de Chegada</span>
                               <span className={`block mt-0.5 text-[11px] leading-relaxed ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`}>
                                 {selectedTrip.endAddress || 'Não fornecido (Viagem Manual)'}
                               </span>
@@ -2310,11 +2227,11 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                             {selectedTrip.startTime && (
                               <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                  <span className="block text-neutral-450 text-[10px] uppercase font-bold font-mono">Início</span>
+                                  <span className="block text-neutral-400 text-[10px] uppercase font-bold font-mono">Início</span>
                                   <span className="block font-bold mt-0.5">{new Date(selectedTrip.startTime).toLocaleTimeString('pt-BR')}</span>
                                 </div>
                                 <div>
-                                  <span className="block text-neutral-450 text-[10px] uppercase font-bold font-mono">Término</span>
+                                  <span className="block text-neutral-400 text-[10px] uppercase font-bold font-mono">Término</span>
                                   <span className="block font-bold mt-0.5">{selectedTrip.endTime ? new Date(selectedTrip.endTime).toLocaleTimeString('pt-BR') : '--'}</span>
                                 </div>
                               </div>
@@ -2323,7 +2240,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
 
                           <div className="space-y-3 pl-0 sm:pl-4 border-l-0 sm:border-l border-neutral-200 dark:border-neutral-800">
                             <div>
-                              <span className="block text-neutral-450 text-[10px] uppercase font-bold">Veículo da Viagem</span>
+                              <span className="block text-neutral-400 text-[10px] uppercase font-bold">Veículo da Viagem</span>
                               <span className={`block mt-0.5 font-sans font-bold ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`}>
                                 {vehicle?.name || 'Não cadastrado'}
                               </span>
@@ -2331,11 +2248,11 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
 
                             <div className="grid grid-cols-2 gap-2">
                               <div>
-                                <span className="block text-neutral-450 text-[10px] uppercase font-bold font-mono">Quilometragem</span>
+                                <span className="block text-neutral-400 text-[10px] uppercase font-bold font-mono">Quilometragem</span>
                                 <span className="block font-bold text-sm mt-0.5">{selectedTrip.kmTraveled} km</span>
                               </div>
                               <div>
-                                <span className="block text-neutral-450 text-[10px] uppercase font-bold font-mono">Est. Consumo</span>
+                                <span className="block text-neutral-400 text-[10px] uppercase font-bold font-mono">Est. Consumo</span>
                                 <span className="block font-bold text-sm mt-0.5">
                                   {(selectedTrip.kmTraveled / (Number(vehicle?.avgConsumption) || 12)).toFixed(1)} L
                                 </span>
@@ -2343,8 +2260,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                             </div>
 
                             <div className="pt-2">
-                              <span className="block text-[#FF4D00] text-[10px] uppercase font-bold font-mono">Est. Reembolso Combustível</span>
-                              <span className="block font-bold text-sm text-[#FF4D00] mt-0.5">
+                              <span className="block text-[#FFFFFF] text-[10px] uppercase font-bold font-mono">Est. Reembolso Combustível</span>
+                              <span className="block font-bold text-sm text-[#FFFFFF] mt-0.5">
                                 R$ {((selectedTrip.kmTraveled / (Number(vehicle?.avgConsumption) || 12)) * 6.29).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </span>
                             </div>
@@ -2352,8 +2269,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                         </div>
 
                         {selectedTrip.notes && (
-                          <div className="p-3 bg-neutral-50 dark:bg-neutral-900/40 rounded-lg text-[11px] leading-relaxed border border-neutral-100 dark:border-neutral-800">
-                            <strong className="block mb-0.5">Observações:</strong>
+                          <div className="p-3 bg-neutral-50 dark:bg-neutral-900/40 rounded-lg text-[11px] leading-relaxed border border-neutral-100 dark:border-neutral-800 text-neutral-800 dark:text-neutral-200">
+                            <strong className="block mb-0.5 text-neutral-500 dark:text-neutral-400 uppercase text-[10px] tracking-wider">Observações:</strong>
                             {selectedTrip.notes}
                           </div>
                         )}
@@ -2387,7 +2304,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   value={employeeForm.name}
                   onChange={(e) => setEmployeeForm({ ...employeeForm, name: e.target.value })}
                   placeholder="Nome do colaborador"
-                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                 />
               </div>
 
@@ -2398,7 +2315,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   value={employeeForm.role}
                   onChange={(e) => setEmployeeForm({ ...employeeForm, role: e.target.value })}
                   placeholder="Ex: Consultor de Vendas"
-                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                 />
               </div>
 
@@ -2410,7 +2327,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   value={employeeForm.email}
                   onChange={(e) => setEmployeeForm({ ...employeeForm, email: e.target.value })}
                   placeholder="nome@leadium.com.br"
-                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                 />
               </div>
 
@@ -2421,7 +2338,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   value={employeeForm.phone}
                   onChange={(e) => setEmployeeForm({ ...employeeForm, phone: e.target.value })}
                   placeholder="(11) 99999-9999"
-                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                 />
               </div>
 
@@ -2430,7 +2347,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 <select
                   value={employeeForm.status}
                   onChange={(e) => setEmployeeForm({ ...employeeForm, status: e.target.value as 'Ativo' | 'Inativo' })}
-                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                 >
                   <option value="Ativo">Ativo</option>
                   <option value="Inativo">Inativo</option>
@@ -2444,7 +2361,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   className={`flex-1 py-1.5 text-xs font-mono uppercase border rounded transition ${
                     isDark 
                       ? 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:bg-neutral-800 hover:text-white' 
-                      : 'bg-neutral-100 border-neutral-250 text-neutral-700 hover:bg-neutral-200 font-bold'
+                      : 'bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200 font-bold'
                   }`}
                 >
                   Cancelar
@@ -2475,7 +2392,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 <select
                   value={vehicleForm.employeeId}
                   onChange={(e) => setVehicleForm({ ...vehicleForm, employeeId: e.target.value })}
-                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                 >
                   {data.employees.map(emp => (
                     <option key={emp.id} value={emp.id}>{emp.name}</option>
@@ -2494,7 +2411,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       const brandName = fipeBrands.find(b => b.codigo === brandCode)?.nome || '';
                       setVehicleForm({ ...vehicleForm, brand: brandName, name: '', model: '' });
                     }}
-                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                   >
                     <option value="" disabled>Selecione a marca</option>
                     {fipeBrands.map(b => (
@@ -2511,7 +2428,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       setVehicleForm({ ...vehicleForm, name: modelName, model: modelName });
                     }}
                     disabled={!selectedFipeBrand || fipeModels.length === 0}
-                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00] disabled:opacity-50"
+                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF] disabled:opacity-50"
                   >
                     <option value="" disabled>Selecione o modelo</option>
                     {fipeModels.map(m => (
@@ -2578,7 +2495,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   className={`flex-1 py-1.5 text-xs font-mono uppercase border rounded transition ${
                     isDark 
                       ? 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:bg-neutral-800 hover:text-white' 
-                      : 'bg-neutral-100 border-neutral-250 text-neutral-700 hover:bg-neutral-200 font-bold'
+                      : 'bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200 font-bold'
                   }`}
                 >
                   Cancelar
@@ -2639,7 +2556,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   </div>
                   <div className="p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 text-center">
                     <span className="text-[9px] uppercase font-mono text-neutral-400 font-bold block">Valor Reembolso</span>
-                    <span className="text-lg font-extrabold text-[#FF4D00]">R$ {finishedTripSummary.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span className="text-lg font-extrabold text-[#FFFFFF]">R$ {finishedTripSummary.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 </div>
 
@@ -2650,11 +2567,11 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   </div>
                   <div>
                     <span className="text-[8px] uppercase font-mono text-neutral-400 font-bold block">🏁 Partida</span>
-                    <span className="text-neutral-600 dark:text-neutral-450 block truncate">{activeTrip?.startAddress}</span>
+                    <span className="text-neutral-600 dark:text-neutral-400 block truncate">{activeTrip?.startAddress}</span>
                   </div>
                   <div>
                     <span className="text-[8px] uppercase font-mono text-neutral-400 font-bold block">📍 Chegada</span>
-                    <span className="text-neutral-600 dark:text-neutral-450 block truncate">{finishedTripSummary.address}</span>
+                    <span className="text-neutral-600 dark:text-neutral-400 block truncate">{finishedTripSummary.address}</span>
                   </div>
                 </div>
 
@@ -2663,7 +2580,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     type="button"
                     onClick={saveFinishedTrip}
                     disabled={gpsLoading}
-                    className="w-full bg-[#FF4D00] hover:bg-[#E64500] text-white py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition-all duration-200 flex items-center justify-center gap-2"
+                    className="w-full bg-white hover:bg-neutral-200 text-black py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition-all duration-200 flex items-center justify-center gap-2"
                   >
                     {gpsLoading ? (
                       <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
@@ -2684,8 +2601,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
             ) : activeTrip ? (
               /* PHASE 2: ACTIVE TRIP IN PROGRESS SCREEN */
               <div className="space-y-4 text-center py-2 animate-fadeIn">
-                <div className="w-16 h-16 rounded-full bg-[#FF4D00]/10 flex items-center justify-center mx-auto animate-pulse">
-                  <MapPin className="w-8 h-8 text-[#FF4D00]" />
+                <div className="w-16 h-16 rounded-full bg-[#FFFFFF]/10 flex items-center justify-center mx-auto animate-pulse">
+                  <MapPin className="w-8 h-8 text-[#FFFFFF]" />
                 </div>
                 <div>
                   <p className="text-sm font-bold text-neutral-900 dark:text-white uppercase tracking-wider">Viagem em Andamento</p>
@@ -2697,24 +2614,24 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   
                   <div className="mt-4 p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-800 text-left space-y-2.5">
                     <div>
-                      <span className="text-[9px] font-bold text-neutral-450 dark:text-neutral-500 uppercase tracking-wider block">🏢 Cliente Visitado</span>
+                      <span className="text-[9px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider block">🏢 Cliente Visitado</span>
                       <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">{activeTrip.clientVisited}</p>
                     </div>
                     {activeTrip.reason && (
                       <div>
-                        <span className="text-[9px] font-bold text-neutral-450 dark:text-neutral-500 uppercase tracking-wider block">📝 Motivo da Visita</span>
+                        <span className="text-[9px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider block">📝 Motivo da Visita</span>
                         <p className="text-xs text-neutral-700 dark:text-neutral-300">{activeTrip.reason}</p>
                       </div>
                     )}
                     <div>
-                      <span className="text-[9px] font-bold text-neutral-450 dark:text-neutral-500 uppercase tracking-wider block">📍 Ponto de Partida</span>
+                      <span className="text-[9px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider block">📍 Ponto de Partida</span>
                       <p className="text-xs text-neutral-700 dark:text-neutral-300 leading-relaxed truncate">
                         {activeTrip.startAddress || 'Localização GPS Obtida'}
                       </p>
                     </div>
                     {activeTrip.endAddress && (
                       <div>
-                        <span className="text-[9px] font-bold text-neutral-450 dark:text-neutral-500 uppercase tracking-wider block">🎯 Endereço de Destino (Visita)</span>
+                        <span className="text-[9px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider block">🎯 Endereço de Destino (Visita)</span>
                         <p className="text-xs text-neutral-700 dark:text-neutral-300 leading-relaxed truncate">
                           {activeTrip.endAddress}
                         </p>
@@ -2728,7 +2645,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     type="button" 
                     disabled={gpsLoading}
                     onClick={finishGpsTrip} 
-                    className="w-full bg-[#FF4D00] text-white py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition hover:bg-[#E64500] hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full bg-white text-black py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition hover:bg-neutral-200 hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {gpsLoading ? (
                       <>
@@ -2769,7 +2686,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                           vehicleId: linked[0]?.id || ''
                         });
                       }}
-                      className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                      className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                     >
                       <option value="" disabled>--- Escolha o colaborador ---</option>
                       {data.employees.map(emp => (
@@ -2784,7 +2701,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       required
                       value={displacementForm.vehicleId}
                       onChange={(e) => setDisplacementForm({ ...displacementForm, vehicleId: e.target.value })}
-                      className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                      className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                     >
                       <option value="" disabled>--- Escolha o veículo ---</option>
                       {data.vehicles
@@ -2803,8 +2720,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     </label>
                     
                     <div className="p-3 rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-neutral-950 dark:text-white flex items-center gap-2 shadow-xs">
-                      <MapPin className={`w-4 h-4 shrink-0 ${gpsLoading ? 'text-[#FF4D00] animate-pulse' : gpsStartStreet ? 'text-emerald-500' : 'text-[#FF4D00] animate-bounce'}`} />
-                      <span className={`text-xs font-bold truncate ${!gpsStartStreet ? 'text-[#FF4D00] animate-pulse' : 'text-neutral-800 dark:text-neutral-200'}`}>
+                      <MapPin className={`w-4 h-4 shrink-0 ${gpsLoading ? 'text-[#FFFFFF] animate-pulse' : gpsStartStreet ? 'text-emerald-500' : 'text-[#FFFFFF] animate-bounce'}`} />
+                      <span className={`text-xs font-bold truncate ${!gpsStartStreet ? 'text-[#FFFFFF] animate-pulse' : 'text-neutral-800 dark:text-neutral-200'}`}>
                         {gpsLoading ? 'Obtendo localização GPS...' : (gpsStartStreet || 'Aperte em Recarregar GPS')}
                       </span>
                     </div>
@@ -2813,7 +2730,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       type="button" 
                       onClick={fetchStartLocation}
                       disabled={gpsLoading}
-                      className="w-full mt-2.5 py-3 px-4 rounded-xl font-extrabold uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 shadow-md bg-[#FF4D00] hover:bg-[#E64500] text-white cursor-pointer active:scale-95"
+                      className="w-full mt-2.5 py-3 px-4 rounded-xl font-extrabold uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 shadow-md bg-white hover:bg-neutral-200 text-black cursor-pointer active:scale-95"
                     >
                       {gpsLoading ? (
                         <>
@@ -2838,7 +2755,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                         placeholder="Nome do cliente/loja"
                         value={displacementForm.clientVisited}
                         onChange={(e) => setDisplacementForm({ ...displacementForm, clientVisited: e.target.value })}
-                        className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                        className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                       />
                     </div>
 
@@ -2850,7 +2767,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                         placeholder="Ex: Reunião"
                         value={displacementForm.reason}
                         onChange={(e) => setDisplacementForm({ ...displacementForm, reason: e.target.value })}
-                        className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                        className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                       />
                     </div>
 
@@ -2873,7 +2790,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                               handleGeocodeDestination(endAddressInput);
                             }
                           }}
-                          className="flex-1 p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                          className="flex-1 p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                         />
                         <button
                           type="button"
@@ -2898,7 +2815,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                           </div>
                           <div className="text-center">
                             <span className="text-[8px] uppercase font-mono text-neutral-400 block">Valor Reembolso</span>
-                            <span className="font-extrabold text-[#FF4D00] text-sm">R$ {calculatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span className="font-extrabold text-neutral-900 dark:text-white text-sm">R$ {calculatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
                         </div>
                       )}
@@ -2911,7 +2828,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     type="button" 
                     onClick={startGpsTrip} 
                     disabled={!displacementForm.employeeId || !displacementForm.vehicleId || !displacementForm.clientVisited || !displacementForm.reason || !gpsEndCoords}
-                    className="w-full bg-[#FF4D00] text-white py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition hover:bg-[#E64500] hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    className="w-full bg-white text-black py-3 rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition hover:bg-neutral-200 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     Começar Viagem / Deslocamento
                   </button>
@@ -2933,7 +2850,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       vehicleId: linked[0]?.id || ''
                     });
                   }}
-                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                 >
                   <option value="" disabled>--- Escolha o colaborador ---</option>
                   {data.employees.map(emp => (
@@ -2948,7 +2865,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   required
                   value={displacementForm.vehicleId}
                   onChange={(e) => setDisplacementForm({ ...displacementForm, vehicleId: e.target.value })}
-                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                 >
                   <option value="" disabled>--- Escolha o veículo ---</option>
                   {data.vehicles
@@ -2968,7 +2885,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     required
                     value={displacementForm.date}
                     onChange={(e) => setDisplacementForm({ ...displacementForm, date: e.target.value })}
-                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                   />
                 </div>
 
@@ -2980,7 +2897,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     value={displacementForm.kmTraveled}
                     onChange={(e) => setDisplacementForm({ ...displacementForm, kmTraveled: e.target.value })}
                     placeholder="Ex: 54"
-                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                   />
                 </div>
               </div>
@@ -2993,7 +2910,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   value={displacementForm.clientVisited}
                   onChange={(e) => setDisplacementForm({ ...displacementForm, clientVisited: e.target.value })}
                   placeholder="Nome do cliente/loja"
-                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                  className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                 />
               </div>
 
@@ -3004,7 +2921,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     required
                     value={displacementForm.city || 'Porto Feliz - SP'}
                     onChange={(e) => setDisplacementForm({ ...displacementForm, city: e.target.value })}
-                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                   >
                     <option value="Porto Feliz - SP">Porto Feliz - SP</option>
                   </select>
@@ -3018,7 +2935,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     value={displacementForm.reason}
                     onChange={(e) => setDisplacementForm({ ...displacementForm, reason: e.target.value })}
                     placeholder="Suporte, Venda..."
-                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    className="w-full p-2 text-xs rounded border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                   />
                 </div>
               </div>
@@ -3034,7 +2951,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] uppercase font-mono text-neutral-450 block">Comprovante de Abastecimento</label>
+                <label className="text-[10px] uppercase font-mono text-neutral-400 block">Comprovante de Abastecimento</label>
                 {displacementForm.receiptImage ? (
                   <div className="relative rounded-lg border border-neutral-200 dark:border-neutral-800 p-2 bg-neutral-50 dark:bg-neutral-900 flex items-center justify-between">
                     <div className="flex items-center gap-2 overflow-hidden">
@@ -3056,7 +2973,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   </div>
                 ) : (
                   <div 
-                    className="border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-3 text-center cursor-pointer hover:border-[#FF4D00] transition bg-neutral-50/50 dark:bg-neutral-900/25"
+                    className="border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-3 text-center cursor-pointer hover:border-[#FFFFFF] transition bg-neutral-50/50 dark:bg-neutral-900/25"
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => {
                       e.preventDefault();
@@ -3139,7 +3056,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   className={`flex-1 py-1.5 text-xs font-mono uppercase border rounded transition ${
                     isDark 
                       ? 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:bg-neutral-800 hover:text-white' 
-                      : 'bg-neutral-100 border-neutral-250 text-neutral-700 hover:bg-neutral-200 font-bold'
+                      : 'bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200 font-bold'
                   }`}
                 >
                   Cancelar
@@ -3177,7 +3094,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     key={statusOption} 
                     className={`flex items-center gap-3 p-3 rounded-lg border text-xs cursor-pointer transition ${
                       statusForm === statusOption
-                        ? 'border-[#FF4D00] bg-[#FF4D00]/5 text-neutral-950 dark:text-white font-semibold'
+                        ? 'border-[#FFFFFF] bg-[#FFFFFF]/5 text-neutral-950 dark:text-white font-semibold'
                         : 'border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:bg-neutral-50 dark:hover:bg-neutral-900/50'
                     }`}
                   >
@@ -3186,7 +3103,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       name="statusOption"
                       checked={statusForm === statusOption || (statusOption === 'Aprovada' && statusForm === 'Reembolsada')}
                       onChange={() => setStatusForm(statusOption)}
-                      className="accent-[#FF4D00]"
+                      className="accent-[#FFFFFF]"
                     />
                     <span>{statusOption === 'Pendente' ? '🟡 Pendente' : '🟢 Aprovada (Reembolsada)'}</span>
                   </label>
@@ -3200,7 +3117,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   className={`flex-1 py-1.5 text-xs font-mono uppercase border rounded transition ${
                     isDark 
                       ? 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:bg-neutral-800 hover:text-white' 
-                      : 'bg-neutral-100 border-neutral-250 text-neutral-700 hover:bg-neutral-200 font-bold'
+                      : 'bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200 font-bold'
                   }`}
                 >
                   Cancelar
@@ -3274,7 +3191,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 <div className="relative border-l-2 border-neutral-200 dark:border-neutral-800 ml-2 space-y-4">
                   {selectedHistoryDisp.history.map((h, i) => (
                     <div key={i} className="relative pl-4">
-                      <div className="absolute w-2 h-2 bg-[#FF4D00] rounded-full -left-[5px] top-1.5 ring-4 ring-white dark:ring-neutral-950"></div>
+                      <div className="absolute w-2 h-2 bg-[#FFFFFF] rounded-full -left-[5px] top-1.5 ring-4 ring-white dark:ring-neutral-950"></div>
                       <span className="block text-xs font-bold text-neutral-900 dark:text-neutral-100">{h.status}</span>
                       <span className="block text-[10px] font-mono text-neutral-500 mt-0.5">
                         {new Date(h.date).toLocaleString('pt-BR')}
@@ -3307,7 +3224,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               
               <div className="mt-4">
                 <div 
-                  className="border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-6 text-center cursor-pointer hover:border-[#FF4D00] transition bg-neutral-50/50 dark:bg-neutral-900/25"
+                  className="border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-6 text-center cursor-pointer hover:border-[#FFFFFF] transition bg-neutral-50/50 dark:bg-neutral-900/25"
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
@@ -3424,7 +3341,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                           <p className="text-[10px] text-neutral-500 mt-1">{disp.reason} {disp.notes && `• ${disp.notes}`}</p>
                         </div>
                         <div className="text-right">
-                          <span className="font-mono font-bold text-xs text-[#FF4D00]">R$ {disp.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          <span className="font-mono font-bold text-xs text-[#FFFFFF]">R$ {disp.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                           <div className="flex items-center gap-1.5 mt-1 justify-end">{disp.kmTraveled} km
                             <span className={`px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-bold ${
                               disp.status === 'Reembolsada' || disp.status === 'Aprovada'

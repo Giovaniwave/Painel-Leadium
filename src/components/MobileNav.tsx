@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { Wallet, LayoutGrid, ArrowLeftRight } from 'lucide-react';
 import { ActiveTab } from '../types';
 
@@ -22,11 +23,11 @@ export default function MobileNav({ activeTab, onTabChange, theme }: MobileNavPr
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 sm:hidden px-4 pb-4 bg-transparent pointer-events-none">
-      <div 
-        className={`w-full max-w-sm mx-auto h-[60px] pointer-events-auto flex items-center justify-around px-2 rounded-2xl shadow-lg transition-colors duration-300 ${
-          isDark 
-            ? 'bg-[#141414]/95 backdrop-blur-md border border-neutral-800/80 shadow-[0_8px_30px_rgb(0,0,0,0.5)]' 
+    <div className="fixed bottom-0 left-0 right-0 z-50 sm:hidden px-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-transparent pointer-events-none">
+      <div
+        className={`w-full max-w-xs mx-auto h-16 pointer-events-auto flex items-center justify-around gap-1 px-2 rounded-full shadow-lg transition-colors duration-300 ${
+          isDark
+            ? 'bg-[#141414]/95 backdrop-blur-md border border-neutral-800/80 shadow-[0_8px_30px_rgb(0,0,0,0.5)]'
             : 'bg-white/95 backdrop-blur-md border border-neutral-200/90 shadow-[0_8px_30px_rgb(0,0,0,0.06)]'
         }`}
       >
@@ -38,31 +39,32 @@ export default function MobileNav({ activeTab, onTabChange, theme }: MobileNavPr
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`flex flex-col items-center justify-center gap-1 h-[48px] px-3 min-w-[70px] transition-all duration-200 cursor-pointer rounded-xl ${
-                isActive
-                  ? isDark
-                    ? 'bg-white text-black font-extrabold shadow-sm'
-                    : 'bg-black text-white font-extrabold shadow-sm'
-                  : isDark
-                    ? 'text-neutral-500 hover:text-white bg-transparent'
-                    : 'text-neutral-500 hover:text-black bg-transparent'
+              className={`relative flex items-center justify-center gap-1.5 h-11 rounded-full transition-all duration-300 cursor-pointer overflow-hidden ${
+                isActive ? 'flex-1 px-4' : 'w-11 shrink-0'
               }`}
             >
-              <Icon 
-                className={`w-4 h-4 shrink-0 ${
+              {isActive && (
+                <motion.div
+                  layoutId="mobileNavActivePill"
+                  className={`absolute inset-0 rounded-full ${isDark ? 'bg-white' : 'bg-black'}`}
+                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                />
+              )}
+              <Icon
+                className={`relative w-[18px] h-[18px] shrink-0 ${
                   isActive
-                    ? isDark ? '!text-black' : '!text-white'
-                    : isDark ? 'text-neutral-500' : 'text-neutral-500'
-                }`} 
-                strokeWidth={isActive ? 2.5 : 2} 
+                    ? isDark ? 'text-black' : 'text-white keep-white'
+                    : isDark ? 'text-neutral-500' : 'text-neutral-400'
+                }`}
+                strokeWidth={isActive ? 2.5 : 2}
               />
-              <span className={`text-[8px] font-sans font-extrabold tracking-wider leading-none ${
-                isActive
-                  ? isDark ? '!text-black' : '!text-white'
-                  : isDark ? 'text-neutral-500' : 'text-neutral-500'
-              }`}>
-                {tab.label}
-              </span>
+              {isActive && (
+                <span className={`relative text-[10px] font-sans font-extrabold tracking-wider leading-none whitespace-nowrap ${
+                  isDark ? 'text-black' : 'text-white keep-white'
+                }`}>
+                  {tab.label}
+                </span>
+              )}
             </button>
           );
         })}

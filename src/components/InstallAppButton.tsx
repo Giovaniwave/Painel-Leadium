@@ -34,8 +34,8 @@ export default function InstallAppButton() {
         className="bg-[#141414] border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-2xl relative my-auto animate-fadeIn mx-auto"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 mb-4 text-[#FF4D00]">
-          <div className="p-2 bg-[#FF4D00]/10 rounded-lg">
+        <div className="flex items-center gap-3 mb-4 text-[#FFFFFF]">
+          <div className="p-2 bg-[#FFFFFF]/10 rounded-lg">
             <AlertCircle className="w-6 h-6" />
           </div>
           <h3 className="text-lg font-bold text-white">Como Instalar</h3>
@@ -96,7 +96,7 @@ export default function InstallAppButton() {
         className={`group relative flex items-center justify-center gap-2 px-4 py-2 rounded-xl border transition-all duration-300 font-semibold cursor-pointer overflow-hidden ${
           status === 'installing'
             ? 'bg-white/10 text-white/50 border-white/5 cursor-not-allowed'
-            : 'bg-[#FF4D00]/10 hover:bg-[#FF4D00] text-[#FF4D00] hover:text-white border-[#FF4D00]/20 hover:border-[#FF4D00]'
+            : 'bg-white/10 hover:bg-white text-white hover:text-black border-white/20 hover:border-white'
         }`}
       >
         <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-shimmer" />

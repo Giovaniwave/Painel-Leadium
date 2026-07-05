@@ -113,7 +113,7 @@ export default function Header({
             >
               <Bell className="w-5 h-5" />
               <span className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full animate-pulse ${
-                theme === 'light' ? 'bg-[#FF4D00] ring-2 ring-white' : 'bg-white ring-2 ring-[#0D0D0D]'
+                theme === 'light' ? 'bg-black ring-2 ring-white' : 'bg-white ring-2 ring-[#0D0D0D]'
               }`}></span>
             </button>
 
@@ -206,9 +206,9 @@ export default function Header({
                     setShowUserDropdown(false);
                     onOpenAssistant();
                   }}
-                  className="w-full flex items-center gap-2.5 px-4 py-3 text-left text-gray-300 hover:bg-[#FF4D00]/10 hover:text-white transition-colors cursor-pointer"
+                  className="w-full flex items-center gap-2.5 px-4 py-3 text-left text-gray-300 hover:bg-[#FFFFFF]/10 hover:text-white transition-colors cursor-pointer"
                 >
-                  <MessageSquare className="w-4 h-4 shrink-0 text-[#FF4D00]" />
+                  <MessageSquare className="w-4 h-4 shrink-0 text-[#FFFFFF]" />
                   <span>Assistente Kairos</span>
                 </button>
 

@@ -4,31 +4,38 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Plus, ChevronDown, Calendar, Percent, CheckSquare, Square, Trash, Star, Coffee, Utensils, ArrowUpRight, ArrowDownLeft, Pencil, Check, X } from 'lucide-react';
-import { Transaction, BudgetGoal } from '../types';
-import { formatSystemDate } from '../utils/date';
+import { ChevronDown, Activity, Pencil, Check, X } from 'lucide-react';
+import {
+  BarChart as ReChartsBarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
+import { Transaction, BudgetGoal, ActiveTab } from '../types';
 
 interface BudgetingViewProps {
   transactions: Transaction[];
   onOpenAddModal: () => void;
-  onDeleteTransaction: (id: string) => void;
   budgetGoals: BudgetGoal[];
   onUpdateGoal?: (id: string, updates: Partial<BudgetGoal>) => void;
-  revenueGoal: number;
-  onUpdateRevenueGoal: (val: number) => void;
+  onNavigateToTab?: (tab: ActiveTab) => void;
   theme?: 'light' | 'dark';
 }
 
-export default function BudgetingView({ 
-  transactions, 
-  onOpenAddModal, 
-  onDeleteTransaction,
+export default function BudgetingView({
+  transactions,
+  onOpenAddModal,
   budgetGoals,
   onUpdateGoal,
-  revenueGoal,
-  onUpdateRevenueGoal,
+  onNavigateToTab,
   theme = 'dark'
 }: BudgetingViewProps) {
+  const isLight = theme === 'light';
+
   const currentFormattedMonthAndYear = useMemo(() => {
     const ptMonths = [
       'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -42,9 +49,6 @@ export default function BudgetingView({
 
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState<string>('');
-
-  const [isEditingRevenue, setIsEditingRevenue] = useState(false);
-  const [editingRevenueValue, setEditingRevenueValue] = useState(revenueGoal.toString());
 
   const startEditing = (id: string, val: number) => {
     setEditingGoalId(id);
@@ -65,111 +69,33 @@ export default function BudgetingView({
     setEditingValue('');
   };
 
-  const startEditingRevenue = () => {
-    setIsEditingRevenue(true);
-    setEditingRevenueValue(revenueGoal.toString());
-  };
-
-  const saveEditingRevenue = () => {
-    const num = parseFloat(editingRevenueValue);
-    if (!isNaN(num) && num >= 0) {
-      onUpdateRevenueGoal(num);
-    }
-    setIsEditingRevenue(false);
-  };
-
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('Todas as Categorias');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('Todas as Transações');
-  
-  // Stats toggle checkboxes
-  const [showUsed, setShowUsed] = useState(true);
-  const [showRemaining, setShowRemaining] = useState(true);
 
   // Compute stats
   const filteredTransactions = useMemo(() => {
     return transactions.filter(tx => {
       const matchCategory = selectedCategoryFilter === 'Todas as Categorias' || tx.category === selectedCategoryFilter;
-      const matchType = selectedTypeFilter === 'Todas as Transações' || 
+      const matchType = selectedTypeFilter === 'Todas as Transações' ||
         (selectedTypeFilter === 'Income' && tx.type === 'income') ||
         (selectedTypeFilter === 'Expense' && tx.type === 'expense');
       return matchCategory && matchType;
     });
   }, [transactions, selectedCategoryFilter, selectedTypeFilter]);
 
-  // Sum total budget allocated
-  const totalAllocated = useMemo(() => {
-    if (selectedCategoryFilter === 'Todas as Categorias') {
-      return budgetGoals.reduce((sum, g) => sum + g.allocated, 0);
-    }
-    const found = budgetGoals.find(g => g.name === selectedCategoryFilter);
-    return found ? found.allocated : 0;
-  }, [budgetGoals, selectedCategoryFilter]);
-
-  // Sum total spent (expenses)
-  const totalSpent = useMemo(() => {
-    const expenses = transactions.filter(tx => tx.type === 'expense');
-    if (selectedCategoryFilter === 'Todas as Categorias') {
-      return expenses.reduce((sum, tx) => sum + tx.amount, 0);
-    }
-    return expenses
-      .filter(tx => tx.category === selectedCategoryFilter)
-      .reduce((sum, tx) => sum + tx.amount, 0);
-  }, [transactions, selectedCategoryFilter]);
-
-  // Sum total income (faturamento)
-  const totalIncome = useMemo(() => {
-    return transactions
-      .filter(tx => tx.type === 'income')
-      .reduce((sum, tx) => sum + tx.amount, 0);
-  }, [transactions]);
-
-  // Sum total remaining
-  const remainingBudget = Math.max(0, totalAllocated - totalSpent);
-
-  // Spend percentage
-  const usagePercentage = useMemo(() => {
-    if (totalAllocated === 0) return 0;
-    return Math.min(100, Math.round((totalSpent / totalAllocated) * 100));
-  }, [totalSpent, totalAllocated]);
-
-  // Revenue reached percentage
-  const percentageRevenueReached = useMemo(() => {
-    if (revenueGoal === 0) return 0;
-    return Math.min(100, Math.round((totalIncome / revenueGoal) * 100));
-  }, [totalIncome, revenueGoal]);
-
-  const remainingRevenueGoal = Math.max(0, revenueGoal - totalIncome);
-
-  // Calculate dynamic "Most Expense" ranking
-  const expenseRankings = useMemo(() => {
-    const categoryTotals: Record<string, number> = {};
-    
-    // Seed default categories list
-    const defaultCategories = ['Investimentos', 'Salários', 'Custo Mensal', 'Emergências', 'Despesa Variável'];
-    defaultCategories.forEach(cat => {
-      categoryTotals[cat] = 0;
+  // Planejado vs. Realizado per budget goal (moved here from the Dashboard to avoid showing this comparison twice)
+  const budgetComparisonData = useMemo(() => {
+    return budgetGoals.map(goal => {
+      const spent = filteredTransactions
+        .filter(tx => tx.type === 'expense' && tx.category === goal.name)
+        .reduce((sum, tx) => sum + tx.amount, 0);
+      return {
+        name: goal.name,
+        Planejado: goal.allocated,
+        Realizado: spent
+      };
     });
-
-    transactions
-      .filter(tx => tx.type === 'expense' && (selectedCategoryFilter === 'Todas as Categorias' || tx.category === selectedCategoryFilter))
-      .forEach(tx => {
-        if (categoryTotals[tx.category] !== undefined) {
-          categoryTotals[tx.category] += tx.amount;
-        } else {
-          categoryTotals[tx.category] = tx.amount;
-        }
-      });
-
-    // Sort descending
-    return Object.entries(categoryTotals)
-      .map(([category, amount]) => ({
-        category,
-        amount,
-        percentChange: category === 'Custo Mensal' ? '+12%' : category === 'Investimentos' ? '+8%' : '-3%'
-      }))
-      .filter(item => item.amount > 0 || defaultCategories.includes(item.category))
-      .sort((a, b) => b.amount - a.amount);
-  }, [transactions, selectedCategoryFilter]);
+  }, [budgetGoals, filteredTransactions]);
 
   // Format currency
   const formatValue = (val: number) => {
@@ -180,19 +106,58 @@ export default function BudgetingView({
     }).format(val);
   };
 
+  const BudgetTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className={`p-3 rounded-lg border shadow-xl font-mono text-xs ${
+          isLight
+            ? 'bg-white border-gray-200 text-zinc-900'
+            : 'bg-[#18181B]/95 border-white/10 text-white'
+        }`}>
+          <p className="font-bold mb-1.5 uppercase text-[10px] tracking-wider">{label}</p>
+          <div className="space-y-1">
+            <p className="flex justify-between gap-4">
+              <span className={isLight ? 'text-zinc-500' : 'text-zinc-400'}>Planejado:</span>
+              <span className="font-bold">{formatValue(payload[0].value)}</span>
+            </p>
+            <p className="flex justify-between gap-4">
+              <span className={isLight ? 'text-zinc-900' : 'text-white'}>Realizado:</span>
+              <span className={`font-bold ${payload[1].value > payload[0].value ? 'text-rose-500 font-black' : (isLight ? 'text-zinc-600' : 'text-zinc-300')}`}>
+                {formatValue(payload[1].value)}
+              </span>
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const selectClass = `w-full border rounded-xl py-3 px-4 text-xs tracking-wider appearance-none focus:outline-none transition-colors cursor-pointer ${
+    isLight
+      ? 'bg-white border-gray-200/80 text-gray-950 focus:border-black/30'
+      : 'bg-[#141414] border-white/10 text-white focus:border-white/40'
+  }`;
+
   return (
     <div className="space-y-10 py-4 animate-fadeIn">
-      {/* Date Selector & Action Trigger */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-white/10 pb-6 gap-4">
+      {/* Header & Action Trigger */}
+      <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-end border-b pb-6 gap-4 ${
+        isLight ? 'border-black/10' : 'border-white/10'
+      }`}>
         <div>
-          <h2 className="text-4xl font-serif italic font-light text-white tracking-tighter">{currentFormattedMonthAndYear}</h2>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-[#666666] mt-1">Visão geral de Planos de Carteira</p>
+          <h2 className={`text-4xl font-serif italic font-light tracking-tighter ${isLight ? 'text-gray-950' : 'text-white'}`}>
+            {currentFormattedMonthAndYear}
+          </h2>
+          <p className={`text-[10px] uppercase tracking-[0.2em] mt-1 ${isLight ? 'text-gray-500' : 'text-[#666666]'}`}>
+            Visão geral de Planos de Carteira
+          </p>
         </div>
         <button
           id="btn-add-manual-transaction"
           onClick={onOpenAddModal}
           className={`px-6 py-2 font-medium rounded-lg transition-colors cursor-pointer text-sm ${
-            theme === 'light'
+            isLight
               ? 'bg-black text-[#FFFFFF] hover:bg-gray-800'
               : 'bg-white text-black hover:bg-gray-200'
           }`}
@@ -202,10 +167,10 @@ export default function BudgetingView({
       </div>
 
       {/* Filters Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Category selection filter dropdown */}
         <div className="space-y-1.5 text-left">
-          <label className="text-[9px] uppercase tracking-[0.2em] text-[#999999] font-bold block">
+          <label className={`text-[9px] uppercase tracking-[0.2em] font-bold block ${isLight ? 'text-gray-500' : 'text-[#999999]'}`}>
             Categoria Alvo
           </label>
           <div className="relative group">
@@ -213,31 +178,32 @@ export default function BudgetingView({
               id="filter-category-select"
               value={selectedCategoryFilter}
               onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-              className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-4 text-xs tracking-wider text-white appearance-none focus:outline-none focus:border-leadium-orange/50 transition-colors cursor-pointer"
-              style={{ backgroundColor: '#141414', color: '#ffffff' }}
+              className={selectClass}
             >
-              <option value="Todas as Categorias" style={{ backgroundColor: '#141414', color: '#ffffff' }}>Todas as Categorias</option>
+              <option value="Todas as Categorias">Todas as Categorias</option>
               {/* Core Limits */}
-              <option value="Custo Mensal" style={{ backgroundColor: '#141414', color: '#ffffff' }}>Custo Mensal</option>
-              <option value="Salários" style={{ backgroundColor: '#141414', color: '#ffffff' }}>Salários (Contas/Equipe)</option>
-              <option value="Investimentos" style={{ backgroundColor: '#141414', color: '#ffffff' }}>Investimentos</option>
-              <option value="Emergências" style={{ backgroundColor: '#141414', color: '#ffffff' }}>Emergências</option>
-              <option value="Despesa Variável" style={{ backgroundColor: '#141414', color: '#ffffff' }}>Despesa Variável</option>
+              <option value="Custo Mensal">Custo Mensal</option>
+              <option value="Salários">Salários (Contas/Equipe)</option>
+              <option value="Investimentos">Investimentos</option>
+              <option value="Emergências">Emergências</option>
+              <option value="Despesa Variável">Despesa Variável</option>
               {/* Ledgers options */}
-              <option value="Venda de Serviços" style={{ backgroundColor: '#141414', color: '#ffffff' }}>Venda de Serviços</option>
-              <option value="Cafe & Restaurants" style={{ backgroundColor: '#141414', color: '#ffffff' }}>Café e Restaurantes</option>
-              <option value="Groceries" style={{ backgroundColor: '#141414', color: '#ffffff' }}>Supermercado</option>
-              <option value="Money Transfer" style={{ backgroundColor: '#141414', color: '#ffffff' }}>Transferência</option>
-              <option value="Utilities" style={{ backgroundColor: '#141414', color: '#ffffff' }}>Serviços Públicos</option>
-              <option value="Other" style={{ backgroundColor: '#141414', color: '#ffffff' }}>Outras Despesas</option>
+              <option value="Venda de Serviços">Venda de Serviços</option>
+              <option value="Cafe & Restaurants">Café e Restaurantes</option>
+              <option value="Groceries">Supermercado</option>
+              <option value="Money Transfer">Transferência</option>
+              <option value="Utilities">Serviços Públicos</option>
+              <option value="Other">Outras Despesas</option>
             </select>
-            <ChevronDown className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-white transition-colors" />
+            <ChevronDown className={`w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none transition-colors ${
+              isLight ? 'text-gray-400 group-hover:text-gray-900' : 'text-gray-400 group-hover:text-white'
+            }`} />
           </div>
         </div>
 
         {/* Type selection filter dropdown */}
         <div className="space-y-1.5 text-left">
-          <label className="text-[9px] uppercase tracking-[0.2em] text-[#999999] font-bold block">
+          <label className={`text-[9px] uppercase tracking-[0.2em] font-bold block ${isLight ? 'text-gray-500' : 'text-[#999999]'}`}>
             Tipo
           </label>
           <div className="relative group">
@@ -245,100 +211,48 @@ export default function BudgetingView({
               id="filter-type-select"
               value={selectedTypeFilter}
               onChange={(e) => setSelectedTypeFilter(e.target.value)}
-              className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-4 text-xs tracking-wider text-white appearance-none focus:outline-none focus:border-leadium-orange/50 transition-colors cursor-pointer"
-              style={{ backgroundColor: '#141414', color: '#ffffff' }}
+              className={selectClass}
             >
-              <option value="Todas as Transações" style={{ backgroundColor: '#141414', color: '#ffffff' }}>Todas as Transações</option>
-              <option value="Income" style={{ backgroundColor: '#141414', color: '#ffffff' }}>Entradas (+)</option>
-              <option value="Expense" style={{ backgroundColor: '#141414', color: '#ffffff' }}>Saídas (-)</option>
+              <option value="Todas as Transações">Todas as Transações</option>
+              <option value="Income">Entradas (+)</option>
+              <option value="Expense">Saídas (-)</option>
             </select>
-            <ChevronDown className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-white transition-colors" />
-          </div>
-        </div>
-
-        {/* Date Filter Visual Card */}
-        <div className="space-y-1.5 text-left">
-          <label className="text-[9px] uppercase tracking-[0.2em] text-[#999999] font-bold block">
-            Intervalo de Datas
-          </label>
-          <div className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-4 text-xs flex justify-between items-center text-white hover:border-white/15 transition-colors cursor-default group">
-            <span className="font-medium tracking-wide">{currentFormattedMonthAndYear}</span>
-            <Calendar className="w-4 h-4 text-gray-400 group-hover:text-leadium-orange transition-colors" />
-          </div>
-        </div>
-      </div>
-
-      {/* Main Budget Layout Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-        
-        {/* Most Expense Dashboard block ranking details (Formerly RHS, expanded to full layout) */}
-        <div className="lg:col-span-12 glass-container p-8 hover:border-[#3B82F6]/30 transition-all duration-300">
-          <h3 className="text-[9px] uppercase tracking-[0.25em] font-bold text-[#999999] mb-6 flex items-center gap-2 text-left">
-            <span className="w-1.5 h-1.5 bg-ai-blue rounded-full"></span>
-            Maiores Categorias de Gastos
-          </h3>
-          
-          <div className="space-y-4">
-            {expenseRankings.map((entity, index) => {
-              const rankStr = `0${index + 1}`;
-              const isPositive = entity.percentChange.startsWith('+');
-              return (
-                <div 
-                  key={entity.category}
-                  className="group flex items-center justify-between p-3 rounded-xl bg-white/2 hover:bg-white/5 border border-white/0 hover:border-white/10 transition-all duration-200 cursor-default"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="text-[10px] bg-[#161616] border border-white/10 w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 font-mono group-hover:border-leadium-orange/50 group-hover:text-white transition-colors">
-                      {rankStr}
-                    </span>
-                    <div className="text-left">
-                      <div className="text-base font-bold text-white tracking-wide">
-                        {formatValue(entity.amount)}
-                      </div>
-                      <div className="text-[9px] text-[#666666] uppercase tracking-widest font-bold mt-0.5">
-                        {entity.category === 'Cafe & Restaurants' ? 'Café e Restaurantes' : entity.category === 'Groceries' ? 'Supermercado' : entity.category === 'Money Transfer' ? 'Transferência' : entity.category}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className={`text-xs font-mono font-bold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {entity.percentChange}
-                  </div>
-                </div>
-              );
-            })}
+            <ChevronDown className={`w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none transition-colors ${
+              isLight ? 'text-gray-400 group-hover:text-gray-900' : 'text-gray-400 group-hover:text-white'
+            }`} />
           </div>
         </div>
       </div>
 
       {/* Target Budgets List Title */}
       <div className="space-y-4 text-left">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-white">
+        <h3 className={`text-sm font-semibold uppercase tracking-wider ${isLight ? 'text-gray-950' : 'text-white'}`}>
           Alocação Planejada
         </h3>
-        
+
         {/* Progress Circles Grid items */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-          
           {budgetGoals.map((goal, idx) => {
             // Dynamic calculation based on transactions
             const matchedExpenses = transactions
               .filter(tx => tx.type === 'expense' && tx.category === goal.name)
               .reduce((sum, tx) => sum + tx.amount, 0);
-            
-            const percent = Math.min(100, Math.round((matchedExpenses / goal.allocated) * 100));
-            
+
+            const percent = goal.allocated > 0 ? Math.min(100, Math.round((matchedExpenses / goal.allocated) * 100)) : 0;
+
             // Outer ring radius computations
             const strokeDash = 175; // Circumference calculation
             const offset = strokeDash - (strokeDash * percent) / 100;
-            
+
             // Rotate beautiful custom gradient colors representing each of the 5 goals
-            const colors = ['stroke-[#FF4D00]', 'stroke-emerald-500', 'stroke-blue-500', 'stroke-purple-500', 'stroke-amber-500'];
+            const colors = isLight
+              ? ['stroke-[#111111]', 'stroke-emerald-600', 'stroke-blue-600', 'stroke-purple-600', 'stroke-amber-600']
+              : ['stroke-[#FFFFFF]', 'stroke-emerald-500', 'stroke-blue-500', 'stroke-purple-500', 'stroke-amber-500'];
             const colorClass = colors[idx % colors.length];
 
             return (
-              <div 
-                key={goal.id} 
+              <div
+                key={goal.id}
                 className="glass-container rounded-xl p-5 flex flex-col sm:flex-row items-center gap-6 hover:border-white/10 transition-all duration-200"
               >
                 <div className="relative w-16 h-16 shrink-0 flex items-center justify-center">
@@ -348,7 +262,7 @@ export default function BudgetingView({
                       cy="32"
                       r="28"
                       fill="transparent"
-                      stroke="rgba(255,255,255,0.04)"
+                      stroke={isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)'}
                       strokeWidth="4"
                     />
                     <circle
@@ -363,17 +277,17 @@ export default function BudgetingView({
                       strokeLinecap="round"
                     />
                   </svg>
-                  <div className="absolute inset-0 flex items-center justify-center text-xs font-mono font-bold text-white">
+                  <div className={`absolute inset-0 flex items-center justify-center text-xs font-mono font-bold ${isLight ? 'text-gray-950' : 'text-white'}`}>
                     {percent}%
                   </div>
                 </div>
 
                 <div className="flex-1 min-w-0 text-left">
-                  <p className="text-[9px] uppercase tracking-wider text-gray-500 font-bold mb-1 truncate">
+                  <p className={`text-[9px] uppercase tracking-wider font-bold mb-1 truncate ${isLight ? 'text-gray-500' : 'text-gray-500'}`}>
                     Limite de {goal.name}
                   </p>
                   <div className="flex items-baseline gap-1.5 flex-wrap">
-                    <h4 className="text-xl font-light text-white tracking-tight">
+                    <h4 className={`text-xl font-light tracking-tight ${isLight ? 'text-gray-950' : 'text-white'}`}>
                       {formatValue(matchedExpenses)}
                     </h4>
                     {editingGoalId === goal.id ? (
@@ -383,20 +297,22 @@ export default function BudgetingView({
                           type="number"
                           value={editingValue}
                           onChange={e => setEditingValue(e.target.value)}
-                          className="w-16 bg-black/60 text-white border border-white/20 rounded px-1.5 py-0.5 text-xs font-mono focus:outline-none focus:border-emerald-500"
+                          className={`w-16 border rounded px-1.5 py-0.5 text-xs font-mono focus:outline-none focus:border-emerald-500 ${
+                            isLight ? 'bg-white text-gray-950 border-gray-300' : 'bg-black/60 text-white border-white/20'
+                          }`}
                           autoFocus
                         />
-                        <button 
+                        <button
                           type="button"
                           onClick={() => saveEditing(goal.id)}
-                          className="p-1 hover:text-emerald-400 bg-white/5 rounded"
+                          className={`p-1 hover:text-emerald-400 rounded ${isLight ? 'bg-black/5' : 'bg-white/5'}`}
                         >
                           <Check className="w-3.5 h-3.5" />
                         </button>
-                        <button 
+                        <button
                           type="button"
                           onClick={cancelEditing}
-                          className="p-1 hover:text-rose-400 bg-white/5 rounded"
+                          className={`p-1 hover:text-rose-400 rounded ${isLight ? 'bg-black/5' : 'bg-white/5'}`}
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -410,10 +326,10 @@ export default function BudgetingView({
                           <button
                             type="button"
                             onClick={() => startEditing(goal.id, goal.allocated)}
-                            className="opacity-0 group-hover/lim:opacity-100 hover:text-white transition-opacity p-0.5"
+                            className="opacity-0 group-hover/lim:opacity-100 transition-opacity p-0.5"
                             title="Alterar Limite"
                           >
-                            <Pencil className="w-3 h-3 text-gray-400 hover:text-white" />
+                            <Pencil className={`w-3 h-3 ${isLight ? 'text-gray-400 hover:text-gray-950' : 'text-gray-400 hover:text-white'}`} />
                           </button>
                         )}
                       </div>
@@ -426,80 +342,78 @@ export default function BudgetingView({
         </div>
       </div>
 
-      {/* Mini Transactions History list */}
-      <div className="space-y-4 pt-4 border-t border-white/5">
-        <div className="flex justify-between items-center">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-white">
-            Atividades Recentes
+      {/* Planejado vs. Realizado detail chart (moved from Dashboard to avoid duplicating the same metric twice) */}
+      <div className="glass-container rounded-xl p-6 text-left">
+        <div className="mb-6">
+          <h3 className={`text-xs uppercase font-bold tracking-widest flex items-center gap-2 ${isLight ? 'text-zinc-800' : 'text-[#F9FAFB]'}`}>
+            <Activity className={`w-4 h-4 ${isLight ? 'text-zinc-700' : 'text-white/70'}`} />
+            <span>Comparativa de Metas: Planejado vs. Realizado</span>
           </h3>
-          <span className="text-[10px] text-gray-500 capitalize tracking-wider font-mono">
-            Ações filtradas
-          </span>
+          <p className="text-[10px] text-gray-500 mt-1 font-mono">
+            Visualização comparativa dos limites alocados em relação às despesas reais para cada categoria.
+          </p>
         </div>
 
-        <div className="divide-y divide-white/5 bg-[#12141C]/50 border border-white/5 rounded-xl overflow-hidden">
-          {filteredTransactions.length === 0 ? (
-            <div className="p-8 text-center text-xs text-gray-500">
-              Nenhuma transação correspondente aos filtros ativos.
-            </div>
-          ) : (
-            filteredTransactions.slice(0, 3).map((tx) => {
-              return (
-                <div 
-                  key={tx.id} 
-                  className="p-4 flex items-center justify-between hover:bg-white/2 transition-colors group"
-                >
-                  <div className="flex items-center gap-4">
-                    {tx.avatarUrl && tx.avatarUrl.trim() !== '' ? (
-                      <img 
-                        src={tx.avatarUrl || null} 
-                        alt={tx.sender || 'Sender'} 
-                        className="w-10 h-10 rounded-lg object-cover bg-white/5"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center text-white text-xs font-mono font-bold">
-                        {((tx.sender || 'TX').substring(0, 2)).toUpperCase()}
-                      </div>
-                    )}
-
-                    <div className="text-left">
-                      <h4 className="text-xs font-bold text-white group-hover:text-[#B43C00] transition-colors">
-                        {tx.sender || 'Pagador Desconhecido'}
-                      </h4>
-                      <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1.5 font-mono">
-                        <span>{formatSystemDate(tx.date)}</span>
-                        <span className="w-1 h-1 bg-white/10 rounded-full"></span>
-                        <span>{tx.description}</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="text-right flex items-center gap-4">
-                    <div>
-                      <div className={`text-sm font-bold font-mono ${tx.type === 'income' ? 'text-emerald-400' : 'text-white'}`}>
-                        {tx.type === 'income' ? '+' : '-'}{formatValue(tx.amount)}
-                      </div>
-                      <div className="text-[8px] uppercase font-bold tracking-wider text-gray-500 font-mono mt-0.5">
-                        {tx.category === 'Receita / Faturamento' ? 'Receita / Faturamento' : tx.category === 'Cafe & Restaurants' ? 'Café e Restaurantes' : tx.category === 'Groceries' ? 'Supermercado' : tx.category === 'Money Transfer' ? 'Transferência' : tx.category}
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => onDeleteTransaction(tx.id)}
-                      className="p-1 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all cursor-pointer bg-transparent border-0"
-                      title="Excluir entrada manual"
-                    >
-                      <Trash className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          )}
+        <div className="h-80 w-full mt-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <ReChartsBarChart
+              data={budgetComparisonData}
+              margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke={isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)'} />
+              <XAxis
+                dataKey="name"
+                stroke="#71717a"
+                fontSize={10}
+                tickLine={false}
+              />
+              <YAxis
+                stroke="#71717a"
+                fontSize={10}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(value) => `R$ ${value}`}
+              />
+              <Tooltip content={<BudgetTooltip />} cursor={{ fill: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)' }} />
+              <Legend
+                verticalAlign="top"
+                height={36}
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: '10px', fontFamily: 'monospace', textTransform: 'uppercase' }}
+              />
+              <Bar
+                name="Planejado"
+                dataKey="Planejado"
+                fill={isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.18)'}
+                radius={[4, 4, 0, 0]}
+                maxBarSize={40}
+              />
+              <Bar
+                name="Realizado"
+                dataKey="Realizado"
+                fill={isLight ? '#111111' : '#FFFFFF'}
+                radius={[4, 4, 0, 0]}
+                maxBarSize={40}
+              />
+            </ReChartsBarChart>
+          </ResponsiveContainer>
         </div>
       </div>
+
+      {/* CTA linking to the full transaction ledger, instead of duplicating a short list of it here */}
+      <button
+        type="button"
+        onClick={() => onNavigateToTab && onNavigateToTab('transactions')}
+        className={`w-full glass-container rounded-xl p-5 flex items-center justify-between text-left transition-all duration-200 cursor-pointer ${
+          isLight ? 'hover:border-black/15' : 'hover:border-white/10'
+        }`}
+      >
+        <span className={`text-xs font-semibold uppercase tracking-wider ${isLight ? 'text-gray-950' : 'text-white'}`}>
+          Ver todas as transações
+        </span>
+        <span className={`text-xs font-mono ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>→</span>
+      </button>
     </div>
   );
 }

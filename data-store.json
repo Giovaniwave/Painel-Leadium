@@ -61,7 +61,7 @@
       "logo": "/uploads/1ed19950-ba78-42f0-b76d-68e05b3793ec.png"
     }
   ],
-  "faturamento_meta": 100000,
+  "faturamento_meta": 10000,
   "user_profiles": {
     "giovani@leadium.com": {
       "email": "giovani@leadium.com",
@@ -98,138 +98,35 @@
     ],
     "displacements": [
       {
-        "id": "232b526d-ce90-4565-bed9-998872891010",
-        "date": "2026-06-28",
+        "id": "c3d5b99f-b303-431d-ba0d-5e85d2cc65fe",
+        "date": "2026-07-05",
         "employeeId": "70907eeb-e16d-4b7f-a6f1-cde3d718add8",
-        "clientVisited": "Cliente Não Especificado",
+        "clientVisited": "dsaads",
         "city": "Localização GPS",
-        "reason": "Test",
-        "vehicleId": "85318eeb-c989-4f46-a196-23d2ec7f5b1c",
-        "vehicleName": "Test",
-        "kmTraveled": 0,
-        "notes": "",
-        "status": "Pendente",
-        "receiptImage": "",
-        "refundReceiptImage": "",
-        "litersConsumed": 0,
-        "amount": 0,
-        "history": [],
-        "startLat": -23.2178,
-        "startLng": -47.5222,
-        "endLat": null,
-        "endLng": null,
-        "startAddress": "Porto Feliz",
-        "endAddress": "Endereço",
-        "startTime": "2026-06-28T04:47:59.317+00:00",
-        "endTime": null
-      },
-      {
-        "id": "53caa12f-86f1-45b3-8133-99e3d183820b",
-        "date": "2026-06-28",
-        "employeeId": "70907eeb-e16d-4b7f-a6f1-cde3d718add8",
-        "clientVisited": "Test Client",
-        "city": "Localização GPS",
-        "reason": "Test Reason",
-        "vehicleId": "85318eeb-c989-4f46-a196-23d2ec7f5b1c",
-        "vehicleName": "Test Vehicle",
-        "kmTraveled": 0,
-        "notes": "",
-        "status": "Pendente",
-        "receiptImage": "",
-        "refundReceiptImage": "",
-        "litersConsumed": 0,
-        "amount": 0,
-        "history": [],
-        "startLat": -23.2178,
-        "startLng": -47.5222,
-        "endLat": -23,
-        "endLng": -47,
-        "startAddress": "Porto Feliz - SP (Sede)",
-        "endAddress": "End Address",
-        "startTime": "2026-06-28T04:49:08.107+00:00",
-        "endTime": null
-      },
-      {
-        "id": "1e9579ea-3f35-44ff-ab3c-887b400e5389",
-        "date": "2026-06-28",
-        "employeeId": "70907eeb-e16d-4b7f-a6f1-cde3d718add8",
-        "clientVisited": "Check",
-        "city": "Check",
-        "reason": "",
-        "vehicleId": "85318eeb-c989-4f46-a196-23d2ec7f5b1c",
-        "vehicleName": "Test Vehicle",
-        "kmTraveled": 0,
-        "notes": "",
-        "status": "Pendente",
-        "receiptImage": "",
-        "refundReceiptImage": "",
-        "litersConsumed": 0,
-        "amount": 0,
-        "history": [],
-        "startLat": 0,
-        "startLng": 0,
-        "endLat": 0,
-        "endLng": 0,
-        "startAddress": "",
-        "endAddress": "",
-        "startTime": "2026-06-28T04:49:47.993+00:00",
-        "endTime": null
-      },
-      {
-        "id": "1c978bbf-33db-45d8-ad0d-ba8346c3ad64",
-        "date": "2026-06-28",
-        "employeeId": "70907eeb-e16d-4b7f-a6f1-cde3d718add8",
-        "clientVisited": "Check",
-        "city": "Check",
-        "reason": "",
-        "vehicleId": "85318eeb-c989-4f46-a196-23d2ec7f5b1c",
-        "vehicleName": "Test Vehicle",
-        "kmTraveled": 0,
-        "notes": "",
-        "status": "Pendente",
-        "receiptImage": "",
-        "refundReceiptImage": "",
-        "litersConsumed": 0,
-        "amount": 0,
-        "history": [],
-        "startLat": null,
-        "startLng": null,
-        "endLat": null,
-        "endLng": null,
-        "startAddress": "",
-        "endAddress": "",
-        "startTime": "2026-06-28T04:50:53.883+00:00",
-        "endTime": null
-      },
-      {
-        "id": "4b44e717-e108-49a8-86c6-15a5438f22bf",
-        "date": "2026-06-28",
-        "employeeId": "70907eeb-e16d-4b7f-a6f1-cde3d718add8",
-        "clientVisited": "Test POST",
-        "city": "Localização GPS",
-        "reason": "Test Reason",
+        "reason": "ads",
         "vehicleId": "85318eeb-c989-4f46-a196-23d2ec7f5b1c",
         "vehicleName": "Veloster 1.6 16V  140cv Aut.",
-        "kmTraveled": 0,
-        "notes": "",
-        "litersConsumed": 0,
-        "amount": 0,
-        "status": "Pendente",
+        "kmTraveled": 0.1,
+        "notes": "Duração: 1 minutos.",
+        "status": "Aprovada",
         "receiptImage": "",
         "refundReceiptImage": "",
-        "startLat": -23.2178,
-        "startLng": -47.5222,
-        "endLat": -23,
-        "endLng": -47,
-        "startAddress": "Porto Feliz - SP (Sede)",
-        "endAddress": "End Address",
-        "startTime": "2026-06-28T04:52:18.011Z",
+        "litersConsumed": 0.01,
+        "amount": 0.06,
         "history": [
           {
-            "status": "Pendente",
-            "date": "2026-06-28T04:52:18.361Z"
+            "status": "Aprovada",
+            "date": "2026-07-05T16:38:45.627Z"
           }
-        ]
+        ],
+        "startLat": -23.211,
+        "startLng": -47.5247,
+        "endLat": -23.211,
+        "endLng": -47.5247,
+        "startAddress": "Rua Custódia Sacramento - Porto Feliz",
+        "endAddress": "Rua Custódia Sacramento - Porto Feliz",
+        "startTime": "2026-07-05T16:33:48.806+00:00",
+        "endTime": "2026-07-05T16:35:16.208+00:00"
       }
     ]
   },
@@ -238,11 +135,43 @@
     "giovani@leadium.com": [
       {
         "sender": "user",
-        "text": "Karios quantos clientes temos?"
+        "text": "__AUDIO__:/uploads/5f9ad735-1f04-4e91-860b-59e280ee78e8.webm"
       },
       {
         "sender": "assistant",
-        "text": "Fala Giovani! No momento, estamos com 0 clientes ativos. Precisamos trabalhar nisso, né? Se precisar de ajuda para captar novos clientes, é só avisar!"
+        "text": "E aí, Giovani! Tudo tranquilo por aqui. Então, parece que o shopping não tá fazendo parte do seu rolê esse mês, né? Se precisar de alguma coisa relacionada às finanças ou qualquer outra dúvida, só dar um toque!"
+      },
+      {
+        "sender": "user",
+        "text": "__AUDIO__:/uploads/9690060b-80f4-4450-803f-cf9dfffda832.webm"
+      },
+      {
+        "sender": "assistant",
+        "text": "Fala, Giovani! Então, até agora, a gente faturou R$ 1.500,00 neste mês. A meta é de R$ 10.000,00, então ainda falta R$ 8.500,00 pra gente chegar lá. Se precisar de mais alguma coisa, é só avisar!"
+      },
+      {
+        "sender": "user",
+        "text": "__AUDIO__:/uploads/81d430f8-af63-4c67-9e8c-52a567ea7eda.webm"
+      },
+      {
+        "sender": "assistant",
+        "text": "O cliente que tá pagando R$ 1.500,00 por mês é o Porto Outlet. Se precisar de mais informações sobre ele ou qualquer outra coisa, só avisar!"
+      },
+      {
+        "sender": "user",
+        "text": "__AUDIO__:/uploads/4d0e4c9c-9459-444f-87de-da775ded4956.webm"
+      },
+      {
+        "sender": "assistant",
+        "text": "A mensalidade do Porto Outlet é referente ao dia 11 de cada mês. Se precisar de mais alguma coisa, é só falar!"
+      },
+      {
+        "sender": "user",
+        "text": "__AUDIO__:/uploads/af8df1cf-9928-436a-b824-b5f0792e2462.webm"
+      },
+      {
+        "sender": "assistant",
+        "text": "Infelizmente, não consigo alterar a data de pagamento diretamente. Mas você pode fazer isso manualmente no sistema. Se precisar de ajuda com mais alguma coisa ou tiver outra dúvida, é só me chamar!"
       }
     ]
   }

@@ -4,13 +4,17 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, X, Sparkles, MessageSquare, CircleAlert, Trash2 } from 'lucide-react';
+import { Send, X, Sparkles, MessageSquare, CircleAlert, Trash2, Mic, Square, Loader2 } from 'lucide-react';
 import { Transaction, BudgetGoal } from '../types';
 
 interface Message {
   sender: 'user' | 'assistant' | 'system';
   text: string;
 }
+
+// User audio messages are persisted as `${AUDIO_PREFIX}<url>` so the chat bubble can be
+// re-rendered as a playable voice note (WhatsApp-style) instead of showing the raw transcript.
+const AUDIO_PREFIX = '__AUDIO__:';
 
 interface FinanceAssistantProps {
   isOpen: boolean;
@@ -39,7 +43,11 @@ export default function FinanceAssistant({
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // Load persistent conversation history from the server-side database
   useEffect(() => {
@@ -105,10 +113,10 @@ export default function FinanceAssistant({
 
   if (!isOpen) return null;
 
-  const handleSendMessage = async (textToSend: string) => {
-    if (!textToSend.trim() || isLoading) return;
+  const handleSendMessage = async (textToSend: string, audioUrl?: string) => {
+    if ((!textToSend.trim() && !audioUrl) || isLoading) return;
 
-    const userMessage: Message = { sender: 'user', text: textToSend };
+    const userMessage: Message = { sender: 'user', text: audioUrl ? `${AUDIO_PREFIX}${audioUrl}` : textToSend };
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
     setIsLoading(true);
@@ -120,7 +128,8 @@ export default function FinanceAssistant({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          prompt: textToSend,
+          prompt: textToSend.trim() || 'Usuário enviou um áudio, mas não consegui identificar o que foi dito.',
+          audioUrl,
           transactionsContext: transactions,
           budgetGoalsContext: budgetGoals,
           currentDate: new Date().toISOString().substring(0, 10),
@@ -136,12 +145,78 @@ export default function FinanceAssistant({
       setMessages(prev => [...prev, { sender: 'assistant', text: data.text || 'Desculpe, tive um contratempo para analisar seus dados.' }]);
     } catch (err: any) {
       console.error(err);
-      setMessages(prev => [...prev, { 
-        sender: 'system', 
-        text: 'Instabilidade de conexão. Verifique se a chave API está configurada nos Secrets do AI Studio.' 
+      setMessages(prev => [...prev, {
+        sender: 'system',
+        text: 'Instabilidade de conexão. Verifique se a chave API está configurada nos Secrets do AI Studio.'
       }]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach(track => track.stop());
+        const blob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
+        handleAudioRecorded(blob);
+      };
+
+      mediaRecorder.start();
+      mediaRecorderRef.current = mediaRecorder;
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Erro ao acessar microfone:', err);
+      setMessages(prev => [...prev, {
+        sender: 'system',
+        text: 'Não foi possível acessar o microfone. Verifique as permissões do navegador.'
+      }]);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const handleAudioRecorded = async (blob: Blob) => {
+    setIsTranscribing(true);
+    try {
+      const base64Audio = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      const res = await fetch('/api/audio/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio: base64Audio })
+      });
+
+      if (!res.ok) throw new Error('Falha ao transcrever o áudio.');
+
+      const { url, text } = await res.json();
+      await handleSendMessage(text || '', url);
+    } catch (err) {
+      console.error('Erro ao processar áudio:', err);
+      setMessages(prev => [...prev, {
+        sender: 'system',
+        text: 'Não foi possível processar o áudio enviado.'
+      }]);
+    } finally {
+      setIsTranscribing(false);
     }
   };
 
@@ -295,6 +370,7 @@ export default function FinanceAssistant({
           }
 
           const isAssistant = m.sender === 'assistant';
+          const audioUrl = !isAssistant && m.text?.startsWith(AUDIO_PREFIX) ? m.text.slice(AUDIO_PREFIX.length) : null;
           return (
             <div 
               key={idx} 
@@ -326,11 +402,17 @@ export default function FinanceAssistant({
               }`}>
                 {/* Time stamp simulated for WhatsApp vibe */}
                 <div className={`break-words select-text ${
-                  isAssistant 
+                  isAssistant
                     ? isDark ? 'text-gray-200' : 'text-gray-800'
                     : isDark ? 'text-black font-semibold' : 'text-zinc-55 font-semibold'
                 }`}>
-                  {isAssistant ? renderMessageContent(m.text) : m.text}
+                  {isAssistant ? (
+                    renderMessageContent(m.text)
+                  ) : audioUrl ? (
+                    <audio controls src={audioUrl} className="h-9 max-w-[200px]" />
+                  ) : (
+                    m.text
+                  )}
                 </div>
                 <div className={`text-[7.5px] text-right mt-1.5 select-none font-mono tracking-tighter ${
                   isAssistant 
@@ -425,16 +507,37 @@ export default function FinanceAssistant({
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="Digite sua pergunta..."
-            className={`flex-1 bg-transparent px-2 py-1.5 text-xs focus:outline-none focus:ring-0 ${
+            placeholder={isRecording ? 'Gravando áudio...' : 'Digite sua pergunta...'}
+            disabled={isRecording || isTranscribing}
+            className={`flex-1 bg-transparent px-2 py-1.5 text-xs focus:outline-none focus:ring-0 disabled:opacity-50 ${
               isDark ? 'text-white placeholder-gray-600' : 'text-black placeholder-gray-400'
             }`}
           />
           <button
+            type="button"
+            onClick={isRecording ? stopRecording : startRecording}
+            disabled={isTranscribing || isLoading}
+            className={`p-2 rounded-xl transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+              isRecording
+                ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
+                : isDark ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-black hover:bg-black/5'
+            }`}
+            title={isRecording ? 'Parar gravação' : 'Gravar áudio'}
+          >
+            {isTranscribing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : isRecording ? (
+              <Square className="w-4 h-4 fill-current" />
+            ) : (
+              <Mic className="w-4 h-4" />
+            )}
+          </button>
+          <button
             type="submit"
-            className={`p-2 rounded-xl transition-all cursor-pointer ${
-              isDark 
-                ? 'bg-white hover:bg-gray-200 text-black' 
+            disabled={isRecording || isTranscribing}
+            className={`p-2 rounded-xl transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+              isDark
+                ? 'bg-white hover:bg-gray-200 text-black'
                 : 'bg-black hover:bg-gray-800 text-zinc-50 shadow-xs'
             }`}
             title="Enviar"

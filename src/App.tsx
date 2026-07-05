@@ -730,14 +730,12 @@ export default function App() {
               />
             )}
             {activeTab === 'budgeting' && (
-              <BudgetingView 
+              <BudgetingView
                 transactions={transactions}
                 onOpenAddModal={() => setIsAddModalOpen(true)}
-                onDeleteTransaction={handleDeleteTransaction}
                 budgetGoals={budgetGoals}
                 onUpdateGoal={handleUpdateGoal}
-                revenueGoal={revenueGoal}
-                onUpdateRevenueGoal={handleUpdateRevenueGoal}
+                onNavigateToTab={(tab) => setActiveTab(tab)}
                 theme={theme}
               />
             )}
@@ -827,7 +825,7 @@ export default function App() {
               className="w-5 h-5 object-contain" 
             />
             {hasUnreadMessage && (
-              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-[#FF4D00] rounded-full flex items-center justify-center border border-white/25"></span>
+              <span className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center border ${theme === 'light' ? 'bg-white border-black/20' : 'bg-black border-white/30'}`}></span>
             )}
           </div>
 
@@ -841,7 +839,7 @@ export default function App() {
                   setHasUnreadMessage(false);
                   setShowFloatingMenu(false);
                 }}
-                className="w-full text-left bg-white/5 hover:bg-[#FF4D00] hover:text-black text-white keep-white px-3 py-2 rounded-lg text-[9px] uppercase tracking-wider font-extrabold transition-all flex items-center gap-2 cursor-pointer border border-transparent hover:border-white/10"
+                className="w-full text-left bg-white/5 hover:bg-white hover:text-black text-white keep-white px-3 py-2 rounded-lg text-[9px] uppercase tracking-wider font-extrabold transition-all flex items-center gap-2 cursor-pointer border border-transparent hover:border-white/10"
               >
                 <MessageSquare className="w-3.5 h-3.5" />
                 <span>Abrir Chat</span>
@@ -862,12 +860,14 @@ export default function App() {
         </div>
       )}
 
-      {/* Mobile Navigation Bar */}
-      <MobileNav 
-        activeTab={activeTab} 
-        onTabChange={setActiveTab} 
-        theme={theme} 
-      />
+      {/* Mobile Navigation Bar - hidden while the sidebar drawer is open so it doesn't overlap it */}
+      {!isSidebarOpenMobile && (
+        <MobileNav
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          theme={theme}
+        />
+      )}
 
       {/* Manual Addition Trigger Modal overlay Form */}
       <AddTransactionModal 

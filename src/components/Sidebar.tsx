@@ -4,7 +4,8 @@
  */
 
 import React from 'react';
-import { 
+import { motion } from 'motion/react';
+import {
   LayoutDashboard, 
   Wallet, 
   ArrowLeftRight, 
@@ -68,39 +69,39 @@ export default function Sidebar({
         />
       )}
 
-      <aside 
+      <aside
         className={`
-          fixed md:sticky top-0 bottom-0 left-0 z-50 flex-col flex-shrink-0 bg-[#080808] border-r border-white/10 transition-all duration-300
-          ${isOpenMobile ? 'flex w-72' : 'hidden md:flex'}
-          ${isCollapsed && !isOpenMobile ? 'md:w-20' : 'md:w-72'}
-        `} 
+          fixed md:sticky top-0 bottom-0 left-0 z-50 flex-col flex-shrink-0 bg-[#080808] border-r border-white/10 transition-all duration-300 overflow-y-auto overflow-x-hidden
+          ${isOpenMobile ? 'flex w-64' : 'hidden md:flex'}
+          ${isCollapsed && !isOpenMobile ? 'md:w-16' : 'md:w-64'}
+        `}
         id="main-sidebar"
       >
         {/* Brand Logo & Toggle Header */}
-        <div className={`px-6 py-8 flex items-center justify-between border-b border-white/5 relative ${isCollapsed ? 'justify-center py-8' : ''}`}>
+        <div className={`px-5 py-5 flex items-center justify-between border-b border-white/5 relative ${isCollapsed ? 'justify-center py-5' : ''}`}>
           {(!isCollapsed || isOpenMobile) ? (
-            <div className="flex items-center gap-3">
-              <img 
-                src={logoUrl} 
-                alt="Leadium Logo" 
-                className="w-14 h-14 object-contain shrink-0" 
+            <div className="flex items-center gap-2.5">
+              <img
+                src={logoUrl}
+                alt="Leadium Logo"
+                className="w-9 h-9 object-contain shrink-0"
                 referrerPolicy="no-referrer"
               />
               <div className="flex flex-col">
-                <span className="text-xs uppercase tracking-[0.3em] font-bold text-white leading-none">
+                <span className="text-[11px] uppercase tracking-[0.28em] font-bold text-white leading-none">
                   Leadium
                 </span>
-                <span className="text-[8px] uppercase tracking-[0.25em] text-[#666666] font-medium mt-1">
+                <span className="text-[7px] uppercase tracking-[0.22em] text-[#666666] font-medium mt-1">
                   Gestão Financeira
                 </span>
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-center w-12 h-12">
-              <img 
-                src={logoUrl} 
-                alt="Leadium Logo" 
-                className="w-12 h-12 object-contain" 
+            <div className="flex items-center justify-center w-9 h-9">
+              <img
+                src={logoUrl}
+                alt="Leadium Logo"
+                className="w-9 h-9 object-contain"
                 referrerPolicy="no-referrer"
               />
             </div>
@@ -121,7 +122,7 @@ export default function Sidebar({
           {/* Desktop Shrink Button (Absolutely positioned on border, out of flex flow) */}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="hidden md:flex absolute top-10 -right-3 z-50 w-6 h-6 rounded-full bg-[#141414] hover:bg-white text-gray-400 hover:text-black border border-white/10 items-center justify-center transition-all duration-300 cursor-pointer shadow-md"
+            className="hidden md:flex absolute top-7 -right-3 z-50 w-5 h-5 rounded-full bg-[#141414] hover:bg-white text-gray-400 hover:text-black border border-white/10 items-center justify-center transition-all duration-300 cursor-pointer shadow-md"
             title={isCollapsed ? "Expandir" : "Encolher"}
             id="sidebar-toggle-btn"
           >
@@ -130,7 +131,7 @@ export default function Sidebar({
         </div>
 
         {/* Main Navigation Menu */}
-        <nav className={`flex-1 px-4 space-y-2 mt-6 ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
+        <nav className={`flex-1 px-3 space-y-1 mt-4 ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -143,34 +144,43 @@ export default function Sidebar({
                   setActiveTab(item.id);
                   setIsOpenMobile(false); // Auto close mobile menu on tab navigation
                 }}
-                className={`w-full group flex items-center gap-4 py-3.5 text-xs uppercase tracking-[0.14em] font-medium rounded-xl transition-all duration-300 cursor-pointer ${
+                className={`relative w-full group flex items-center gap-3 py-2.5 text-[11px] uppercase tracking-[0.12em] font-medium rounded-xl transition-all duration-300 cursor-pointer overflow-hidden ${
                   (isCollapsed && !isOpenMobile)
-                    ? 'justify-center px-0 w-12 h-12' 
-                    : 'px-5'
+                    ? 'justify-center px-0 w-10 h-10'
+                    : 'px-4'
                 } ${
                   isActive
-                    ? isDark
-                      ? 'bg-white text-black shadow-lg shadow-white/5 border border-white'
-                      : 'bg-black text-white keep-white shadow-md border border-black active-tab-light-fix'
+                    ? isDark ? 'text-black' : 'text-white keep-white'
                     : isDark
                       ? 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
                       : 'text-gray-600 hover:text-black hover:bg-gray-100 border border-transparent'
                 }`}
                 title={(isCollapsed && !isOpenMobile) ? item.label : undefined}
               >
-                <Icon className={`w-4 h-4 transition-transform duration-300 group-hover:scale-110 ${
-                  isActive 
+                {isActive && (
+                  <motion.div
+                    layoutId="sidebarActivePill"
+                    className={`absolute inset-0 rounded-xl ${
+                      isDark
+                        ? 'bg-white shadow-lg shadow-white/5 border border-white'
+                        : 'bg-black shadow-md border border-black active-tab-light-fix'
+                    }`}
+                    transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                  />
+                )}
+                <Icon className={`relative w-3.5 h-3.5 transition-transform duration-300 group-hover:scale-110 ${
+                  isActive
                     ? isDark ? 'text-black' : 'text-white keep-white'
                     : isDark ? 'text-gray-400 group-hover:text-white' : 'text-gray-500 group-hover:text-black'
                 }`} />
-                {(!isCollapsed || isOpenMobile) && <span>{item.label}</span>}
+                {(!isCollapsed || isOpenMobile) && <span className="relative">{item.label}</span>}
               </button>
             );
           })}
         </nav>
 
         {/* Bottom Option Menu */}
-        <div className={`px-4 py-8 space-y-2 border-t border-white/10 ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
+        <div className={`px-3 py-4 space-y-1 border-t border-white/10 shrink-0 ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
           {bottomItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -183,49 +193,58 @@ export default function Sidebar({
                   setActiveTab(item.id);
                   setIsOpenMobile(false); // Auto close mobile menu on tab navigation
                 }}
-                className={`w-full group flex items-center gap-4 py-3.5 text-xs uppercase tracking-[0.14em] font-medium rounded-xl transition-all duration-300 cursor-pointer ${
+                className={`relative w-full group flex items-center gap-3 py-2.5 text-[11px] uppercase tracking-[0.12em] font-medium rounded-xl transition-all duration-300 cursor-pointer overflow-hidden ${
                   (isCollapsed && !isOpenMobile)
-                    ? 'justify-center px-0 w-12 h-12' 
-                    : 'px-5'
+                    ? 'justify-center px-0 w-10 h-10'
+                    : 'px-4'
                 } ${
                   isActive
-                    ? isDark
-                      ? 'bg-white text-black shadow-lg shadow-white/5 border border-white'
-                      : 'bg-black text-white keep-white shadow-md border border-black active-tab-light-fix'
+                    ? isDark ? 'text-black' : 'text-white keep-white'
                     : isDark
                       ? 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
                       : 'text-gray-600 hover:text-black hover:bg-gray-100 border border-transparent'
                 }`}
                 title={(isCollapsed && !isOpenMobile) ? item.label : undefined}
               >
-                <Icon className={`w-4 h-4 transition-transform duration-300 group-hover:scale-110 ${
-                  isActive 
+                {isActive && (
+                  <motion.div
+                    layoutId="sidebarActivePill"
+                    className={`absolute inset-0 rounded-xl ${
+                      isDark
+                        ? 'bg-white shadow-lg shadow-white/5 border border-white'
+                        : 'bg-black shadow-md border border-black active-tab-light-fix'
+                    }`}
+                    transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                  />
+                )}
+                <Icon className={`relative w-3.5 h-3.5 transition-transform duration-300 group-hover:scale-110 ${
+                  isActive
                     ? isDark ? 'text-black' : 'text-white keep-white'
                     : isDark ? 'text-gray-400 group-hover:text-white' : 'text-gray-500 group-hover:text-black'
                 }`} />
-                {(!isCollapsed || isOpenMobile) && <span>{item.label}</span>}
+                {(!isCollapsed || isOpenMobile) && <span className="relative">{item.label}</span>}
               </button>
             );
           })}
 
-          {/* Permanent fixed Kairos Assistant selection button inside Sidebar */}
+          {/* Featured Kairos Assistant CTA - visually distinct so it's always easy to spot */}
           <button
             onClick={() => {
               onOpenAssistant();
               setIsOpenMobile(false);
             }}
-            className={`w-full group flex items-center gap-4 py-3.5 text-xs uppercase tracking-[0.14em] font-medium rounded-xl transition-all duration-300 cursor-pointer ${
+            className={`w-full group flex items-center gap-3 py-2.5 mt-1 text-[11px] uppercase tracking-[0.12em] font-semibold rounded-xl border transition-all duration-300 cursor-pointer ${
               (isCollapsed && !isOpenMobile)
-                ? 'justify-center px-0 w-12 h-12' 
-                : 'px-5'
+                ? 'justify-center px-0 w-10 h-10'
+                : 'px-4'
             } ${
               theme === 'light'
-                ? 'text-gray-600 hover:text-black hover:bg-gray-100 border border-transparent'
-                : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
+                ? 'text-black bg-gray-50 hover:bg-gray-100 border-black/10'
+                : 'text-white bg-white/[0.04] hover:bg-white/10 border-white/10'
             }`}
             title={(isCollapsed && !isOpenMobile) ? "Assistente Kairos" : undefined}
           >
-            <MessageSquare className="w-4 h-4 text-[#FF4D00] animate-pulse transition-transform duration-300 group-hover:scale-110" />
+            <MessageSquare className="w-3.5 h-3.5 shrink-0 text-[#AD4F25] animate-pulse transition-transform duration-300 group-hover:scale-110" />
             {(!isCollapsed || isOpenMobile) && <span>Assistente Kairos</span>}
           </button>
         </div>

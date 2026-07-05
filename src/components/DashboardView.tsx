@@ -19,14 +19,15 @@ import {
   X,
   Plus,
   Download,
-  Target
+  Target,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { Transaction, BudgetGoal } from '../types';
 import AnimatedCounter from './AnimatedCounter';
+import NeuralNetworkBackground from './NeuralNetworkBackground';
 import { generateMonthlyReportPDF } from '../utils/pdfGenerator';
-import { 
-  BarChart as ReChartsBarChart, 
-  Bar, 
+import {
   LineChart as ReChartsLineChart,
   Line,
   XAxis, 
@@ -69,6 +70,7 @@ export default function DashboardView({
 
   const [isEditingRevenue, setIsEditingRevenue] = useState(false);
   const [editingRevenueValue, setEditingRevenueValue] = useState(revenueGoal.toString());
+  const [showValues, setShowValues] = useState(true);
 
   const setPresetRange = (preset: 'all' | 'this_month' | 'last_30' | 'this_year') => {
     const today = new Date();
@@ -143,102 +145,10 @@ export default function DashboardView({
     return Math.min(100, Math.round((totalIncome / revenueGoal) * 100));
   }, [totalIncome, revenueGoal]);
 
-  const remainingRevenueGoal = useMemo(() => {
-    return Math.max(0, revenueGoal - totalIncome);
-  }, [totalIncome, revenueGoal]);
-
-  const percentageTrend = useMemo(() => {
-    // Get income from past 30 days and compare to the 30 days before that
-    const today = new Date();
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(today.getDate() - 30);
-    const sixtyDaysAgo = new Date();
-    sixtyDaysAgo.setDate(today.getDate() - 60);
-
-    let recentIncome = 0;
-    let priorIncome = 0;
-
-    transactions.forEach(tx => {
-      if (tx.type !== 'income' || !tx.date) return;
-      if (tx.date >= thirtyDaysAgo.toISOString().split('T')[0] && tx.date <= today.toISOString().split('T')[0]) {
-        recentIncome += tx.amount;
-      } else if (tx.date >= sixtyDaysAgo.toISOString().split('T')[0] && tx.date < thirtyDaysAgo.toISOString().split('T')[0]) {
-        priorIncome += tx.amount;
-      }
-    });
-
-    if (priorIncome === 0) return 12; // fallback placeholder matching the mockup photo exactly!
-    const change = ((recentIncome - priorIncome) / priorIncome) * 100;
-    return Math.round(change);
-  }, [transactions]);
-
   // Total allocated limit
   const totalAllocated = useMemo(() => {
     return budgetGoals.reduce((sum, g) => sum + g.allocated, 0);
   }, [budgetGoals]);
-
-  const futureProjections = useMemo(() => {
-    const recurringTxs = transactions.filter(t => t.isRecurring && t.nextOccurrenceDate);
-    const today = new Date();
-    const futureLimit = new Date();
-    futureLimit.setDate(today.getDate() + 90);
-
-    const projections: Array<{
-      date: string;
-      description: string;
-      sender: string;
-      type: 'income' | 'expense';
-      category: string;
-      amount: number;
-    }> = [];
-
-    recurringTxs.forEach(tx => {
-      if (!tx.nextOccurrenceDate) return;
-      let occurrenceDate = new Date(tx.nextOccurrenceDate + 'T12:00:00');
-      
-      for (let i = 0; i < 12; i++) {
-        if (occurrenceDate > futureLimit) break;
-        
-        projections.push({
-          date: occurrenceDate.toISOString().substring(0, 10),
-          description: tx.description,
-          sender: tx.sender,
-          type: tx.type,
-          category: tx.category,
-          amount: tx.amount
-        });
-
-        if (tx.frequency === 'weekly') {
-          occurrenceDate.setDate(occurrenceDate.getDate() + 7);
-        } else if (tx.frequency === 'monthly') {
-          occurrenceDate.setMonth(occurrenceDate.getMonth() + 1);
-        } else if (tx.frequency === 'quarterly') {
-          occurrenceDate.setMonth(occurrenceDate.getMonth() + 3);
-        } else {
-          break;
-        }
-      }
-    });
-
-    projections.sort((a, b) => a.date.localeCompare(b.date));
-
-    let upcomingIncome = 0;
-    let upcomingExpense = 0;
-    projections.forEach(p => {
-      if (p.type === 'income') {
-        upcomingIncome += p.amount;
-      } else {
-        upcomingExpense += p.amount;
-      }
-    });
-
-    return {
-      list: projections,
-      upcomingIncome,
-      upcomingExpense,
-      projectedNet: upcomingIncome - upcomingExpense
-    };
-  }, [transactions]);
 
   // Compute dynamic trend dates list from actual manual transaction logs only
   const trendData = useMemo(() => {
@@ -415,51 +325,12 @@ export default function DashboardView({
   }, [filteredTransactions, currentMonthKey, prevMonthKey, lineChartType]);
 
   const formatCurrency = (val: number) => {
+    if (!showValues) return 'R$ ••••••';
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
       maximumFractionDigits: 0
     }).format(val);
-  };
-
-  const rechartsData = useMemo(() => {
-    return budgetGoals.map(goal => {
-      const spent = filteredTransactions
-        .filter(tx => tx.type === 'expense' && tx.category === goal.name)
-        .reduce((sum, tx) => sum + tx.amount, 0);
-      return {
-        name: goal.name,
-        Planejado: goal.allocated,
-        Realizado: spent
-      };
-    });
-  }, [budgetGoals, filteredTransactions]);
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className={`p-3 rounded-lg border shadow-xl font-mono text-xs ${
-          theme === 'dark' 
-            ? 'bg-[#18181B]/95 border-white/10 text-white' 
-            : 'bg-white border-gray-200 text-zinc-900'
-        }`}>
-          <p className="font-bold mb-1.5 uppercase text-[10px] tracking-wider">{label}</p>
-          <div className="space-y-1">
-            <p className="flex justify-between gap-4">
-              <span className="text-blue-400">Planejado:</span>
-              <span className="font-bold">{formatCurrency(payload[0].value)}</span>
-            </p>
-            <p className="flex justify-between gap-4">
-              <span className="text-[#FF4D00]">Realizado:</span>
-              <span className={`font-bold ${payload[1].value > payload[0].value ? 'text-rose-500 font-black' : 'text-emerald-400'}`}>
-                {formatCurrency(payload[1].value)}
-              </span>
-            </p>
-          </div>
-        </div>
-      );
-    }
-    return null;
   };
 
   const LineTooltip = ({ active, payload, label }: any) => {
@@ -474,7 +345,7 @@ export default function DashboardView({
           <div className="space-y-1.5">
             {payload.map((p: any) => (
               <p key={p.name} className="flex justify-between gap-4">
-                <span style={{ color: p.color || (p.name.includes('Atual') ? '#FF4D00' : '#888') }}>{p.name}:</span>
+                <span style={{ color: p.color || (p.name.includes('Atual') ? '#FFFFFF' : '#888') }}>{p.name}:</span>
                 <span className="font-bold">
                   {p.value !== undefined ? formatCurrency(p.value) : 'Sem dados'}
                 </span>
@@ -512,23 +383,106 @@ export default function DashboardView({
     setEditingValue('');
   };
 
+  const kpiCards: Array<{
+    key: string;
+    order: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    iconClass?: string;
+    valueNode: React.ReactNode;
+    sublabel: string;
+    subIcon?: React.ComponentType<{ className?: string }>;
+    subIconClass?: string;
+  }> = [
+    {
+      key: 'saldo',
+      order: 'order-4 lg:order-1',
+      label: 'Saldo Líquido',
+      icon: DollarSign,
+      valueNode: (
+        <h3 className={`text-3xl font-serif italic font-light flex items-center overflow-hidden h-9 ${
+          netSavings >= 0
+            ? (theme === 'light' ? 'text-gray-950' : 'text-white')
+            : (theme === 'light' ? 'text-rose-600' : 'text-rose-400')
+        }`}>
+          <AnimatePresence mode="popLayout">
+            <motion.span
+              key={netSavings}
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.94 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              className="inline-block"
+            >
+              {netSavings < 0 ? '-' : ''}{formatCurrency(Math.abs(netSavings))}
+            </motion.span>
+          </AnimatePresence>
+        </h3>
+      ),
+      sublabel: `${netSavings >= 0 ? 'Superávit acumulado' : 'Déficit registrado'} neste período`
+    },
+    {
+      key: 'entradas',
+      order: 'order-1 lg:order-2',
+      label: 'Total de Entradas',
+      icon: TrendingUp,
+      iconClass: theme === 'light' ? 'text-emerald-600' : 'text-emerald-400/80',
+      valueNode: (
+        <h3 className={`text-3xl font-serif italic font-light ${theme === 'light' ? 'text-gray-950' : 'text-white'}`}>
+          {formatCurrency(totalIncome)}
+        </h3>
+      ),
+      sublabel: 'Receitas e faturamentos',
+      subIcon: ArrowUpRight,
+      subIconClass: theme === 'light' ? 'text-emerald-600' : 'text-emerald-400/80'
+    },
+    {
+      key: 'saidas',
+      order: 'order-2 lg:order-3',
+      label: 'Total de Saídas',
+      icon: TrendingDown,
+      iconClass: theme === 'light' ? 'text-rose-600' : 'text-rose-400/80',
+      valueNode: (
+        <h3 className={`text-3xl font-serif italic font-light ${theme === 'light' ? 'text-gray-950' : 'text-white'}`}>
+          {formatCurrency(totalExpenses)}
+        </h3>
+      ),
+      sublabel: 'Despesas pagas',
+      subIcon: ArrowDownLeft,
+      subIconClass: theme === 'light' ? 'text-rose-600' : 'text-rose-400/80'
+    },
+    {
+      key: 'limite',
+      order: 'order-3 lg:order-4',
+      label: 'Limite de Despesas',
+      icon: Calendar,
+      valueNode: (
+        <h3 className={`text-3xl font-serif italic font-light ${theme === 'light' ? 'text-gray-950' : 'text-white'}`}>
+          {formatCurrency(totalAllocated)}
+        </h3>
+      ),
+      sublabel: 'Teto máximo delimitado',
+      subIcon: Activity
+    }
+  ];
+
+  const gaugeRadius = 84;
+  const gaugeCircumference = 2 * Math.PI * gaugeRadius;
+
   return (
     <div className="space-y-10 py-4 animate-fadeIn">
-      {/* Card 3: Progresso de Vendas with Nested Stats */}
-      <div className="bg-[#121212]/90 border border-white/5 rounded-3xl p-6 sm:p-8 relative overflow-hidden group hover:border-white/10 transition-all duration-300 shadow-[0_12px_40px_rgba(0,0,0,0.6)] flex flex-col gap-6">
-        {/* Curved decorative background lines matching the mockup */}
-        <div className="absolute inset-0 opacity-20 pointer-events-none">
-          <svg className="w-full h-full" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M-50 150 C 100 120, 200 250, 450 170" stroke={theme === 'light' ? "rgba(0, 0, 0, 0.04)" : "rgba(255, 255, 255, 0.15)"} strokeWidth="1" />
-            <path d="M-50 170 C 120 140, 180 270, 450 190" stroke={theme === 'light' ? "rgba(0, 0, 0, 0.03)" : "rgba(255, 255, 255, 0.1)"} strokeWidth="1" />
-            <path d="M-50 130 C 80 100, 220 230, 450 150" stroke={theme === 'light' ? "rgba(0, 0, 0, 0.02)" : "rgba(255, 255, 255, 0.05)"} strokeWidth="1" />
-          </svg>
-        </div>
+      {/* Card 3: Faturamento vs Meta */}
+      <div className={`border rounded-3xl p-6 sm:p-8 relative overflow-hidden group transition-all duration-300 flex flex-col gap-6 ${
+        theme === 'light'
+          ? 'bg-white border-black/5 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:border-black/10'
+          : 'bg-black/90 border-white/5 shadow-[0_12px_40px_rgba(0,0,0,0.6)] hover:border-white/10'
+      }`}>
+        <NeuralNetworkBackground theme={theme} />
 
         {/* Top Label with Small Action Buttons */}
-        <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-2 z-10">
+        <div className="relative flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-2 z-10">
           <span className="text-[10px] uppercase tracking-[0.15em] font-extrabold text-gray-500 dark:text-gray-400">
-            Progresso de Vendas
+            Faturamento vs Meta
           </span>
           <div className="flex items-center gap-2">
             {/* Filtrar Período Button (Icon Only) */}
@@ -536,10 +490,14 @@ export default function DashboardView({
               <button
                 type="button"
                 onClick={() => setShowMobileDates(!showMobileDates)}
-                className="p-1.5 bg-gray-100 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg text-gray-900 dark:text-gray-300 transition-all cursor-pointer shadow-sm dark:shadow-none flex items-center justify-center"
+                className={`p-1.5 rounded-lg transition-all cursor-pointer shadow-sm border flex items-center justify-center ${
+                  theme === 'light'
+                    ? 'bg-gray-100 border-black/10 hover:bg-gray-200 text-gray-900'
+                    : 'bg-white/5 border-white/10 hover:bg-white/10 text-gray-300'
+                }`}
                 title="Filtrar período"
               >
-                <Calendar className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400" />
+                <Calendar className="w-3.5 h-3.5" />
               </button>
 
               {/* Dropdown for dates when active - positioned right aligned */}
@@ -551,14 +509,14 @@ export default function DashboardView({
                       type="date"
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
-                      className="bg-gray-50 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-lg px-2 py-1 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-[#FF4D00] w-full"
+                      className="bg-gray-50 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-lg px-2 py-1 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-white/60 w-full"
                     />
                     <span className="text-[9px] text-center text-gray-500 font-mono">até</span>
                     <input
                       type="date"
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
-                      className="bg-gray-50 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-lg px-2 py-1 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-[#FF4D00] w-full"
+                      className="bg-gray-50 dark:bg-black/50 border border-black/10 dark:border-white/10 rounded-lg px-2 py-1 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-white/60 w-full"
                     />
                   </div>
                   <div className="border-t border-black/5 dark:border-white/5 my-1" />
@@ -596,7 +554,22 @@ export default function DashboardView({
               )}
             </div>
 
-            {/* Relatório Button (Small version) */}
+            {/* Toggle: esconder/exibir valores */}
+            <button
+              type="button"
+              onClick={() => setShowValues(v => !v)}
+              className={`p-1.5 rounded-lg transition-all cursor-pointer shadow-sm border flex items-center justify-center ${
+                theme === 'light'
+                  ? 'bg-gray-100 border-black/10 hover:bg-gray-200 text-gray-900'
+                  : 'bg-white/5 border-white/10 hover:bg-white/10 text-gray-300'
+              }`}
+              title={showValues ? 'Ocultar valores' : 'Exibir valores'}
+              aria-label={showValues ? 'Ocultar valores' : 'Exibir valores'}
+            >
+              {showValues ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            </button>
+
+            {/* Relatório Button (icon-only) */}
             <button
               type="button"
               onClick={() => generateMonthlyReportPDF({
@@ -606,260 +579,127 @@ export default function DashboardView({
                 startDate,
                 endDate
               })}
-              className="flex items-center gap-1 px-2 py-1.5 bg-black dark:bg-white text-white dark:text-black hover:bg-black/90 dark:hover:bg-white/90 rounded-lg text-[9px] font-bold transition-all cursor-pointer shadow-sm border border-transparent dark:border-white/10"
+              className={`p-1.5 rounded-lg transition-all cursor-pointer shadow-sm border flex items-center justify-center ${
+                theme === 'light'
+                  ? 'bg-gray-100 border-black/10 hover:bg-gray-200 text-gray-900'
+                  : 'bg-white/5 border-white/10 hover:bg-white/10 text-gray-300'
+              }`}
               title="Exportar relatório consolidado em PDF"
+              aria-label="Exportar relatório consolidado em PDF"
             >
-              <Download className="w-3 h-3 animate-pulse shrink-0" />
-              <span>RELATÓRIO</span>
+              <Download className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
-        {/* Clean layout merging Faturamento Realizado & Meta Objetiva de Vendas at the top of the gauge */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 z-10">
-          {/* Block 1: Faturamento Realizado */}
-          <div className={`border rounded-2xl p-4 flex items-center justify-between relative overflow-hidden transition-all duration-300 ${
-            theme === 'light' 
-              ? 'bg-gray-50 border-gray-200/80' 
-              : 'bg-white/[0.02] border-white/5'
-          }`}>
-            <div className="flex items-center gap-4">
-              {/* Icon Container */}
-              <div className={`w-11 h-11 rounded-xl flex items-center justify-center relative shrink-0 border ${
-                theme === 'light' 
-                  ? 'bg-gray-200/60 border-gray-300/50' 
-                  : 'bg-white/[0.04] border-white/5'
-              }`}>
-                <span className={`absolute top-1 left-1 w-1.5 h-1.5 rounded-full ${
-                  theme === 'light' ? 'bg-gray-800' : 'bg-white'
-                }`}></span>
-                <TrendingUp className={`w-5 h-5 ${theme === 'light' ? 'text-gray-900' : 'text-white'}`} />
-              </div>
-              <div className="text-left">
-                <span className={`text-[9px] uppercase tracking-[0.15em] font-bold block mb-0.5 ${
-                  theme === 'light' ? 'text-gray-500' : 'text-gray-400'
-                }`}>
-                  Faturamento
-                </span>
-                <h2 className={`text-lg sm:text-xl font-bold tracking-tight leading-none font-sans ${
-                  theme === 'light' ? 'text-gray-950' : 'text-white'
-                }`}>
-                  {formatCurrency(totalIncome)}
-                </h2>
-              </div>
-            </div>
-            <div className="text-right flex flex-col items-end shrink-0 pl-2">
-              <span className={`text-[9px] font-bold px-2 py-1 rounded-full border ${
-                theme === 'light' 
-                  ? 'bg-gray-100 border-gray-300 text-gray-900' 
-                  : 'bg-white/[0.06] border-white/5 text-white/90'
-              }`}>
-                {percentageTrend >= 0 ? `+${percentageTrend}%` : `${percentageTrend}%`}
-              </span>
-              <span className={`text-[8px] mt-1 block tracking-tight font-medium ${
-                theme === 'light' ? 'text-gray-600' : 'text-gray-500'
-              }`}>
-                vs período anterior
-              </span>
-            </div>
-          </div>
-
-          {/* Block 2: Meta Objetiva de Vendas */}
-          <div 
-            onClick={!isEditingRevenue ? startEditingRevenue : undefined}
-            className={`border rounded-2xl p-4 flex items-center justify-between relative overflow-hidden transition-all duration-300 ${
-              theme === 'light' 
-                ? 'bg-gray-50 border-gray-200/80' 
-                : 'bg-white/[0.02] border-white/5'
-            } ${
-              !isEditingRevenue ? 'cursor-pointer hover:border-black/20 dark:hover:border-white/10' : ''
-            }`}
-          >
-            <div className="flex items-center gap-4 min-w-0 flex-1">
-              {/* Icon Container */}
-              <div className={`w-11 h-11 rounded-xl flex items-center justify-center relative shrink-0 border ${
-                theme === 'light' 
-                  ? 'bg-gray-200/60 border-gray-300/50' 
-                  : 'bg-white/[0.04] border-white/5'
-              }`}>
-                <span className={`absolute top-1 left-1 w-1.5 h-1.5 rounded-full ${
-                  theme === 'light' ? 'bg-gray-800' : 'bg-white'
-                }`}></span>
-                <Target className={`w-5 h-5 ${theme === 'light' ? 'text-gray-900' : 'text-white'}`} />
-              </div>
-              <div className="text-left min-w-0 flex-1">
-                <span className={`text-[9px] uppercase tracking-[0.15em] font-bold block mb-0.5 ${
-                  theme === 'light' ? 'text-gray-500' : 'text-gray-400'
-                }`}>
-                  Meta de Vendas
-                </span>
-                {isEditingRevenue ? (
-                  <div className="flex items-center gap-1 pt-0.5" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="number"
-                      value={editingRevenueValue}
-                      onChange={e => setEditingRevenueValue(e.target.value)}
-                      className={`border rounded-lg px-2 py-0.5 text-xs font-mono w-20 focus:outline-none focus:border-[#FF4D00] ${
-                        theme === 'light' 
-                          ? 'bg-white border-gray-300 text-gray-900' 
-                          : 'bg-black/60 border-white/10 text-white'
-                      }`}
-                      autoFocus
-                    />
-                    <button 
-                      type="button"
-                      onClick={saveEditingRevenue}
-                      className={`p-0.5 px-2 text-[8px] font-bold rounded transition-colors cursor-pointer ${
-                        theme === 'light'
-                          ? 'bg-gray-900 text-white hover:bg-gray-800'
-                          : 'bg-white text-black hover:bg-gray-200'
-                      }`}
-                    >
-                      OK
-                    </button>
-                  </div>
-                ) : (
-                  <h2 className={`text-lg sm:text-xl font-bold tracking-tight leading-none font-sans truncate ${
-                    theme === 'light' ? 'text-gray-950' : 'text-white'
-                  }`}>
-                    {formatCurrency(revenueGoal)}
-                  </h2>
-                )}
-              </div>
-            </div>
-            <div className="text-right flex flex-col items-end shrink-0 pl-2">
-              <span className={`text-[9px] font-bold px-2 py-1 rounded-full border ${
-                theme === 'light' 
-                  ? 'bg-gray-100 border-gray-300 text-gray-900' 
-                  : 'bg-white/[0.06] border-white/5 text-white/90'
-              }`}>
-                {percentageRevenueReached}%
-              </span>
-              <span className={`text-[8px] mt-1 block tracking-tight font-medium ${
-                theme === 'light' ? 'text-gray-600' : 'text-gray-500'
-              }`}>
-                da meta atingida
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Circular gauge exactly like the mockup */}
-        <div className="relative flex flex-col items-center justify-center py-4 z-10">
-          <div className="relative w-44 h-44 flex items-center justify-center">
-            {/* Outer high-tech rotating tick ring */}
-            <motion.svg 
-              className="w-44 h-44 absolute pointer-events-none"
-              animate={{ rotate: 360 }}
-              transition={{ repeat: Infinity, duration: 40, ease: "linear" }}
-            >
+        {/* Radial gauge: Faturamento vs Meta */}
+        <div className="relative flex flex-col items-center gap-8 py-4 z-10">
+          <div className="relative w-48 h-48 sm:w-56 sm:h-56 shrink-0">
+            <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90">
               <circle
-                cx="88"
-                cy="88"
-                r="82"
+                cx="100" cy="100" r={gaugeRadius}
                 fill="none"
-                stroke={theme === 'light' ? 'rgba(255, 77, 0, 0.12)' : 'rgba(255, 77, 0, 0.15)'}
-                strokeWidth="1.5"
-                strokeDasharray="4 8"
+                strokeWidth="12"
+                className={theme === 'light' ? 'stroke-gray-100' : 'stroke-white/[0.06]'}
               />
-            </motion.svg>
-
-            {/* Tachometer style tick marks behind the progress */}
-            <svg className="w-44 h-44 absolute pointer-events-none">
-              <circle
-                cx="88"
-                cy="88"
-                r="76"
-                fill="none"
-                stroke={theme === 'light' ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)'}
-                strokeWidth="2.5"
-                strokeDasharray="1 5"
-              />
-            </svg>
-
-            {/* Ring Background Shadow / Central Sphere */}
-            <div className={`absolute inset-2 rounded-full border shadow-[inset_0_2px_4px_rgba(0,0,0,0.03),0_10px_30px_rgba(0,0,0,0.05)] transition-all duration-300 ${
-              theme === 'light'
-                ? 'bg-gradient-to-b from-white to-gray-50/95 border-gray-200/80'
-                : 'bg-gradient-to-b from-[#161618] to-[#0A0A0B] border-white/5'
-            }`}></div>
-
-            {/* SVG Circular Progress */}
-            <svg className="w-44 h-44 absolute transform -rotate-90">
-              <defs>
-                <linearGradient id="circleProgressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  {theme === 'light' ? (
-                    <>
-                      <stop offset="0%" stopColor="#E03E00" />
-                      <stop offset="100%" stopColor="#FF6A00" />
-                    </>
-                  ) : (
-                    <>
-                      <stop offset="0%" stopColor="#FF4D00" />
-                      <stop offset="100%" stopColor="#FF9F00" />
-                    </>
-                  )}
-                </linearGradient>
-                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feGaussianBlur stdDeviation="5" result="blur" />
-                  <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                </filter>
-              </defs>
-              {/* Background thin circle */}
-              <circle
-                cx="88"
-                cy="88"
-                r="70"
-                fill="none"
-                stroke={theme === 'light' ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.04)'}
-                strokeWidth="6"
-              />
-              {/* Active animated indicator path with rounded ends */}
               <motion.circle
-                cx="88"
-                cy="88"
-                r="70"
+                cx="100" cy="100" r={gaugeRadius}
                 fill="none"
-                stroke="url(#circleProgressGradient)"
-                strokeWidth="8"
-                strokeDasharray="439.8"
-                initial={{ strokeDashoffset: 439.8 }}
-                animate={{ strokeDashoffset: 439.8 - (439.8 * Math.min(percentageRevenueReached, 100)) / 100 }}
-                transition={{ duration: 1.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+                strokeWidth="12"
                 strokeLinecap="round"
-                filter={theme === 'light' ? undefined : 'url(#glow)'}
+                stroke={theme === 'light' ? 'url(#gaugeGradientLight)' : 'url(#gaugeGradientDark)'}
+                style={{
+                  filter: theme === 'light' ? 'none' : 'drop-shadow(0 0 10px rgba(255,255,255,0.35))'
+                }}
+                strokeDasharray={gaugeCircumference}
+                initial={{ strokeDashoffset: gaugeCircumference }}
+                animate={{ strokeDashoffset: gaugeCircumference * (1 - Math.min(percentageRevenueReached, 100) / 100) }}
+                transition={{ duration: 1.6, ease: [0.16, 1, 0.3, 1] }}
               />
+              <defs>
+                <linearGradient id="gaugeGradientDark" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#FFFFFF" />
+                  <stop offset="100%" stopColor="#8A8A8A" />
+                </linearGradient>
+                <linearGradient id="gaugeGradientLight" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#111111" />
+                  <stop offset="100%" stopColor="#4B4B4B" />
+                </linearGradient>
+              </defs>
             </svg>
-
-            {/* Inner Content matching mockup */}
-            <div className="text-center z-10 flex flex-col items-center justify-center">
-              {/* Dynamic live status pulsing dot */}
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${
-                  percentageRevenueReached >= 100 
-                    ? 'bg-emerald-500 animate-pulse' 
-                    : 'bg-[#FF4D00] animate-pulse'
-                }`} />
-                <span className={`text-[8px] uppercase tracking-wider font-extrabold font-mono ${
-                  theme === 'light' ? 'text-gray-500' : 'text-gray-400'
-                }`}>
-                  Progresso
-                </span>
-              </div>
-
-              <span className={`text-4xl font-extrabold font-sans tracking-tighter leading-none ${
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className={`text-4xl sm:text-5xl font-extrabold font-sans tracking-tighter leading-none ${
                 theme === 'light' ? 'text-gray-950' : 'text-white'
               }`}>
-                {percentageRevenueReached}%
+                <AnimatedCounter value={percentageRevenueReached} formatter={(v) => `${Math.round(v)}%`} />
               </span>
-
-              <span className={`text-[9px] uppercase tracking-[0.2em] font-bold mt-2.5 block px-3 py-1 rounded-full ${
-                theme === 'light' 
-                  ? 'text-gray-800 bg-gray-100 border border-gray-200/85 shadow-sm' 
-                  : 'text-gray-200 bg-white/5 border border-white/5 shadow-inner'
+              <span className={`text-[9px] uppercase tracking-[0.2em] font-bold mt-2 ${
+                theme === 'light' ? 'text-gray-500' : 'text-gray-400'
               }`}>
-                Concluído
+                da meta
               </span>
+            </div>
+          </div>
+
+          <div className="w-full grid grid-cols-2 gap-3 max-w-sm">
+            {/* Faturamento */}
+            <div className={`rounded-2xl border p-4 flex flex-col gap-1.5 ${
+              theme === 'light' ? 'bg-gray-50 border-gray-200/80' : 'bg-white/[0.02] border-white/5'
+            }`}>
+              <span className={`text-[9px] uppercase tracking-[0.15em] font-bold flex items-center gap-1.5 ${
+                theme === 'light' ? 'text-gray-500' : 'text-gray-400'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${theme === 'light' ? 'bg-gray-900' : 'bg-white'}`} />
+                Faturamento
+              </span>
+              <span className={`text-lg sm:text-xl font-bold tracking-tight leading-none font-sans ${
+                theme === 'light' ? 'text-gray-950' : 'text-white'
+              }`}>
+                {formatCurrency(totalIncome)}
+              </span>
+            </div>
+
+            {/* Meta */}
+            <div
+              onClick={!isEditingRevenue ? startEditingRevenue : undefined}
+              className={`rounded-2xl border p-4 flex flex-col gap-1.5 transition-all duration-300 ${
+                theme === 'light' ? 'bg-gray-50 border-gray-200/80' : 'bg-white/[0.02] border-white/5'
+              } ${!isEditingRevenue ? 'cursor-pointer hover:border-black/20 dark:hover:border-white/10' : ''}`}
+            >
+              <span className={`text-[9px] uppercase tracking-[0.15em] font-bold flex items-center gap-1.5 ${
+                theme === 'light' ? 'text-gray-500' : 'text-gray-400'
+              }`}>
+                <Target className={`w-3 h-3 shrink-0 ${theme === 'light' ? 'text-gray-900' : 'text-white'}`} />
+                Meta
+              </span>
+              {isEditingRevenue ? (
+                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="number"
+                    value={editingRevenueValue}
+                    onChange={e => setEditingRevenueValue(e.target.value)}
+                    className={`border rounded-lg px-2 py-0.5 text-xs font-mono w-20 focus:outline-none focus:border-white/60 ${
+                      theme === 'light' ? 'bg-white border-gray-300 text-gray-900' : 'bg-black/60 border-white/10 text-white'
+                    }`}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={saveEditingRevenue}
+                    className={`p-0.5 px-2 text-[8px] font-bold rounded transition-colors cursor-pointer ${
+                      theme === 'light' ? 'bg-gray-900 text-white hover:bg-gray-800' : 'bg-white text-black hover:bg-gray-200'
+                    }`}
+                  >
+                    OK
+                  </button>
+                </div>
+              ) : (
+                <span className={`text-lg sm:text-xl font-bold tracking-tight leading-none font-sans truncate ${
+                  theme === 'light' ? 'text-gray-950' : 'text-white'
+                }`}>
+                  {formatCurrency(revenueGoal)}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -867,101 +707,32 @@ export default function DashboardView({
 
       {/* Main Core Net stats grids */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-4 sm:mt-6 lg:mt-12">
-        
-        {/* Total Net Balance Card */}
-        <div 
-          className="metric-card-interactive glass-container p-5 border-l-2 border-l-emerald-500 shadow-lg text-left cursor-pointer order-4 lg:order-1"
-          style={{ 
-            '--card-highlight': '#10B981', 
-            '--card-glow': 'rgba(16, 185, 129, 0.15)' 
-          } as React.CSSProperties}
-        >
-          <div className="flex justify-between items-start text-[#999999] mb-3">
-            <span className="text-[9px] uppercase font-bold tracking-[0.2em]">Saldo Líquido</span>
-            <DollarSign className="w-4 h-4 text-emerald-500" />
-          </div>
-          <h3 className={`text-3xl font-serif italic font-light ${netSavings >= 0 ? 'text-white' : 'text-rose-400'} flex items-center overflow-hidden h-9`}>
-            <AnimatePresence mode="popLayout">
-              <motion.span
-                key={netSavings}
-                initial={{ opacity: 0, scale: 0.94 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.94 }}
-                transition={{ duration: 0.25, ease: 'easeOut' }}
-                className="inline-block"
-              >
-                {netSavings < 0 ? '-' : ''}{formatCurrency(Math.abs(netSavings))}
-              </motion.span>
-            </AnimatePresence>
-          </h3>
-          <p className="text-[9px] uppercase tracking-wider text-[#666666] mt-2 font-mono">
-            {netSavings >= 0 ? 'Superávit acumulado' : 'Déficit registrado'} neste período
-          </p>
-        </div>
-
-        {/* Total Income Card */}
-        <div 
-          className="metric-card-interactive glass-container p-5 border-l-2 border-l-emerald-500 shadow-lg text-left cursor-pointer order-1 lg:order-2"
-          style={{ 
-            '--card-highlight': '#10B981', 
-            '--card-glow': 'rgba(16, 185, 129, 0.15)' 
-          } as React.CSSProperties}
-        >
-          <div className="flex justify-between items-start text-[#999999] mb-3">
-            <span className="text-[9px] uppercase font-bold tracking-[0.2em]">Total de Entradas</span>
-            <TrendingUp className="w-4 h-4 text-emerald-400" />
-          </div>
-          <h3 className="text-3xl font-serif italic font-light text-white">
-            {formatCurrency(totalIncome)}
-          </h3>
-          <p className="text-[9px] uppercase tracking-wider text-emerald-400 mt-2 flex items-center gap-1 font-mono">
-            <ArrowUpRight className="w-3 h-3" />
-            <span>Receitas e faturamentos</span>
-          </p>
-        </div>
-
-        {/* Total Expenses Card */}
-        <div 
-          className="metric-card-interactive glass-container p-5 border-l-2 border-l-rose-500 shadow-lg text-left cursor-pointer order-2 lg:order-3"
-          style={{ 
-            '--card-highlight': '#F43F5E', 
-            '--card-glow': 'rgba(244, 63, 94, 0.15)' 
-          } as React.CSSProperties}
-        >
-          <div className="flex justify-between items-start text-[#999999] mb-3">
-            <span className="text-[9px] uppercase font-bold tracking-[0.2em]">Total de Saídas</span>
-            <TrendingDown className="w-4 h-4 text-rose-400" />
-          </div>
-          <h3 className="text-3xl font-serif italic font-light text-white">
-            {formatCurrency(totalExpenses)}
-          </h3>
-          <p className="text-[9px] uppercase tracking-wider text-rose-400 mt-2 flex items-center gap-1 font-mono">
-            <ArrowDownLeft className="w-3 h-3" />
-            <span>Despesas pagas</span>
-          </p>
-        </div>
-
-        {/* Dedicated Monthly Plan KPI Card */}
-        <div 
-          className="metric-card-interactive glass-container p-5 border-l-2 border-l-blue-500 shadow-lg text-left cursor-pointer order-3 lg:order-4"
-          style={{ 
-            '--card-highlight': '#3B82F6', 
-            '--card-glow': 'rgba(59, 130, 246, 0.15)' 
-          } as React.CSSProperties}
-        >
-          <div className="flex justify-between items-start text-[#999999] mb-3">
-            <span className="text-[9px] uppercase font-bold tracking-[0.2em]">Limite de Despesas</span>
-            <Calendar className="w-4 h-4 text-blue-400" />
-          </div>
-          <h3 className="text-3xl font-serif italic font-light text-white">
-            {formatCurrency(totalAllocated)}
-          </h3>
-          <p className="text-[9px] uppercase tracking-wider text-blue-400 mt-2 flex items-center gap-1 font-mono">
-            <Activity className="w-3 h-3" />
-            <span>Teto máximo delimitado</span>
-          </p>
-        </div>
-
+        {kpiCards.map((card) => {
+          const Icon = card.icon;
+          const SubIcon = card.subIcon;
+          return (
+            <div
+              key={card.key}
+              className={`metric-card-interactive glass-container p-5 border-l-2 shadow-lg text-left cursor-pointer ${card.order} ${
+                theme === 'light' ? 'border-l-black/10' : 'border-l-white/20'
+              }`}
+              style={{
+                '--card-highlight': theme === 'light' ? '#111111' : '#FFFFFF',
+                '--card-glow': theme === 'light' ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.1)'
+              } as React.CSSProperties}
+            >
+              <div className={`flex justify-between items-start mb-3 ${theme === 'light' ? 'text-gray-500' : 'text-[#999999]'}`}>
+                <span className="text-[9px] uppercase font-bold tracking-[0.2em]">{card.label}</span>
+                <Icon className={`w-4 h-4 ${card.iconClass || (theme === 'light' ? 'text-gray-900/50' : 'text-white/60')}`} />
+              </div>
+              {card.valueNode}
+              <p className={`text-[9px] uppercase tracking-wider mt-2 flex items-center gap-1 font-mono ${theme === 'light' ? 'text-gray-500' : 'text-zinc-500'}`}>
+                {SubIcon && <SubIcon className={`w-3 h-3 ${card.subIconClass || (theme === 'light' ? 'text-gray-900/50' : 'text-white/60')}`} />}
+                <span>{card.sublabel}</span>
+              </p>
+            </div>
+          );
+        })}
       </div>
 
       {/* Real-time Budget Goals Progress Bars */}
@@ -970,13 +741,13 @@ export default function DashboardView({
           <h3 className={`text-xs uppercase font-bold tracking-widest flex items-center gap-2 ${
             theme === 'dark' ? 'text-[#F9FAFB]' : 'text-zinc-800'
           }`}>
-            <Activity className="w-4 h-4 text-[#FF4D00]" />
+            <Activity className={`w-4 h-4 ${theme === 'dark' ? 'text-white/70' : 'text-zinc-700'}`} />
             <span>Progresso das Metas Orçamentárias</span>
           </h3>
           <button
             type="button"
             onClick={() => onNavigateToTab('budgeting')}
-            className="text-[10px] font-mono font-bold uppercase text-[#FF4D00] hover:underline cursor-pointer bg-transparent border-0"
+            className="text-[10px] font-mono font-bold uppercase text-white/80 hover:underline cursor-pointer bg-transparent border-0"
           >
             Ajustar Alocações →
           </button>
@@ -1055,7 +826,7 @@ export default function DashboardView({
             <h3 className={`text-xs uppercase font-bold tracking-widest flex items-center gap-2 text-left ${
               theme === 'dark' ? 'text-[#F9FAFB]' : 'text-zinc-800'
             }`}>
-              <PieChart className="w-4 h-4 text-[#B43C00]" />
+              <PieChart className={`w-4 h-4 ${theme === 'dark' ? 'text-white/70' : 'text-zinc-700'}`} />
               <span>Saídas por Categoria</span>
             </h3>
             <span className={`text-[10px] uppercase tracking-wider font-mono ${
@@ -1090,7 +861,9 @@ export default function DashboardView({
                     const strokeLength = (strokeDash * percentScaled) / 100;
                     const offset = strokeDash - strokeLength + acc.runningOffset;
                     
-                    const colors = ['#B43C00', '#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EC4899', '#737373'];
+                    const colors = theme === 'light'
+                      ? ['#111111', '#3D3D3D', '#5C5C5C', '#7A7A7A', '#999999', '#B8B8B8']
+                      : ['#FFFFFF', '#C7C7C7', '#9A9A9A', '#707070', '#4A4A4A', '#2E2E2E'];
                     const color = colors[idx % colors.length];
 
                     acc.elements.push(
@@ -1127,7 +900,9 @@ export default function DashboardView({
                     {hoveredCategory ? (hoveredCategory.name === 'Cafe & Restaurants' ? 'Restaurantes' : hoveredCategory.name === 'Groceries' ? 'Supermercado' : hoveredCategory.name === 'Money Transfer' ? 'Transf.' : hoveredCategory.name) : (categoryChartData[0]?.name === 'Cafe & Restaurants' ? 'Restaurantes' : categoryChartData[0]?.name === 'Groceries' ? 'Supermercado' : categoryChartData[0]?.name === 'Money Transfer' ? 'Transf.' : categoryChartData[0]?.name || 'Categorias')}
                   </span>
                   {hoveredCategory && (
-                    <span className="text-[9px] font-mono text-emerald-500 font-semibold block mt-0.5">
+                    <span className={`text-[9px] font-mono font-semibold block mt-0.5 ${
+                      theme === 'dark' ? 'text-white/80' : 'text-zinc-700'
+                    }`}>
                       {formatCurrency(hoveredCategory.value)}
                     </span>
                   )}
@@ -1137,7 +912,9 @@ export default function DashboardView({
               {/* Categoric percentage side legend table lists */}
               <div className="flex-1 space-y-3.5 w-full">
                 {categoryChartData.slice(0, 5).map((choice, idx) => {
-                  const colors = ['bg-[#B43C00]', 'bg-[#10B981]', 'bg-[#3B82F6]', 'bg-[#8B5CF6]', 'bg-[#F59E0B]', 'bg-[#737373]'];
+                  const colors = theme === 'light'
+                    ? ['bg-[#111111]', 'bg-[#3D3D3D]', 'bg-[#5C5C5C]', 'bg-[#7A7A7A]', 'bg-[#999999]']
+                    : ['bg-[#FFFFFF]', 'bg-[#C7C7C7]', 'bg-[#9A9A9A]', 'bg-[#707070]', 'bg-[#4A4A4A]'];
                   const colorDot = colors[idx % colors.length];
                   return (
                     <div key={choice.name} className="flex justify-between items-center text-xs">
@@ -1171,18 +948,18 @@ export default function DashboardView({
             <h3 className={`text-xs uppercase font-bold tracking-widest flex items-center gap-2 text-left ${
               theme === 'dark' ? 'text-[#F9FAFB]' : 'text-zinc-800'
             }`}>
-              <Activity className="w-4 h-4 text-[#B43C00] animate-pulse" />
+              <Activity className={`w-4 h-4 ${theme === 'dark' ? 'text-white/70' : 'text-zinc-700'}`} />
               <span>Tendências de Fluxo</span>
             </h3>
             {hoveredTrend ? (
               <span className={`text-[10px] font-mono font-bold ${
                 theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'
               }`}>
-                {hoveredTrend.month}: <span className="text-emerald-500">+{formatCurrency(hoveredTrend.income)}</span> | <span className="text-rose-400">-{formatCurrency(hoveredTrend.expense)}</span>
+                {hoveredTrend.month}: <span className={theme === 'dark' ? 'text-white' : 'text-zinc-950'}>+{formatCurrency(hoveredTrend.income)}</span> | <span className="text-zinc-500">-{formatCurrency(hoveredTrend.expense)}</span>
               </span>
             ) : (
               <span className={`text-[10px] uppercase font-bold font-mono ${
-                theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'
               }`}>
                 Entradas vs Saídas por Mês
               </span>
@@ -1210,9 +987,11 @@ export default function DashboardView({
                   >
                     <div className="flex gap-1.5 h-32 items-end w-full relative">
                       {/* Income Column */}
-                      <div 
-                        style={{ height: hInc }} 
-                        className="bg-emerald-500/20 hover:bg-emerald-500/40 w-4 rounded-t transition-all relative"
+                      <div
+                        style={{ height: hInc }}
+                        className={`w-4 rounded-t transition-all relative ${
+                          theme === 'dark' ? 'bg-white/70 hover:bg-white' : 'bg-zinc-900/70 hover:bg-zinc-900'
+                        }`}
                         title={`Inflow ${d.month}: ${formatCurrency(d.income)}`}
                       >
                         <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block text-[10px] font-mono font-bold py-1 px-2 rounded-lg whitespace-nowrap z-20 shadow-md ${
@@ -1224,9 +1003,13 @@ export default function DashboardView({
                         </div>
                       </div>
                       {/* Expense Column */}
-                      <div 
-                        style={{ height: hExp }} 
-                        className="bg-[#B43C00]/40 hover:bg-[#B43C00] w-4 rounded-t transition-all relative"
+                      <div
+                        style={{ height: hExp }}
+                        className={`w-4 rounded-t transition-all relative border ${
+                          theme === 'dark'
+                            ? 'bg-white/10 border-white/20 hover:bg-white/20'
+                            : 'bg-zinc-900/10 border-zinc-900/20 hover:bg-zinc-900/20'
+                        }`}
                         title={`Outflow ${d.month}: ${formatCurrency(d.expense)}`}
                       >
                         <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block text-[10px] font-mono font-bold py-1 px-2 rounded-lg whitespace-nowrap z-20 shadow-md ${
@@ -1251,11 +1034,13 @@ export default function DashboardView({
             theme === 'dark' ? 'text-zinc-500 border-white/5' : 'text-zinc-600 border-black/5'
           }`}>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500/30"></span>
+              <span className={`w-2.5 h-2.5 rounded-sm ${theme === 'dark' ? 'bg-white/70' : 'bg-zinc-900/70'}`}></span>
               <span>Entrada de Capital</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-sm bg-[#B43C00]/40"></span>
+              <span className={`w-2.5 h-2.5 rounded-sm border ${
+                theme === 'dark' ? 'bg-white/10 border-white/20' : 'bg-zinc-900/10 border-zinc-900/20'
+              }`}></span>
               <span>Saída de Capital</span>
             </div>
           </div>
@@ -1270,7 +1055,7 @@ export default function DashboardView({
             <h3 className={`text-xs uppercase font-bold tracking-widest flex items-center gap-2 ${
               theme === 'dark' ? 'text-[#F9FAFB]' : 'text-zinc-800'
             }`}>
-              <TrendingUp className="w-4 h-4 text-[#FF4D00]" />
+              <TrendingUp className={`w-4 h-4 ${theme === 'dark' ? 'text-white/70' : 'text-zinc-700'}`} />
               <span>Tendência de Consumo: {currentMonthLabel} vs. {prevMonthLabel}</span>
             </h3>
             <p className="text-[10px] text-gray-500 mt-1 font-mono">
@@ -1284,7 +1069,7 @@ export default function DashboardView({
               onClick={() => setLineChartType('cumulative')}
               className={`px-3 py-1 rounded text-[10px] font-mono font-bold uppercase transition-all cursor-pointer ${
                 lineChartType === 'cumulative'
-                  ? 'bg-[#FF4D00] text-black font-black'
+                  ? (theme === 'dark' ? 'bg-white text-black font-black' : 'bg-zinc-900 text-white font-black')
                   : theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-zinc-500 hover:text-zinc-900'
               }`}
             >
@@ -1295,7 +1080,7 @@ export default function DashboardView({
               onClick={() => setLineChartType('daily')}
               className={`px-3 py-1 rounded text-[10px] font-mono font-bold uppercase transition-all cursor-pointer ${
                 lineChartType === 'daily'
-                  ? 'bg-[#FF4D00] text-black font-black'
+                  ? (theme === 'dark' ? 'bg-white text-black font-black' : 'bg-zinc-900 text-white font-black')
                   : theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-zinc-500 hover:text-zinc-900'
               }`}
             >
@@ -1336,93 +1121,25 @@ export default function DashboardView({
                 iconSize={8}
                 wrapperStyle={{ fontSize: '10px', fontFamily: 'monospace', textTransform: 'uppercase' }}
               />
-              <Line 
+              <Line
                 name={`Mês Anterior (${prevMonthLabel})`}
                 type="monotone"
-                dataKey="Mês Anterior" 
-                stroke={theme === 'dark' ? '#71717a' : '#a1a1aa'} 
+                dataKey="Mês Anterior"
+                stroke={theme === 'dark' ? '#52525b' : '#a1a1aa'}
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 4 }}
               />
-              <Line 
+              <Line
                 name={`Mês Atual (${currentMonthLabel})`}
                 type="monotone"
-                dataKey="Mês Atual" 
-                stroke="#FF4D00" 
+                dataKey="Mês Atual"
+                stroke={theme === 'dark' ? '#FFFFFF' : '#111111'}
                 strokeWidth={3}
                 dot={false}
                 activeDot={{ r: 6 }}
               />
             </ReChartsLineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Comparative Budget Goals and Spent (Recharts Bar Chart) */}
-      <div className="glass-container rounded-xl p-6 text-left mt-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-2">
-          <div>
-            <h3 className={`text-xs uppercase font-bold tracking-widest flex items-center gap-2 ${
-              theme === 'dark' ? 'text-[#F9FAFB]' : 'text-zinc-800'
-            }`}>
-              <Activity className="w-4 h-4 text-[#FF4D00]" />
-              <span>Comparativa de Metas: Planejado vs. Realizado</span>
-            </h3>
-            <p className="text-[10px] text-gray-500 mt-1 font-mono">
-              Visualização comparativa dos limites alocados em relação às despesas reais para cada categoria.
-            </p>
-          </div>
-          <span className={`text-[10px] uppercase tracking-wider font-mono px-2.5 py-1 rounded-md bg-white/5 border border-white/10 ${
-            theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'
-          }`}>
-            Recharts Ativo
-          </span>
-        </div>
-
-        <div className="h-80 w-full mt-4">
-          <ResponsiveContainer width="100%" height="100%">
-            <ReChartsBarChart
-              data={rechartsData}
-              margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
-              <XAxis 
-                dataKey="name" 
-                stroke={theme === 'dark' ? '#71717a' : '#71717a'} 
-                fontSize={10}
-                tickLine={false}
-              />
-              <YAxis 
-                stroke={theme === 'dark' ? '#71717a' : '#71717a'} 
-                fontSize={10}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(value) => `R$ ${value}`}
-              />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }} />
-              <Legend 
-                verticalAlign="top" 
-                height={36} 
-                iconType="circle"
-                iconSize={8}
-                wrapperStyle={{ fontSize: '10px', fontFamily: 'monospace', textTransform: 'uppercase' }}
-              />
-              <Bar 
-                name="Planejado"
-                dataKey="Planejado" 
-                fill={theme === 'dark' ? '#3B82F6' : '#2563EB'} 
-                radius={[4, 4, 0, 0]} 
-                maxBarSize={40}
-              />
-              <Bar 
-                name="Realizado"
-                dataKey="Realizado" 
-                fill="#FF4D00" 
-                radius={[4, 4, 0, 0]} 
-                maxBarSize={40}
-              />
-            </ReChartsBarChart>
           </ResponsiveContainer>
         </div>
       </div>

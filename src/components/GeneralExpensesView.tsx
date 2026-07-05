@@ -113,19 +113,20 @@ export default function GeneralExpensesView({ theme, clients }: GeneralExpensesV
             Controle de despesas vinculadas a clientes, reembolsos e cobranças na mensalidade.
           </p>
         </div>
-        <button 
+        <button
           onClick={() => {
             setFormData({ status: 'pending', billingType: 'separate', date: new Date().toISOString().split('T')[0] });
             setIsModalOpen(true);
           }}
-          className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border-[1.58px] px-5 py-2.5 font-medium shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-xs font-bold font-mono uppercase tracking-wider ${
-            isDark 
-              ? 'bg-white border-zinc-200 text-zinc-950 hover:bg-zinc-50' 
+          className={`inline-flex cursor-pointer items-center justify-center rounded-xl border-[1.58px] p-2.5 shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
+            isDark
+              ? 'bg-white border-zinc-200 text-zinc-950 hover:bg-zinc-50'
               : 'bg-zinc-950 border-zinc-600 text-slate-200 hover:bg-zinc-900 keep-white text-keep-white'
           }`}
+          title="Nova Despesa"
+          aria-label="Nova Despesa"
         >
           <Plus className="w-4 h-4" />
-          <span>Nova Despesa</span>
         </button>
       </div>
 
@@ -227,7 +228,7 @@ export default function GeneralExpensesView({ theme, clients }: GeneralExpensesV
                         </button>
                         <button 
                           onClick={() => setDeletingId(null)} 
-                          className="text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-mono font-bold hover:underline active:scale-95 bg-neutral-100 dark:bg-neutral-850 px-2 py-1 rounded"
+                          className="text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-mono font-bold hover:underline active:scale-95 bg-neutral-100 dark:bg-neutral-900 px-2 py-1 rounded"
                         >
                           Não
                         </button>
@@ -261,7 +262,7 @@ export default function GeneralExpensesView({ theme, clients }: GeneralExpensesV
                   required
                   value={formData.clientId || ''}
                   onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
-                  className="w-full p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                  className="w-full p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                 >
                   <option value="" disabled>Selecione um cliente...</option>
                   <option value="leadium">Leadium (Interno)</option>
@@ -277,7 +278,7 @@ export default function GeneralExpensesView({ theme, clients }: GeneralExpensesV
                   value={formData.description || ''}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Ex: Almoço com diretoria, Brindes..."
-                  className="w-full p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                  className="w-full p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                 />
               </div>
 
@@ -289,7 +290,7 @@ export default function GeneralExpensesView({ theme, clients }: GeneralExpensesV
                     required
                     value={formData.date || ''}
                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    className="w-full p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    className="w-full p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                   />
                 </div>
                 <div className="space-y-1">
@@ -301,7 +302,7 @@ export default function GeneralExpensesView({ theme, clients }: GeneralExpensesV
                     value={formData.amount || ''}
                     onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) })}
                     placeholder="0.00"
-                    className="w-full p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    className="w-full p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                   />
                 </div>
               </div>
@@ -312,7 +313,7 @@ export default function GeneralExpensesView({ theme, clients }: GeneralExpensesV
                   <select
                     value={formData.billingType || 'separate'}
                     onChange={(e) => setFormData({ ...formData, billingType: e.target.value as any })}
-                    className="w-full p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    className="w-full p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                   >
                     <option value="separate">Cobrar Avulso</option>
                     <option value="monthly_fee">Incluir na Mensalidade</option>
@@ -323,7 +324,7 @@ export default function GeneralExpensesView({ theme, clients }: GeneralExpensesV
                   <select
                     value={formData.status || 'pending'}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                    className="w-full p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    className="w-full p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                   >
                     <option value="pending">Pendente</option>
                     <option value="reimbursed">Reembolsado</option>
@@ -339,7 +340,7 @@ export default function GeneralExpensesView({ theme, clients }: GeneralExpensesV
                     value={formData.receiptImage || ''}
                     onChange={(e) => setFormData({ ...formData, receiptImage: e.target.value })}
                     placeholder="https://sua-imagem.com ou faça drag & drop abaixo"
-                    className="flex-1 p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FF4D00]"
+                    className="flex-1 p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none focus:border-[#FFFFFF]"
                   />
                   {formData.receiptImage && (
                     <button
@@ -354,7 +355,7 @@ export default function GeneralExpensesView({ theme, clients }: GeneralExpensesV
 
                 {/* Upload drag & click zone */}
                 <div 
-                  className="border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-3 text-center cursor-pointer hover:border-[#FF4D00] transition bg-neutral-50/50 dark:bg-neutral-900/25 mt-1"
+                  className="border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-3 text-center cursor-pointer hover:border-[#FFFFFF] transition bg-neutral-50/50 dark:bg-neutral-900/25 mt-1"
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
@@ -435,7 +436,7 @@ export default function GeneralExpensesView({ theme, clients }: GeneralExpensesV
                   value={formData.notes || ''}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="Detalhes (Opcional)..."
-                  className="w-full p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none resize-none h-16 focus:border-[#FF4D00]"
+                  className="w-full p-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-800 bg-transparent text-neutral-950 dark:text-white outline-none resize-none h-16 focus:border-[#FFFFFF]"
                 />
               </div>
 

@@ -1223,7 +1223,7 @@ export default function ClientsView({
                           <button 
                             type="button"
                             onClick={() => toggleNotesExpanded(c.id)}
-                            className="text-[9px] text-[#FF4D00]/70 cursor-pointer block mt-0.5 hover:underline"
+                            className="text-[9px] text-[#FFFFFF]/70 cursor-pointer block mt-0.5 hover:underline"
                           >
                             {expandedNotes[c.id] ? '[- Recolher Observação]' : '[+ Ver Observação Completa]'}
                           </button>
@@ -1341,7 +1341,7 @@ export default function ClientsView({
                            <button
                              onClick={() => handleRecordQuickPayment(c.id, c.name)}
                              disabled={isRecordingPayment}
-                             className="w-full py-2.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all cursor-pointer bg-[#FF4D00] text-white hover:bg-[#e04500]" style={{ color: "#FFFFFF" }}
+                             className="w-full py-2.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all cursor-pointer bg-white text-black hover:bg-neutral-200"
                            >
                              {isRecordingPayment ? 'Registrando...' : 'Registrar e Creditar LTV'}
                            </button>
@@ -1669,7 +1669,7 @@ export default function ClientsView({
                                       <button 
                                         type="button"
                                         onClick={() => toggleNotesExpanded(c.id)}
-                                        className="text-[9px] text-[#FF4D00]/70 cursor-pointer block mt-0.5 hover:underline"
+                                        className="text-[9px] text-[#FFFFFF]/70 cursor-pointer block mt-0.5 hover:underline"
                                       >
                                         {expandedNotes[c.id] ? '[- Recolher Observação]' : '[+ Ver Observação Completa]'}
                                       </button>
@@ -1836,7 +1836,7 @@ export default function ClientsView({
                                       <button
                                         onClick={() => handleRecordQuickPayment(c.id, c.name)}
                                         disabled={isRecordingPayment}
-                                        className="w-full py-1.5 rounded text-[10px] uppercase font-bold tracking-wider transition-all cursor-pointer bg-[#FF4D00] text-white hover:bg-[#e04500]"
+                                        className="w-full py-1.5 rounded text-[10px] uppercase font-bold tracking-wider transition-all cursor-pointer bg-white text-black hover:bg-neutral-200"
                                         style={{ color: '#FFFFFF' }}
                                       >
                                         {isRecordingPayment ? 'Registrando...' : 'Registrar e Creditar LTV'}

@@ -89,25 +89,28 @@ export default function TransactionsView({
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <button
             onClick={handleExport}
-            className={`flex-1 sm:flex-none flex items-center justify-center px-4 py-2 font-medium rounded-lg transition-colors cursor-pointer text-sm ${
+            className={`p-2.5 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
               theme === 'light'
-                ? 'bg-black text-[#FFFFFF] hover:bg-gray-800'
+                ? 'bg-black text-white keep-white hover:bg-gray-800'
                 : 'bg-white text-black hover:bg-gray-200'
             }`}
-            title="Exportar PDF"
+            title="Exportar Dados"
+            aria-label="Exportar Dados"
           >
-            Exportar Dados
+            <Download className="w-4 h-4" />
           </button>
 
           <button
             onClick={onOpenAddModal}
-            className={`flex-1 sm:flex-none flex items-center justify-center px-6 py-2 font-medium rounded-lg transition-colors cursor-pointer text-sm ${
+            className={`p-2.5 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
               theme === 'light'
-                ? 'bg-black text-[#FFFFFF] hover:bg-gray-800'
+                ? 'bg-black text-white keep-white hover:bg-gray-800'
                 : 'bg-white text-black hover:bg-gray-200'
             }`}
+            title="Adicionar"
+            aria-label="Adicionar"
           >
-            Adicionar
+            <Plus className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -126,14 +129,14 @@ export default function TransactionsView({
             placeholder="Buscar favorecido, descrição..."
             className={`w-full border rounded-xl py-2 pl-9 pr-3 text-xs placeholder-gray-500 focus:outline-none transition-all font-sans ${
               isDark 
-                ? 'bg-[#141414] border-white/10 text-white focus:border-[#FF4D00]/50' 
-                : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-[#FF4D00]/50'
+                ? 'bg-[#141414] border-white/10 text-white focus:border-[#FFFFFF]/50' 
+                : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-[#FFFFFF]/50'
             }`}
           />
         </div>
 
         {/* Category Filter */}
-        <div className={`flex items-center gap-2 border rounded-xl py-1 px-3 focus-within:border-[#FF4D00]/50 transition-all ${
+        <div className={`flex items-center gap-2 border rounded-xl py-1 px-3 focus-within:border-[#FFFFFF]/50 transition-all ${
           isDark ? 'bg-[#141414] border-white/10 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
         }`}>
           <Tag className="w-3.5 h-3.5 text-gray-500 shrink-0" />
@@ -270,7 +273,7 @@ export default function TransactionsView({
                       {/* Expanded Subrow detail panel */}
                       {isExpanded && (
                         <tr className={isDark ? 'bg-white/[0.015]' : 'bg-gray-50/50'}>
-                          <td colSpan={2} className="py-4 px-6 border-l-2 border-[#FF4D00]">
+                          <td colSpan={2} className="py-4 px-6 border-l-2 border-[#FFFFFF]">
                             <div className={`grid grid-cols-1 ${tx.isRecurring ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-6 text-left py-2 animate-fadeIn`}>
                               
                               {/* Option A: Description details */}

@@ -63,7 +63,7 @@ export const generateMonthlyReportPDF = (params: {
   const pageWidth = doc.internal.pageSize.getWidth();
 
   // Draw elegant top bar accent
-  doc.setFillColor(255, 77, 0); // Leadium Orange (#FF4D00)
+  doc.setFillColor(17, 17, 17); // Leadium Black accent
   doc.rect(0, 0, pageWidth, 4, 'F');
 
   // Header Typography
@@ -114,7 +114,7 @@ export const generateMonthlyReportPDF = (params: {
   doc.rect(14, 39, pageWidth - 28, 30, 'S');
 
   // Mini decorative left bar on summary panel
-  doc.setFillColor(255, 77, 0);
+  doc.setFillColor(17, 17, 17);
   doc.rect(14, 39, 1.5, 30, 'F');
 
   // Summary Metrics inside panel

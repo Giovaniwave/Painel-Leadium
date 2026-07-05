@@ -178,7 +178,7 @@ export default function SettingsView({
             {/* Header info */}
             <div className={`flex items-center justify-between pb-4 border-b border-white/5`} style={{ borderColor: !isDark ? 'rgba(0,0,0,0.06)' : '' }}>
               <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-[#FF4D00]" />
+                <User className="w-4 h-4 text-[#FFFFFF]" />
                 <h3 className={`text-xs uppercase tracking-[0.25em] font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                   Ficha de Perfil do Titular
                 </h3>
@@ -196,7 +196,7 @@ export default function SettingsView({
               >
                 {isDark ? (
                   <>
-                    <Sun className="w-3.5 h-3.5 text-[#FF4D00]" />
+                    <Sun className="w-3.5 h-3.5 text-[#FFFFFF]" />
                     <span>Modo Claro</span>
                   </>
                 ) : (
@@ -222,7 +222,7 @@ export default function SettingsView({
                       src={avatarPreview || null} 
                       alt="Avatar Preview" 
                       className={`w-24 h-24 rounded-full border-2 object-cover ${
-                        isDark ? 'border-[#FF4D00]/50 bg-black' : 'border-[#FF4D00] bg-gray-50 shadow-sm'
+                        isDark ? 'border-[#FFFFFF]/50 bg-black' : 'border-[#FFFFFF] bg-gray-50 shadow-sm'
                       }`}
                       referrerPolicy="no-referrer"
                     />
@@ -240,8 +240,8 @@ export default function SettingsView({
                     onClick={onButtonClick}
                     className={`flex-1 w-full p-6 rounded-xl border border-dashed text-center cursor-pointer transition-all ${
                       dragActive
-                        ? (isDark ? 'border-[#FF4D00] bg-[#FF4D00]/5' : 'border-[#FF4D00] bg-[#FF4D00]/5')
-                        : (isDark ? 'border-white/10 hover:border-white/20 bg-black/20 hover:bg-black/30' : 'border-gray-300 hover:border-[#FF4D00] bg-gray-50 hover:bg-gray-100/50')
+                        ? (isDark ? 'border-[#FFFFFF] bg-[#FFFFFF]/5' : 'border-[#FFFFFF] bg-[#FFFFFF]/5')
+                        : (isDark ? 'border-white/10 hover:border-white/20 bg-black/20 hover:bg-black/30' : 'border-gray-300 hover:border-[#FFFFFF] bg-gray-50 hover:bg-gray-100/50')
                     }`}
                   >
                     <input 
@@ -254,7 +254,7 @@ export default function SettingsView({
                     
                     <Upload className={`w-6 h-6 mx-auto mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
                     <p className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-gray-900'} mb-1`}>
-                      Arraste e solte sua foto aqui ou <span className="text-[#FF4D00] hover:underline">clique para buscar</span>
+                      Arraste e solte sua foto aqui ou <span className="text-[#FFFFFF] hover:underline">clique para buscar</span>
                     </p>
                     <p className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                       Aceita arquivos PNG, JPG, JPEG, WEBP ou GIF (será salvo direto no sistema)
@@ -275,8 +275,8 @@ export default function SettingsView({
                   placeholder="Seu Nome Completo"
                   className={`w-full border rounded-xl py-3 px-4 text-xs focus:ring-0 focus:outline-none transition-all ${
                     isDark 
-                      ? 'bg-[#141414] border-white/10 text-white focus:border-[#FF4D00]/50 font-sans' 
-                      : 'bg-gray-50 border-gray-200 text-gray-950 focus:border-[#FF4D00]/50 font-sans font-medium'
+                      ? 'bg-[#141414] border-white/10 text-white focus:border-[#FFFFFF]/50 font-sans' 
+                      : 'bg-gray-50 border-gray-200 text-gray-950 focus:border-[#FFFFFF]/50 font-sans font-medium'
                   }`}
                 />
               </div>
@@ -332,7 +332,7 @@ export default function SettingsView({
                       <button
                         type="button"
                         onClick={handleRequestPermission}
-                        className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer bg-[#FF4D00] text-black hover:bg-[#FF6622] font-mono"
+                        className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer bg-white text-black hover:bg-neutral-200 font-mono"
                       >
                         Permitir Notificações
                       </button>

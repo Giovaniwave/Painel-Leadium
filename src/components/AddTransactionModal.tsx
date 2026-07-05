@@ -138,7 +138,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
         {/* Header Block */}
         <div className="px-6 py-5 bg-[#141414] border-b border-white/10 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-2">
-            <span className="w-1.5 h-3 bg-[#B43C00] rounded-full"></span>
+            <span className="w-1.5 h-3 bg-[#6B6B6B] rounded-full"></span>
             <h3 className="text-[11px] uppercase tracking-[0.25em] font-bold text-white">
               Adicionar Transação Manual
             </h3>
@@ -200,7 +200,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
             {/* Payee / Client Input wrapper row */}
             <div className="space-y-1.5 text-left">
               <label className="text-[9px] uppercase font-bold tracking-[0.25em] text-gray-400 flex items-center gap-1.5 label-icon">
-                <User className="w-3.5 h-3.5 text-[#B43C00]" />
+                <User className="w-3.5 h-3.5 text-[#6B6B6B]" />
                 {type === 'income' ? 'Cliente / Pagador' : 'Favorecido / Cliente'}
               </label>
               {clients && clients.length > 0 && (
@@ -213,7 +213,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
                       setSender(selectedClient.name);
                     }
                   }}
-                  className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white focus:outline-none focus:border-[#B43C00] focus:ring-1 focus:ring-[#B43C00]/20 transition-all cursor-pointer font-sans mb-2"
+                  className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white focus:outline-none focus:border-[#6B6B6B] focus:ring-1 focus:ring-[#6B6B6B]/20 transition-all cursor-pointer font-sans mb-2"
                 >
                   <option value="">-- Vincular a um Cliente (Opcional) --</option>
                   {clients.map(c => (
@@ -227,14 +227,14 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
                 value={sender}
                 onChange={(e) => setSender(e.target.value)}
                 placeholder={type === 'income' ? "Ex: Outra origem se não for cliente..." : "Ex: Fornecedor ou Favorecido..."}
-                className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#B43C00] focus:ring-1 focus:ring-[#B43C00]/20 transition-all font-sans"
+                className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#6B6B6B] focus:ring-1 focus:ring-[#6B6B6B]/20 transition-all font-sans"
               />
             </div>
 
             {/* Description Area */}
             <div className="space-y-1.5 text-left">
               <label className="text-[9px] uppercase font-bold tracking-[0.25em] text-gray-400 flex items-center gap-1.5 label-icon">
-                <FileText className="w-3.5 h-3.5 text-[#B43C00]" />
+                <FileText className="w-3.5 h-3.5 text-[#6B6B6B]" />
                 Descrição
               </label>
               <input
@@ -247,7 +247,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
                 }}
                 onBlur={() => suggestCategory()}
                 placeholder="Ex: Mensalidade de serviços ou despesas extras"
-                className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#B43C00] focus:ring-1 focus:ring-[#B43C00]/20 transition-all font-sans"
+                className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#6B6B6B] focus:ring-1 focus:ring-[#6B6B6B]/20 transition-all font-sans"
               />
             </div>
 
@@ -266,14 +266,14 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0.00"
-                  className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#B43C00] focus:ring-1 focus:ring-[#B43C00]/20 transition-all font-mono"
+                  className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#6B6B6B] focus:ring-1 focus:ring-[#6B6B6B]/20 transition-all font-mono"
                 />
               </div>
 
               {/* Date selection input */}
               <div className="space-y-1.5 text-left">
                 <label className="text-[9px] uppercase font-bold tracking-[0.25em] text-gray-400 flex items-center gap-1.5 label-icon">
-                  <Calendar className="w-3.5 h-3.5 text-[#B43C00]" />
+                  <Calendar className="w-3.5 h-3.5 text-[#6B6B6B]" />
                   Data
                 </label>
                 <input
@@ -281,7 +281,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
                   required
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white focus:outline-none focus:border-[#B43C00] focus:ring-1 focus:ring-[#B43C00]/20 transition-all font-sans"
+                  className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white focus:outline-none focus:border-[#6B6B6B] focus:ring-1 focus:ring-[#6B6B6B]/20 transition-all font-sans"
                 />
               </div>
             </div>
@@ -290,7 +290,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
             <div className="space-y-1.5 text-left">
               <div className="flex justify-between items-center">
                 <label className="text-[9px] uppercase font-bold tracking-[0.25em] text-gray-400 flex items-center gap-1.5 label-icon">
-                  <Tag className="w-3.5 h-3.5 text-[#B43C00]" />
+                  <Tag className="w-3.5 h-3.5 text-[#6B6B6B]" />
                   Categoria
                 </label>
                 {description.trim().length >= 3 && (
@@ -298,7 +298,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
                     type="button"
                     onClick={() => suggestCategory()}
                     disabled={isSuggestingCategory}
-                    className="flex items-center gap-1 text-[9px] uppercase font-bold tracking-wider text-[#FF4D00] hover:text-[#FF661A] transition-colors bg-white/5 hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer disabled:opacity-50"
+                    className="flex items-center gap-1 text-[9px] uppercase font-bold tracking-wider text-[#FFFFFF] hover:text-[#FF661A] transition-colors bg-white/5 hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer disabled:opacity-50"
                   >
                     <Sparkles className={`w-2.5 h-2.5 ${isSuggestingCategory ? 'animate-pulse' : ''}`} />
                     {isSuggestingCategory ? 'Sugerindo...' : 'Sugerir com IA'}
@@ -311,7 +311,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
                   setCategory(e.target.value);
                   setSuggestedByIA(false);
                 }}
-                className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white focus:outline-none focus:border-[#B43C00] focus:ring-1 focus:ring-[#B43C00]/20 transition-all cursor-pointer font-sans"
+                className="w-full bg-[#141414] border border-white/10 rounded-xl py-3 px-3.5 text-xs text-white focus:outline-none focus:border-[#6B6B6B] focus:ring-1 focus:ring-[#6B6B6B]/20 transition-all cursor-pointer font-sans"
               >
                 {type === 'income' ? (
                   <>
@@ -381,7 +381,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
                     <select
                       value={frequency}
                       onChange={(e) => setFrequency(e.target.value as any)}
-                      className="w-full bg-[#141414] border border-white/10 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-[#B43C00] cursor-pointer"
+                      className="w-full bg-[#141414] border border-white/10 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-[#6B6B6B] cursor-pointer"
                     >
                       <option value="weekly">Semanal</option>
                       <option value="monthly">Mensal</option>

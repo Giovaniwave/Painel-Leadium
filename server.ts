@@ -6,7 +6,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { OpenAI } from "openai";
+import { OpenAI, toFile } from "openai";
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 import fs from "fs";
@@ -54,6 +54,19 @@ async function startServer() {
       });
     }
     return geminiClient;
+  }
+
+  // Lazy initialize the Groq SDK safely (OpenAI-compatible endpoint, used for audio transcription)
+  let groqClient: OpenAI | null = null;
+  function getGroq(): OpenAI | null {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      return null;
+    }
+    if (!groqClient) {
+      groqClient = new OpenAI({ apiKey, baseURL: "https://api.groq.com/openai/v1" });
+    }
+    return groqClient;
   }
 
   // Health endpoint
@@ -1989,6 +2002,7 @@ As análises individuais de consumo apontam os seguintes indicadores de eficiên
     try {
       const {
         prompt,
+        audioUrl,
         currentDate = new Date().toISOString().substring(0, 10),
         userEmail,
       } = req.body;
@@ -2559,8 +2573,11 @@ Você pode executar ações no sistema através de funções: adicionar transaç
         }
       }
 
-      // Save user and assistant messages to database memory
-      await saveChatMessage(emailToUse, "user", prompt);
+      // Save user and assistant messages to database memory.
+      // Audio messages are persisted as a marker pointing at the recording so the chat
+      // bubble can be re-rendered as a player on reload; Kairos still reasons over the transcript.
+      const userDisplayText = audioUrl ? `__AUDIO__:${audioUrl}` : prompt;
+      await saveChatMessage(emailToUse, "user", userDisplayText);
       await saveChatMessage(emailToUse, "assistant", textResponse);
 
       return res.json({ text: textResponse });
@@ -2768,6 +2785,54 @@ Responda APENAS com o nome exato da categoria, sem explicações ou aspas.`;
       res.json({ url: `/uploads/${safeName}` });
     } catch (err: any) {
       console.error("[Upload API] Error saving image file:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Saves a recorded voice message and transcribes it via Groq's Whisper API
+  // so Kairos can understand it while the chat bubble keeps the playable audio.
+  app.post("/api/audio/transcribe", async (req, res) => {
+    try {
+      const { audio } = req.body;
+      if (!audio) {
+        return res.status(400).json({ error: "Nenhum áudio enviado." });
+      }
+
+      // Browser MediaRecorder blobs often carry codec params (e.g. "audio/webm;codecs=opus"),
+      // so extra ";key=value" segments before the final ";base64," marker must be tolerated.
+      const match = audio.match(/^data:(audio\/[a-zA-Z0-9.+-]+)(?:;[a-zA-Z0-9=_.-]*)*;base64,(.+)$/);
+      if (!match) {
+        return res.status(400).json({
+          error: "Formato de áudio inválido. Deve ser base64 data-uri.",
+        });
+      }
+
+      const mimeType = match[1];
+      const base64Data = match[2];
+      const buffer = Buffer.from(base64Data, "base64");
+
+      const ext = mimeType.split("/")[1] || "webm";
+      const safeName = `${crypto.randomUUID()}.${ext}`;
+      const filePath = path.join(uploadsDir, safeName);
+
+      await fs.promises.writeFile(filePath, buffer);
+      const url = `/uploads/${safeName}`;
+
+      const groq = getGroq();
+      if (!groq) {
+        console.warn("[Audio Transcribe API] GROQ_API_KEY não configurada, pulando transcrição.");
+        return res.json({ url, text: "" });
+      }
+
+      const transcription = await groq.audio.transcriptions.create({
+        file: await toFile(buffer, `audio.${ext}`),
+        model: "whisper-large-v3",
+        language: "pt",
+      });
+
+      res.json({ url, text: transcription.text || "" });
+    } catch (err: any) {
+      console.error("[Audio Transcribe API] Error:", err.message);
       res.status(500).json({ error: err.message });
     }
   });
