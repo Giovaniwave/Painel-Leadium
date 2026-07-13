@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS leadium_growth_metrics (
 
 -- 3. VIEW: Resumo Financeiro Mensal (Calcula automaticamente as métricas de saúde e Margem de Lucro)
 -- Com essa View, você puxa instantaneamente o resumo em qualquer lugar do dashboard.
-CREATE OR REPLACE VIEW leadium_monthly_metrics AS
+CREATE OR REPLACE VIEW leadium_monthly_metrics
+WITH (security_invoker = true, security_barrier = true) AS
 WITH monthly_data AS (
   SELECT 
     date_trunc('month', date) AS month,
@@ -62,18 +63,29 @@ SELECT
 FROM monthly_data
 ORDER BY month DESC;
 
+-- A view financeira não é acessível diretamente pela API pública.
+REVOKE ALL ON public.leadium_monthly_metrics FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.leadium_monthly_metrics TO service_role;
+
 -- ==========================================
 -- PERMISSÕES E SEGURANÇA
 -- ==========================================
 ALTER TABLE leadium_clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE leadium_growth_metrics ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow public select on leadium_clients" ON leadium_clients FOR SELECT TO public USING (true);
-CREATE POLICY "Allow public insert on leadium_clients" ON leadium_clients FOR INSERT TO public WITH CHECK (true);
-CREATE POLICY "Allow public update on leadium_clients" ON leadium_clients FOR UPDATE TO public WITH CHECK (true);
-CREATE POLICY "Allow public delete on leadium_clients" ON leadium_clients FOR DELETE TO public USING (true);
+-- Remove políticas legadas e inseguras. DROP IF EXISTS torna este script idempotente.
+DROP POLICY IF EXISTS "Allow public select on leadium_clients" ON leadium_clients;
+DROP POLICY IF EXISTS "Allow public insert on leadium_clients" ON leadium_clients;
+DROP POLICY IF EXISTS "Allow public update on leadium_clients" ON leadium_clients;
+DROP POLICY IF EXISTS "Allow public delete on leadium_clients" ON leadium_clients;
 
-CREATE POLICY "Allow public select on leadium_growth_metrics" ON leadium_growth_metrics FOR SELECT TO public USING (true);
-CREATE POLICY "Allow public insert on leadium_growth_metrics" ON leadium_growth_metrics FOR INSERT TO public WITH CHECK (true);
-CREATE POLICY "Allow public update on leadium_growth_metrics" ON leadium_growth_metrics FOR UPDATE TO public WITH CHECK (true);
-CREATE POLICY "Allow public delete on leadium_growth_metrics" ON leadium_growth_metrics FOR DELETE TO public USING (true);
+DROP POLICY IF EXISTS "Allow public select on leadium_growth_metrics" ON leadium_growth_metrics;
+DROP POLICY IF EXISTS "Allow public insert on leadium_growth_metrics" ON leadium_growth_metrics;
+DROP POLICY IF EXISTS "Allow public update on leadium_growth_metrics" ON leadium_growth_metrics;
+DROP POLICY IF EXISTS "Allow public delete on leadium_growth_metrics" ON leadium_growth_metrics;
+
+-- O CRM consulta e altera estas tabelas somente pelo backend com service_role.
+REVOKE ALL ON public.leadium_clients FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON public.leadium_growth_metrics FROM PUBLIC, anon, authenticated;
+GRANT ALL ON public.leadium_clients TO service_role;
+GRANT ALL ON public.leadium_growth_metrics TO service_role;

@@ -17,6 +17,11 @@ dotenv.config();
 
 async function startServer() {
   const app = express();
+  const realtimeClients = new Set<express.Response>();
+  const publishCrmEvent = (type: string, data: unknown) => {
+    const payload = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
+    realtimeClients.forEach((client) => client.write(payload));
+  };
   // Vercel, Hostinger node instances, or Heroku define process.env.PORT. AI Studio uses 3000 implicitly based on internal proxy.
   const PORT = Number(process.env.PORT) || 3000;
 
@@ -64,7 +69,10 @@ async function startServer() {
       return null;
     }
     if (!groqClient) {
-      groqClient = new OpenAI({ apiKey, baseURL: "https://api.groq.com/openai/v1" });
+      groqClient = new OpenAI({
+        apiKey,
+        baseURL: "https://api.groq.com/openai/v1",
+      });
     }
     return groqClient;
   }
@@ -77,7 +85,10 @@ async function startServer() {
   // Initialize Supabase Client if env secrets exist
   let supabaseClient: any = null;
   const supabaseUrl = process.env.SUPABASE_URL || "";
-  const supabaseKey = process.env.SUPABASE_KEY || "";
+  const isProduction = process.env.NODE_ENV === "production";
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    (!isProduction ? process.env.SUPABASE_KEY || "" : "");
 
   const tablesReady = {
     transactions: false,
@@ -224,7 +235,9 @@ async function startServer() {
         .limit(1);
       if (!implementationsErr) {
         tablesReady.client_implementations = true;
-        console.log("Supabase check: leadium_client_implementations table is ready.");
+        console.log(
+          "Supabase check: leadium_client_implementations table is ready.",
+        );
       }
 
       const { error: clientPaymentsErr } = await supabaseClient
@@ -308,9 +321,14 @@ async function startServer() {
         .limit(1);
       if (!prospectingErr) {
         tablesReady.prospecting_leads = true;
-        console.log("Supabase check: leadium_prospecting_leads table is ready.");
+        console.log(
+          "Supabase check: leadium_prospecting_leads table is ready.",
+        );
       } else {
-        console.warn("Supabase info: leadium_prospecting_leads table not ready:", prospectingErr.message);
+        console.warn(
+          "Supabase info: leadium_prospecting_leads table not ready:",
+          prospectingErr.message,
+        );
       }
     } catch (err: any) {
       console.warn(
@@ -386,26 +404,99 @@ async function startServer() {
     }
   }
 
-  const mapProspectingLead = (row: any) => ({
-    id: row.id,
-    company: row.company || "Lead sem empresa",
-    contact: row.contact || "",
-    email: row.email || "",
-    phone: row.phone || "",
-    service: row.service || "Aplicação estratégica",
-    source: row.source || "Site",
-    value: Number(row.estimated_value ?? row.value) || 0,
-    stage: row.stage || "new",
-    temperature: row.temperature || "hot",
-    nextContact: row.next_contact || row.nextContact || new Date().toISOString().slice(0, 10),
-    notes: row.notes || "",
-    createdAt: row.created_at || row.createdAt || new Date().toISOString(),
-  });
+  const noteValue = (notes: unknown, label: string) => {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return (
+      String(notes || "")
+        .match(new RegExp(`(?:^|\\n)${escaped}:\\s*([^\\n]+)`, "i"))?.[1]
+        ?.trim() || ""
+    );
+  };
+
+  const normalizeSubmittedAt = (value: unknown) => {
+    const text = String(value || "").trim();
+    if (!text) return null;
+    const brazilian = text.match(
+      /^(\d{2})\/(\d{2})\/(\d{4})\s*(?:-|às?)\s*(\d{2}):(\d{2})(?::(\d{2}))?$/i,
+    );
+    if (brazilian) {
+      const [, day, month, year, hour, minute, second = "00"] = brazilian;
+      const localBrazil = new Date(
+        `${year}-${month}-${day}T${hour}:${minute}:${second}-03:00`,
+      );
+      return Number.isNaN(localBrazil.getTime())
+        ? null
+        : localBrazil.toISOString();
+    }
+    const parsed = new Date(text);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  };
+
+  const mapProspectingLead = (row: any) => {
+    const payload = row.raw_payload || row.rawPayload || {};
+    const payloadLead = payload.lead || {};
+    const payloadContext = payload.contexto || {};
+    const notes = row.notes || "";
+    const company = row.company || "Lead sem empresa";
+    return {
+      id: row.id,
+      company,
+      contact: row.contact || "",
+      email: row.email || "",
+      phone: row.phone || "",
+      instagram:
+        row.instagram ||
+        payloadLead.instagram ||
+        (String(company).startsWith("@") ? company : ""),
+      niche: row.niche || payloadLead.nicho || noteValue(notes, "Nicho"),
+      monthlyRevenueRange:
+        row.monthly_revenue_range ||
+        row.monthlyRevenueRange ||
+        payloadLead.faturamento_mensal_atual ||
+        noteValue(notes, "Faturamento atual"),
+      eventName: row.event_name || row.eventName || "",
+      service: row.service || "Aplicação estratégica",
+      source: row.source || "Site",
+      interest: row.interest || payloadContext.interesse || row.service || "",
+      formName:
+        row.form_name ||
+        row.formName ||
+        payloadContext.formulario ||
+        noteValue(notes, "Formulário"),
+      pageUrl:
+        row.page_url ||
+        row.pageUrl ||
+        payloadContext.pagina ||
+        noteValue(notes, "Página"),
+      submittedAt: normalizeSubmittedAt(
+        row.submitted_at ||
+          row.submittedAt ||
+          payloadContext.data_hora_envio ||
+          noteValue(notes, "Enviado em"),
+      ),
+      device:
+        row.device ||
+        payloadContext.dispositivo ||
+        noteValue(notes, "Dispositivo"),
+      rawPayload: payload,
+      value: Number(row.estimated_value ?? row.value) || 0,
+      stage: row.stage || "new",
+      temperature: ["meeting", "proposal"].includes(row.stage) ? "hot" : "warm",
+      nextContact:
+        row.next_contact ||
+        row.nextContact ||
+        new Date().toISOString().slice(0, 10),
+      notes,
+      createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+    };
+  };
 
   async function loadProspectingLeads() {
     if (supabaseClient && tablesReady.prospecting_leads) {
-      const { data, error } = await supabaseClient.from(tables.prospecting_leads)
-        .select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabaseClient
+        .from(tables.prospecting_leads)
+        .select("*")
+        .order("created_at", { ascending: false });
       if (!error && data) {
         const mapped = data.map(mapProspectingLead);
         const local = fetchLocalDbData();
@@ -413,7 +504,8 @@ async function startServer() {
         writeLocalDbData(local);
         return mapped;
       }
-      if (error) console.warn("Failed to load prospecting leads:", error.message);
+      if (error)
+        console.warn("Failed to load prospecting leads:", error.message);
     }
     return fetchLocalDbData().prospectingLeads || [];
   }
@@ -422,20 +514,34 @@ async function startServer() {
     const id = lead.id || crypto.randomUUID();
     const normalized = mapProspectingLead({ ...lead, id });
     if (supabaseClient && tablesReady.prospecting_leads) {
-      const { data, error } = await supabaseClient.from(tables.prospecting_leads).insert({
-        id,
-        company: normalized.company,
-        contact: normalized.contact,
-        email: normalized.email,
-        phone: normalized.phone,
-        service: normalized.service,
-        source: normalized.source,
-        estimated_value: normalized.value,
-        stage: normalized.stage,
-        temperature: normalized.temperature,
-        next_contact: normalized.nextContact,
-        notes: normalized.notes,
-      }).select("*").single();
+      const { data, error } = await supabaseClient
+        .from(tables.prospecting_leads)
+        .insert({
+          id,
+          company: normalized.company,
+          contact: normalized.contact,
+          email: normalized.email,
+          phone: normalized.phone,
+          instagram: normalized.instagram,
+          niche: normalized.niche,
+          monthly_revenue_range: normalized.monthlyRevenueRange,
+          event_name: normalized.eventName,
+          service: normalized.service,
+          source: normalized.source,
+          interest: normalized.interest,
+          form_name: normalized.formName,
+          page_url: normalized.pageUrl,
+          submitted_at: normalized.submittedAt,
+          device: normalized.device,
+          raw_payload: normalized.rawPayload,
+          estimated_value: normalized.value,
+          stage: normalized.stage,
+          temperature: normalized.temperature,
+          next_contact: normalized.nextContact,
+          notes: normalized.notes,
+        })
+        .select("*")
+        .single();
       if (error) throw new Error(error.message);
       return mapProspectingLead(data);
     }
@@ -461,7 +567,9 @@ async function startServer() {
             let nextOccurrenceDate = undefined;
             if (notes.startsWith("__RECURRING_METADATA__:")) {
               try {
-                const meta = JSON.parse(notes.substring("__RECURRING_METADATA__:".length));
+                const meta = JSON.parse(
+                  notes.substring("__RECURRING_METADATA__:".length),
+                );
                 isRecurring = !!meta.isRecurring;
                 frequency = meta.frequency;
                 nextOccurrenceDate = meta.nextOccurrenceDate;
@@ -547,9 +655,13 @@ async function startServer() {
     const detailNotes = [
       "Origem: Despesa Geral",
       expense.status === "reimbursed" ? "Status: Paga" : "Status: Pendente",
-      expense.billingType === "monthly_fee" ? "Cobrança: Na mensalidade" : "Cobrança: Avulsa",
+      expense.billingType === "monthly_fee"
+        ? "Cobrança: Na mensalidade"
+        : "Cobrança: Avulsa",
       expense.notes || "",
-    ].filter(Boolean).join(" · ");
+    ]
+      .filter(Boolean)
+      .join(" · ");
 
     return {
       id: parseOrGenerateUUID(expense.id),
@@ -558,17 +670,24 @@ async function startServer() {
       type: "expense",
       amount: Number(expense.amount) || 0,
       category: expense.category || "Outros",
-      account: expense.clientId === "leadium" ? "Leadium (Interno)" : "Despesa geral",
+      account:
+        expense.clientId === "leadium" ? "Leadium (Interno)" : "Despesa geral",
       notes: detailNotes,
-      clientId: expense.clientId && expense.clientId !== "leadium" ? expense.clientId : undefined,
+      clientId:
+        expense.clientId && expense.clientId !== "leadium"
+          ? expense.clientId
+          : undefined,
     };
   }
 
   async function syncGeneralExpensesToTransactions(expenses?: any[]) {
-    const sourceExpenses = expenses || await loadGeneralExpenses();
+    const sourceExpenses = expenses || (await loadGeneralExpenses());
     const currentTransactions = await loadTransactions();
     const mergedById = new Map<string, any>(
-      currentTransactions.map((transaction: any) => [String(transaction.id), transaction]),
+      currentTransactions.map((transaction: any) => [
+        String(transaction.id),
+        transaction,
+      ]),
     );
     let changed = false;
 
@@ -576,15 +695,16 @@ async function startServer() {
       const mapped = generalExpenseToTransaction(expense);
       const key = String(mapped.id);
       const existing = mergedById.get(key);
-      const isSame = existing
-        && existing.date === mapped.date
-        && existing.description === mapped.description
-        && existing.type === mapped.type
-        && Number(existing.amount) === Number(mapped.amount)
-        && existing.category === mapped.category
-        && existing.account === mapped.account
-        && (existing.notes || "") === (mapped.notes || "")
-        && (existing.clientId || undefined) === (mapped.clientId || undefined);
+      const isSame =
+        existing &&
+        existing.date === mapped.date &&
+        existing.description === mapped.description &&
+        existing.type === mapped.type &&
+        Number(existing.amount) === Number(mapped.amount) &&
+        existing.category === mapped.category &&
+        existing.account === mapped.account &&
+        (existing.notes || "") === (mapped.notes || "") &&
+        (existing.clientId || undefined) === (mapped.clientId || undefined);
       if (!isSame) {
         mergedById.set(key, mapped);
         changed = true;
@@ -706,10 +826,16 @@ async function startServer() {
             text: m.text,
           }));
         } else if (error) {
-          console.warn("[Supabase Sync Logger] Fetch chat history issue:", error.message);
+          console.warn(
+            "[Supabase Sync Logger] Fetch chat history issue:",
+            error.message,
+          );
         }
       } catch (err: any) {
-        console.warn("[Supabase Sync Logger] Failed to query chat history:", err.message || err);
+        console.warn(
+          "[Supabase Sync Logger] Failed to query chat history:",
+          err.message || err,
+        );
       }
     }
     const local = fetchLocalDbData();
@@ -719,7 +845,11 @@ async function startServer() {
     return local.chat_histories[lowerEmail] || [];
   }
 
-  async function saveChatMessage(userEmail: string, sender: string, text: string) {
+  async function saveChatMessage(
+    userEmail: string,
+    sender: string,
+    text: string,
+  ) {
     const lowerEmail = (userEmail || "anonymous").toLowerCase();
     const newMessage = { sender, text };
 
@@ -750,17 +880,23 @@ async function startServer() {
             created_at: new Date().toISOString(),
           });
         if (error) {
-          console.warn("[Supabase Sync Logger] Save chat message issue:", error.message);
+          console.warn(
+            "[Supabase Sync Logger] Save chat message issue:",
+            error.message,
+          );
         }
       } catch (err: any) {
-        console.warn("[Supabase Sync Logger] Failed to sync chat message:", err.message || err);
+        console.warn(
+          "[Supabase Sync Logger] Failed to sync chat message:",
+          err.message || err,
+        );
       }
     }
   }
 
   async function clearChatHistory(userEmail: string) {
     const lowerEmail = (userEmail || "anonymous").toLowerCase();
-    
+
     const local = fetchLocalDbData();
     if (local.chat_histories && local.chat_histories[lowerEmail]) {
       local.chat_histories[lowerEmail] = [];
@@ -774,10 +910,16 @@ async function startServer() {
           .delete()
           .eq("user_email", lowerEmail);
         if (error) {
-          console.warn("[Supabase Sync Logger] Clear chat history issue:", error.message);
+          console.warn(
+            "[Supabase Sync Logger] Clear chat history issue:",
+            error.message,
+          );
         }
       } catch (err: any) {
-        console.warn("[Supabase Sync Logger] Failed to clear chat history in Supabase:", err.message || err);
+        console.warn(
+          "[Supabase Sync Logger] Failed to clear chat history in Supabase:",
+          err.message || err,
+        );
       }
     }
   }
@@ -846,12 +988,14 @@ async function startServer() {
           const formatted = updatedTxList.map((t: any) => {
             let notesValue = t.notes || null;
             if (t.isRecurring) {
-              notesValue = "__RECURRING_METADATA__:" + JSON.stringify({
-                isRecurring: t.isRecurring,
-                frequency: t.frequency,
-                nextOccurrenceDate: t.nextOccurrenceDate,
-                notes: t.notes || ""
-              });
+              notesValue =
+                "__RECURRING_METADATA__:" +
+                JSON.stringify({
+                  isRecurring: t.isRecurring,
+                  frequency: t.frequency,
+                  nextOccurrenceDate: t.nextOccurrenceDate,
+                  notes: t.notes || "",
+                });
             }
             const row: any = {
               id: t.id,
@@ -968,7 +1112,8 @@ async function startServer() {
                 // It is a fixed day like "day:15" or "15"
                 let dayNum = 10;
                 if (c.nextPaymentDate.startsWith("day:")) {
-                  dayNum = parseInt(c.nextPaymentDate.replace("day:", ""), 10) || 10;
+                  dayNum =
+                    parseInt(c.nextPaymentDate.replace("day:", ""), 10) || 10;
                 } else if (!isNaN(Number(c.nextPaymentDate))) {
                   dayNum = parseInt(c.nextPaymentDate, 10) || 10;
                 }
@@ -976,7 +1121,7 @@ async function startServer() {
                 const now = new Date();
                 let year = now.getFullYear();
                 let month = now.getMonth() + 1; // 1-indexed
-                
+
                 // If dayNum is less than today, set to next month to make it a valid future payment date
                 if (dayNum < now.getDate()) {
                   month += 1;
@@ -985,7 +1130,7 @@ async function startServer() {
                     year += 1;
                   }
                 }
-                
+
                 dbDate = `${year}-${String(month).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
               }
             }
@@ -994,7 +1139,8 @@ async function startServer() {
               id: c.id,
               name: c.name,
               contract_value: Number(c.contract_value) || 0,
-              is_recurring: c.is_recurring !== undefined ? c.is_recurring : true,
+              is_recurring:
+                c.is_recurring !== undefined ? c.is_recurring : true,
               status: c.status || "active",
               email: c.email || "",
               phone: c.phone || "",
@@ -1052,96 +1198,197 @@ async function startServer() {
   }
 
   // --- DATABASE PERSISTENT ENDPOINTS ---
+  app.get("/api/realtime", (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+    res.write(`event: connected\ndata: {"ready":true}\n\n`);
+    realtimeClients.add(res);
+    const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), 25000);
+    req.on("close", () => {
+      clearInterval(heartbeat);
+      realtimeClients.delete(res);
+    });
+  });
+
   app.get("/api/prospecting-leads", async (_req, res) => {
-    try { res.json(await loadProspectingLeads()); }
-    catch (err: any) { res.status(500).json({ error: err.message }); }
+    try {
+      res.json(await loadProspectingLeads());
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post("/api/prospecting-leads", async (req, res) => {
     try {
       const lead = req.body?.lead || req.body;
-      if (!lead?.contact && !lead?.nome_completo) return res.status(400).json({ error: "contact is required" });
-      res.status(201).json(await createProspectingLead(lead));
-    } catch (err: any) { res.status(500).json({ error: err.message }); }
+      if (!lead?.contact && !lead?.nome_completo)
+        return res.status(400).json({ error: "contact is required" });
+      const created = await createProspectingLead(lead);
+      publishCrmEvent("lead-created", created);
+      res.status(201).json(created);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.patch("/api/prospecting-leads/:id", async (req, res) => {
     try {
       const leads = await loadProspectingLeads();
-      const current = leads.find((lead: any) => String(lead.id) === req.params.id);
+      const current = leads.find(
+        (lead: any) => String(lead.id) === req.params.id,
+      );
       if (!current) return res.status(404).json({ error: "Lead not found" });
-      const updated = mapProspectingLead({ ...current, ...req.body, id: current.id });
+      const updated = mapProspectingLead({
+        ...current,
+        ...req.body,
+        id: current.id,
+      });
       if (supabaseClient && tablesReady.prospecting_leads) {
-        const { error } = await supabaseClient.from(tables.prospecting_leads).update({
-          company: updated.company, contact: updated.contact, email: updated.email,
-          phone: updated.phone, service: updated.service, source: updated.source,
-          estimated_value: updated.value, stage: updated.stage, temperature: updated.temperature,
-          next_contact: updated.nextContact, notes: updated.notes,
-        }).eq("id", current.id);
+        const { error } = await supabaseClient
+          .from(tables.prospecting_leads)
+          .update({
+            company: updated.company,
+            contact: updated.contact,
+            email: updated.email,
+            phone: updated.phone,
+            instagram: updated.instagram,
+            niche: updated.niche,
+            monthly_revenue_range: updated.monthlyRevenueRange,
+            event_name: updated.eventName,
+            service: updated.service,
+            source: updated.source,
+            interest: updated.interest,
+            form_name: updated.formName,
+            page_url: updated.pageUrl,
+            submitted_at: updated.submittedAt,
+            device: updated.device,
+            raw_payload: updated.rawPayload,
+            estimated_value: updated.value,
+            stage: updated.stage,
+            temperature: updated.temperature,
+            next_contact: updated.nextContact,
+            notes: updated.notes,
+          })
+          .eq("id", current.id);
         if (error) throw new Error(error.message);
       }
       const local = fetchLocalDbData();
-      local.prospectingLeads = leads.map((lead: any) => lead.id === current.id ? updated : lead);
+      local.prospectingLeads = leads.map((lead: any) =>
+        lead.id === current.id ? updated : lead,
+      );
       writeLocalDbData(local);
+      publishCrmEvent("lead-updated", updated);
       res.json(updated);
-    } catch (err: any) { res.status(500).json({ error: err.message }); }
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.delete("/api/prospecting-leads/:id", async (req, res) => {
     try {
       if (supabaseClient && tablesReady.prospecting_leads) {
-        const { error } = await supabaseClient.from(tables.prospecting_leads).delete().eq("id", req.params.id);
+        const { error } = await supabaseClient
+          .from(tables.prospecting_leads)
+          .delete()
+          .eq("id", req.params.id);
         if (error) throw new Error(error.message);
       }
       const local = fetchLocalDbData();
-      local.prospectingLeads = (local.prospectingLeads || []).filter((lead: any) => String(lead.id) !== req.params.id);
+      local.prospectingLeads = (local.prospectingLeads || []).filter(
+        (lead: any) => String(lead.id) !== req.params.id,
+      );
       writeLocalDbData(local);
+      publishCrmEvent("lead-deleted", { id: req.params.id });
       res.json({ success: true });
-    } catch (err: any) { res.status(500).json({ error: err.message }); }
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post("/api/webhooks/leads", async (req, res) => {
     try {
       const configuredSecret = process.env.LEAD_WEBHOOK_SECRET;
-      if (configuredSecret && req.header("x-webhook-secret") !== configuredSecret) {
+      if (!configuredSecret) {
+        return res.status(503).json({ error: "Webhook is not configured" });
+      }
+      const receivedSecret = req.header("x-webhook-secret") || "";
+      const expected = Buffer.from(configuredSecret);
+      const received = Buffer.from(receivedSecret);
+      if (
+        expected.length !== received.length ||
+        !crypto.timingSafeEqual(expected, received)
+      ) {
         return res.status(401).json({ error: "Invalid webhook secret" });
       }
       const payload = req.body || {};
       const lead = payload.lead || {};
       const name = String(lead.nome_completo || "").trim();
-      const email = String(lead.email || "").trim().toLowerCase();
+      const email = String(lead.email || "")
+        .trim()
+        .toLowerCase();
       const phone = String(lead.whatsapp || "").replace(/\D/g, "");
       if (!name || (!email && !phone)) {
-        return res.status(400).json({ error: "Informe lead.nome_completo e pelo menos lead.email ou lead.whatsapp" });
+        return res.status(400).json({
+          error:
+            "Informe lead.nome_completo e pelo menos lead.email ou lead.whatsapp",
+        });
       }
       const revenueText = String(lead.faturamento_mensal_atual || "");
       const extractedValues = revenueText.match(/[\d.,]+/g) || [];
       const estimatedValue = extractedValues.length
-        ? Number(extractedValues.at(-1)!.replace(/\./g, "").replace(",", ".")) * (/mil/i.test(revenueText) ? 1000 : 1)
+        ? Number(extractedValues.at(-1)!.replace(/\./g, "").replace(",", ".")) *
+          (/mil/i.test(revenueText) ? 1000 : 1)
         : 0;
       const created = await createProspectingLead({
         company: lead.instagram || name,
         contact: name,
         email,
         phone,
+        instagram: lead.instagram || "",
+        niche: lead.nicho || "",
+        monthlyRevenueRange: revenueText,
+        eventName: payload.evento || "",
         service: payload.contexto?.interesse || "Aplicação estratégica Leadium",
         source: payload.origem || "site_leadium_premium",
+        interest: payload.contexto?.interesse || "",
+        formName: payload.contexto?.formulario || "",
+        pageUrl: payload.contexto?.pagina || "",
+        submittedAt:
+          normalizeSubmittedAt(payload.contexto?.data_hora_envio) ||
+          new Date().toISOString(),
+        device: payload.contexto?.dispositivo || "",
+        rawPayload: payload,
         value: estimatedValue,
         stage: "new",
-        temperature: "hot",
+        temperature: "warm",
         nextContact: new Date().toISOString().slice(0, 10),
         notes: [
           lead.nicho && `Nicho: ${lead.nicho}`,
           revenueText && `Faturamento atual: ${revenueText}`,
           payload.evento && `Evento: ${payload.evento}`,
-          payload.contexto?.formulario && `Formulário: ${payload.contexto.formulario}`,
+          payload.contexto?.formulario &&
+            `Formulário: ${payload.contexto.formulario}`,
           payload.contexto?.pagina && `Página: ${payload.contexto.pagina}`,
-          payload.contexto?.dispositivo && `Dispositivo: ${payload.contexto.dispositivo}`,
-          payload.contexto?.data_hora_envio && `Enviado em: ${payload.contexto.data_hora_envio}`,
-        ].filter(Boolean).join("\n"),
+          payload.contexto?.dispositivo &&
+            `Dispositivo: ${payload.contexto.dispositivo}`,
+          payload.contexto?.data_hora_envio &&
+            `Enviado em: ${payload.contexto.data_hora_envio}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
       });
-      res.status(201).json({ success: true, message: "Lead criado no pipeline", lead: created });
-    } catch (err: any) { res.status(500).json({ error: err.message }); }
+      publishCrmEvent("lead-created", created);
+      res.status(201).json({
+        success: true,
+        message: "Lead criado no pipeline",
+        lead: created,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.get("/api/transactions", async (req, res) => {
@@ -1161,7 +1408,22 @@ async function startServer() {
       if (!Array.isArray(transactions)) {
         return res.status(400).json({ error: "transactions must be an array" });
       }
+      const previous = await loadTransactions();
+      const previousIds = new Set(previous.map((item: any) => String(item.id)));
+      const added = transactions.filter(
+        (item: any) => !previousIds.has(String(item.id)),
+      );
       await saveTransactions(transactions);
+      added.forEach((item: any) =>
+        publishCrmEvent("crm-notification", {
+          title:
+            item.type === "income"
+              ? "Nova entrada registrada"
+              : "Nova saída registrada",
+          detail: `${item.description || item.category || "Transação"} · ${Number(item.amount || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`,
+          kind: "created",
+        }),
+      );
       res.json({ success: true, count: transactions.length });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1205,7 +1467,19 @@ async function startServer() {
       if (!Array.isArray(clients)) {
         return res.status(400).json({ error: "clients must be an array" });
       }
+      const previous = await loadClients();
+      const previousIds = new Set(previous.map((item: any) => String(item.id)));
+      const added = clients.filter(
+        (item: any) => !previousIds.has(String(item.id)),
+      );
       await saveClients(clients);
+      added.forEach((item: any) =>
+        publishCrmEvent("crm-notification", {
+          title: "Novo cliente adicionado",
+          detail: `${item.name || "Cliente"}${item.contractValue || item.contract_value ? ` · ${Number(item.contractValue || item.contract_value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : ""}`,
+          kind: "created",
+        }),
+      );
       res.json({ success: true, count: clients.length });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1225,7 +1499,9 @@ async function startServer() {
         return res.json(data || null);
       }
       const local = fetchLocalDbData();
-      const rows = Array.isArray(local.clientImplementations) ? local.clientImplementations : [];
+      const rows = Array.isArray(local.clientImplementations)
+        ? local.clientImplementations
+        : [];
       res.json(rows.find((row: any) => row.client_id === clientId) || null);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1257,8 +1533,12 @@ async function startServer() {
         return res.json(data);
       }
       const local = fetchLocalDbData();
-      const rows = Array.isArray(local.clientImplementations) ? local.clientImplementations : [];
-      const index = rows.findIndex((row: any) => row.client_id === payload.client_id);
+      const rows = Array.isArray(local.clientImplementations)
+        ? local.clientImplementations
+        : [];
+      const index = rows.findIndex(
+        (row: any) => row.client_id === payload.client_id,
+      );
       if (index >= 0) rows[index] = { ...rows[index], ...payload };
       else rows.push(payload);
       local.clientImplementations = rows;
@@ -1281,8 +1561,12 @@ async function startServer() {
         return res.json(data || []);
       }
       const local = fetchLocalDbData();
-      const rows = Array.isArray(local.clientPayments) ? local.clientPayments : [];
-      res.json(rows.filter((row: any) => row.client_id === req.params.clientId));
+      const rows = Array.isArray(local.clientPayments)
+        ? local.clientPayments
+        : [];
+      res.json(
+        rows.filter((row: any) => row.client_id === req.params.clientId),
+      );
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -1308,7 +1592,11 @@ async function startServer() {
         notes: row.notes || "",
         updated_at: new Date().toISOString(),
       }));
-      if (payments.some((row: any) => !row.client_id || !row.payment_type || row.amount <= 0)) {
+      if (
+        payments.some(
+          (row: any) => !row.client_id || !row.payment_type || row.amount <= 0,
+        )
+      ) {
         return res.status(400).json({ error: "invalid payment schedule" });
       }
       if (supabaseClient && tablesReady.client_payments) {
@@ -1320,7 +1608,9 @@ async function startServer() {
         return res.json({ success: true, payments: data });
       }
       const local = fetchLocalDbData();
-      const rows = Array.isArray(local.clientPayments) ? local.clientPayments : [];
+      const rows = Array.isArray(local.clientPayments)
+        ? local.clientPayments
+        : [];
       payments.forEach((payment: any) => {
         const index = rows.findIndex((row: any) => row.id === payment.id);
         if (index >= 0) rows[index] = { ...rows[index], ...payment };
@@ -1400,7 +1690,10 @@ async function startServer() {
           .upsert(baseRow);
         // Fallback: se a coluna `category` ainda não foi migrada no Supabase (42703),
         // salva a despesa sem esse campo para não perder a persistência na nuvem.
-        if (error && (error.code === "42703" || /category/.test(error.message || ""))) {
+        if (
+          error &&
+          (error.code === "42703" || /category/.test(error.message || ""))
+        ) {
           const { category: _omit, ...withoutCategory } = baseRow;
           ({ error } = await supabaseClient
             .from(tables.general_expenses)
@@ -2580,7 +2873,8 @@ As análises individuais de consumo apontam os seguintes indicadores de eficiên
       const budgetGoalsContext = await loadGoals();
       const faturamentoMetaContext = await loadRevenueGoal();
       const clientsContext = await loadClients();
-      const generalExpensesContext = (fetchLocalDbData().generalExpenses || []) as any[];
+      const generalExpensesContext = (fetchLocalDbData().generalExpenses ||
+        []) as any[];
 
       // Load previous chat messages for this user to pass to Kairos (context memory)
       const emailToUse = userEmail || "anonymous";
@@ -2728,7 +3022,9 @@ ${
           const cliente =
             e.clientId === "leadium"
               ? "Leadium (Interno)"
-              : clientsContext.find((c: any) => c.id === e.clientId)?.name || e.clientId || "--";
+              : clientsContext.find((c: any) => c.id === e.clientId)?.name ||
+                e.clientId ||
+                "--";
           return `- [ID: ${e.id}] ${e.date} | ${e.description} | R$ ${(Number(e.amount) || 0).toFixed(2)} | Categoria: ${e.category || "Outros"} | Status: ${e.status === "reimbursed" ? "Paga" : "Pendente"} | Cobrança: ${e.billingType === "monthly_fee" ? "Fixa/Mensalidade" : "Avulsa"} | Cliente/Setor: ${cliente}`;
         })
         .join("\n")
@@ -2850,13 +3146,27 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
               properties: {
                 description: {
                   type: "string",
-                  description: "Descrição do gasto (ex: 'Assinatura Google Workspace').",
+                  description:
+                    "Descrição do gasto (ex: 'Assinatura Google Workspace').",
                 },
-                amount: { type: "number", description: "Valor numérico positivo em Reais." },
-                date: { type: "string", description: "Data no formato YYYY-MM-DD. Se não informado, use a data de hoje." },
+                amount: {
+                  type: "number",
+                  description: "Valor numérico positivo em Reais.",
+                },
+                date: {
+                  type: "string",
+                  description:
+                    "Data no formato YYYY-MM-DD. Se não informado, use a data de hoje.",
+                },
                 category: {
                   type: "string",
-                  enum: ["Serviços", "Marketing", "Software", "Infraestrutura", "Outros"],
+                  enum: [
+                    "Serviços",
+                    "Marketing",
+                    "Software",
+                    "Infraestrutura",
+                    "Outros",
+                  ],
                   description: "Categoria da despesa.",
                 },
                 status: {
@@ -2867,19 +3177,32 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
                 billingType: {
                   type: "string",
                   enum: ["separate", "monthly_fee"],
-                  description: "'monthly_fee' = despesa Fixa (incluída na mensalidade), 'separate' = despesa Avulsa.",
+                  description:
+                    "'monthly_fee' = despesa Fixa (incluída na mensalidade), 'separate' = despesa Avulsa.",
                 },
                 clientId: {
                   type: "string",
-                  description: "ID do cliente vinculado, ou 'leadium' para despesa interna do próprio negócio (padrão).",
+                  description:
+                    "ID do cliente vinculado, ou 'leadium' para despesa interna do próprio negócio (padrão).",
                 },
-                notes: { type: "string", description: "Observações adicionais (opcional)." },
+                notes: {
+                  type: "string",
+                  description: "Observações adicionais (opcional).",
+                },
                 receiptImage: {
                   type: "string",
-                  description: "URL do comprovante/anexo, se houver (ex: a URL de um arquivo anexado na conversa).",
+                  description:
+                    "URL do comprovante/anexo, se houver (ex: a URL de um arquivo anexado na conversa).",
                 },
               },
-              required: ["description", "amount", "date", "category", "status", "billingType"],
+              required: [
+                "description",
+                "amount",
+                "date",
+                "category",
+                "status",
+                "billingType",
+              ],
             },
           },
         },
@@ -2887,16 +3210,23 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
           type: "function",
           function: {
             name: "updatePlannedAllocation",
-            description: "Atualiza o valor de alocação planejada (limite) de uma meta de orçamento/caixinha.",
+            description:
+              "Atualiza o valor de alocação planejada (limite) de uma meta de orçamento/caixinha.",
             parameters: {
               type: "object",
               properties: {
-                goalId: { type: "string", description: "O ID da meta/caixinha (ex: goal_1)." },
-                allocated: { type: "number", description: "O novo valor de alocação planejada em Reais." }
+                goalId: {
+                  type: "string",
+                  description: "O ID da meta/caixinha (ex: goal_1).",
+                },
+                allocated: {
+                  type: "number",
+                  description: "O novo valor de alocação planejada em Reais.",
+                },
               },
-              required: ["goalId", "allocated"]
-            }
-          }
+              required: ["goalId", "allocated"],
+            },
+          },
         },
         {
           type: "function",
@@ -2906,40 +3236,51 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
             parameters: {
               type: "object",
               properties: {
-                id: { type: "string", description: "O ID da transação a ser excluída." }
+                id: {
+                  type: "string",
+                  description: "O ID da transação a ser excluída.",
+                },
               },
-              required: ["id"]
-            }
-          }
+              required: ["id"],
+            },
+          },
         },
         {
           type: "function",
           function: {
             name: "deleteDisplacement",
-            description: "Exclui um deslocamento/viagem registrada da frota por ID.",
+            description:
+              "Exclui um deslocamento/viagem registrada da frota por ID.",
             parameters: {
               type: "object",
               properties: {
-                id: { type: "string", description: "O ID do deslocamento a ser excluído." }
+                id: {
+                  type: "string",
+                  description: "O ID do deslocamento a ser excluído.",
+                },
               },
-              required: ["id"]
-            }
-          }
+              required: ["id"],
+            },
+          },
         },
         {
           type: "function",
           function: {
             name: "deleteGeneralExpense",
-            description: "Exclui uma despesa geral (não frota) registrada por ID.",
+            description:
+              "Exclui uma despesa geral (não frota) registrada por ID.",
             parameters: {
               type: "object",
               properties: {
-                id: { type: "string", description: "O ID da despesa geral a ser excluída." }
+                id: {
+                  type: "string",
+                  description: "O ID da despesa geral a ser excluída.",
+                },
               },
-              required: ["id"]
-            }
-          }
-        }
+              required: ["id"],
+            },
+          },
+        },
       ];
 
       const geminiTools: FunctionDeclaration[] = [
@@ -3003,7 +3344,8 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
               date: { type: Type.STRING, description: "YYYY-MM-DD" },
               category: {
                 type: Type.STRING,
-                description: "Serviços, Marketing, Software, Infraestrutura ou Outros.",
+                description:
+                  "Serviços, Marketing, Software, Infraestrutura ou Outros.",
               },
               status: {
                 type: Type.STRING,
@@ -3011,26 +3353,41 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
               },
               billingType: {
                 type: Type.STRING,
-                description: "'monthly_fee' (Fixa/mensalidade) ou 'separate' (Avulsa).",
+                description:
+                  "'monthly_fee' (Fixa/mensalidade) ou 'separate' (Avulsa).",
               },
-              clientId: { type: Type.STRING, description: "ID do cliente ou 'leadium' (interno)." },
+              clientId: {
+                type: Type.STRING,
+                description: "ID do cliente ou 'leadium' (interno).",
+              },
               notes: { type: Type.STRING },
-              receiptImage: { type: Type.STRING, description: "URL do comprovante/anexo, se houver." },
+              receiptImage: {
+                type: Type.STRING,
+                description: "URL do comprovante/anexo, se houver.",
+              },
             },
-            required: ["description", "amount", "date", "category", "status", "billingType"],
+            required: [
+              "description",
+              "amount",
+              "date",
+              "category",
+              "status",
+              "billingType",
+            ],
           },
         },
         {
           name: "updatePlannedAllocation",
-          description: "Atualiza o valor de alocação planejada (limite) de uma meta de orçamento/caixinha.",
+          description:
+            "Atualiza o valor de alocação planejada (limite) de uma meta de orçamento/caixinha.",
           parameters: {
             type: Type.OBJECT,
             properties: {
               goalId: { type: Type.STRING },
-              allocated: { type: Type.NUMBER }
+              allocated: { type: Type.NUMBER },
             },
-            required: ["goalId", "allocated"]
-          }
+            required: ["goalId", "allocated"],
+          },
         },
         {
           name: "deleteTransaction",
@@ -3038,33 +3395,35 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
           parameters: {
             type: Type.OBJECT,
             properties: {
-              id: { type: Type.STRING }
+              id: { type: Type.STRING },
             },
-            required: ["id"]
-          }
+            required: ["id"],
+          },
         },
         {
           name: "deleteDisplacement",
-          description: "Exclui um deslocamento/viagem registrada da frota por ID.",
+          description:
+            "Exclui um deslocamento/viagem registrada da frota por ID.",
           parameters: {
             type: Type.OBJECT,
             properties: {
-              id: { type: Type.STRING }
+              id: { type: Type.STRING },
             },
-            required: ["id"]
-          }
+            required: ["id"],
+          },
         },
         {
           name: "deleteGeneralExpense",
-          description: "Exclui uma despesa geral (não frota) registrada por ID.",
+          description:
+            "Exclui uma despesa geral (não frota) registrada por ID.",
           parameters: {
             type: Type.OBJECT,
             properties: {
-              id: { type: Type.STRING }
+              id: { type: Type.STRING },
             },
-            required: ["id"]
-          }
-        }
+            required: ["id"],
+          },
+        },
       ];
 
       let toolName: string | null = null;
@@ -3103,9 +3462,9 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
           contents: [
             ...historyToPass.map((m: any) => ({
               role: m.sender === "user" ? "user" : "model",
-              parts: [{ text: m.text }]
+              parts: [{ text: m.text }],
             })),
-            { role: "user", parts: [{ text: prompt }] }
+            { role: "user", parts: [{ text: prompt }] },
           ],
           config: {
             systemInstruction: systemInstruction,
@@ -3194,7 +3553,10 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
                 .from(tables.general_expenses)
                 .upsert(baseRow);
               // Fallback caso a coluna `category` ainda não tenha sido migrada na nuvem.
-              if (error && (error.code === "42703" || /category/.test(error.message || ""))) {
+              if (
+                error &&
+                (error.code === "42703" || /category/.test(error.message || ""))
+              ) {
                 const { category: _omit, ...withoutCategory } = baseRow;
                 ({ error } = await supabaseClient
                   .from(tables.general_expenses)
@@ -3208,8 +3570,12 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
               }
             }
 
-            const statusLabel = payload.status === "reimbursed" ? "Paga" : "Pendente";
-            const tipoLabel = payload.billingType === "monthly_fee" ? "Fixa (mensalidade)" : "Avulsa";
+            const statusLabel =
+              payload.status === "reimbursed" ? "Paga" : "Pendente";
+            const tipoLabel =
+              payload.billingType === "monthly_fee"
+                ? "Fixa (mensalidade)"
+                : "Avulsa";
             textResponse = `Feito! Lancei a despesa **${payload.description}** de R$ ${payload.amount.toFixed(2)} (${payload.category} · ${tipoLabel} · ${statusLabel}) na data ${expenseDate}.${receipt ? " Comprovante anexado. ✅" : ""} Quer que eu registre mais alguma?`;
           } else if (toolName === "addDisplacement") {
             const expenses = await getExpensesData();
@@ -3252,7 +3618,7 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
             const expenses = await getExpensesData();
             const initialLen = expenses.displacements.length;
             expenses.displacements = expenses.displacements.filter(
-              (d: any) => d.id !== toolArgs.id
+              (d: any) => d.id !== toolArgs.id,
             );
             if (expenses.displacements.length < initialLen) {
               await saveExpensesData(expenses);
@@ -3268,7 +3634,7 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
             if (arr.length < initialLen) {
               local.generalExpenses = arr;
               writeLocalDbData(local);
-              
+
               if (supabaseClient && tablesReady.general_expenses) {
                 await supabaseClient
                   .from(tables.general_expenses)
@@ -3313,7 +3679,9 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
       const history = await loadChatHistory(email);
       res.json(history);
     } catch (err: any) {
-      res.status(500).json({ error: err.message || "Erro ao carregar histórico." });
+      res
+        .status(500)
+        .json({ error: err.message || "Erro ao carregar histórico." });
     }
   });
 
@@ -3327,7 +3695,9 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
       await clearChatHistory(email);
       res.json({ success: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message || "Erro ao limpar histórico." });
+      res
+        .status(500)
+        .json({ error: err.message || "Erro ao limpar histórico." });
     }
   });
 
@@ -3342,7 +3712,7 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
       const validIncomeCategories = [
         "Venda de Serviços",
         "Investimentos",
-        "Other"
+        "Other",
       ];
 
       const validExpenseCategories = [
@@ -3355,18 +3725,20 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
         "Groceries",
         "Money Transfer",
         "Utilities",
-        "Other"
+        "Other",
       ];
 
-      const categories = type === "income" ? validIncomeCategories : validExpenseCategories;
-      const defaultCategory = type === "income" ? "Venda de Serviços" : "Custo Mensal";
+      const categories =
+        type === "income" ? validIncomeCategories : validExpenseCategories;
+      const defaultCategory =
+        type === "income" ? "Venda de Serviços" : "Custo Mensal";
 
       const openai = getOpenAi();
       if (openai) {
         try {
           const systemPrompt = `You are a financial classification assistant for the Leadium platform.
 Classify the given transaction description into exactly ONE of the following valid categories:
-${categories.map(c => `- "${c}"`).join("\n")}
+${categories.map((c) => `- "${c}"`).join("\n")}
 
 Rules:
 - Respond ONLY with the exact category name.
@@ -3377,18 +3749,24 @@ Rules:
             model: "gpt-4o-mini",
             messages: [
               { role: "system", content: systemPrompt },
-              { role: "user", content: `Description: "${description}"` }
+              { role: "user", content: `Description: "${description}"` },
             ],
             temperature: 0.1,
             max_tokens: 20,
           });
 
-          const suggestedCategory = response.choices[0]?.message?.content?.trim().replace(/^"|"$/g, '') || defaultCategory;
+          const suggestedCategory =
+            response.choices[0]?.message?.content
+              ?.trim()
+              .replace(/^"|"$/g, "") || defaultCategory;
           if (categories.includes(suggestedCategory)) {
             return res.json({ category: suggestedCategory });
           }
         } catch (openaiErr: any) {
-          console.warn("OpenAI category suggestion failed, trying Gemini fallback:", openaiErr.message || openaiErr);
+          console.warn(
+            "OpenAI category suggestion failed, trying Gemini fallback:",
+            openaiErr.message || openaiErr,
+          );
         }
       }
 
@@ -3398,7 +3776,7 @@ Rules:
         try {
           const systemPrompt = `Você é um assistente de classificação financeira.
 Classifique a descrição do lançamento em exatamente UMA das seguintes categorias:
-${categories.map(c => `- "${c}"`).join("\n")}
+${categories.map((c) => `- "${c}"`).join("\n")}
 
 Responda APENAS com o nome exato da categoria, sem explicações ou aspas.`;
 
@@ -3408,59 +3786,146 @@ Responda APENAS com o nome exato da categoria, sem explicações ou aspas.`;
             config: {
               systemInstruction: systemPrompt,
               temperature: 0.1,
-              maxOutputTokens: 20
-            }
+              maxOutputTokens: 20,
+            },
           });
 
-          const text = response.text?.trim().replace(/^"|"$/g, '') || "";
+          const text = response.text?.trim().replace(/^"|"$/g, "") || "";
           if (categories.includes(text)) {
             return res.json({ category: text });
           }
         } catch (geminiErr: any) {
-          console.warn("Gemini category suggestion fallback failed:", geminiErr.message || geminiErr);
+          console.warn(
+            "Gemini category suggestion fallback failed:",
+            geminiErr.message || geminiErr,
+          );
         }
       }
 
       // Fallback 2: Simple heuristic/keyword fallback
       const lower = description.toLowerCase();
       if (type === "income") {
-        if (lower.includes("venda") || lower.includes("serviço") || lower.includes("mensalidade") || lower.includes("fatura") || lower.includes("projeto")) {
+        if (
+          lower.includes("venda") ||
+          lower.includes("serviço") ||
+          lower.includes("mensalidade") ||
+          lower.includes("fatura") ||
+          lower.includes("projeto")
+        ) {
           return res.json({ category: "Venda de Serviços" });
         }
-        if (lower.includes("rendimento") || lower.includes("invest") || lower.includes("juros") || lower.includes("dividendo")) {
+        if (
+          lower.includes("rendimento") ||
+          lower.includes("invest") ||
+          lower.includes("juros") ||
+          lower.includes("dividendo")
+        ) {
           return res.json({ category: "Investimentos" });
         }
         return res.json({ category: "Venda de Serviços" });
       } else {
-        if (lower.includes("aluguel") || lower.includes("luz") || lower.includes("água") || lower.includes("internet") || lower.includes("energia") || lower.includes("telefone") || lower.includes("hospedagem") || lower.includes("servidor") || lower.includes("aws") || lower.includes("cloud") || lower.includes("digitalocean") || lower.includes("vercel")) {
+        if (
+          lower.includes("aluguel") ||
+          lower.includes("luz") ||
+          lower.includes("água") ||
+          lower.includes("internet") ||
+          lower.includes("energia") ||
+          lower.includes("telefone") ||
+          lower.includes("hospedagem") ||
+          lower.includes("servidor") ||
+          lower.includes("aws") ||
+          lower.includes("cloud") ||
+          lower.includes("digitalocean") ||
+          lower.includes("vercel")
+        ) {
           return res.json({ category: "Utilities" });
         }
-        if (lower.includes("almoço") || lower.includes("jantar") || lower.includes("restaurante") || lower.includes("café") || lower.includes("comida") || lower.includes("ifood") || lower.includes("padaria") || lower.includes("lanche") || lower.includes("bistrô") || lower.includes("uber eats")) {
+        if (
+          lower.includes("almoço") ||
+          lower.includes("jantar") ||
+          lower.includes("restaurante") ||
+          lower.includes("café") ||
+          lower.includes("comida") ||
+          lower.includes("ifood") ||
+          lower.includes("padaria") ||
+          lower.includes("lanche") ||
+          lower.includes("bistrô") ||
+          lower.includes("uber eats")
+        ) {
           return res.json({ category: "Cafe & Restaurants" });
         }
-        if (lower.includes("supermercado") || lower.includes("mercado") || lower.includes("compras") || lower.includes("groceries") || lower.includes("feira") || lower.includes("carrefour") || lower.includes("pão de açúcar")) {
+        if (
+          lower.includes("supermercado") ||
+          lower.includes("mercado") ||
+          lower.includes("compras") ||
+          lower.includes("groceries") ||
+          lower.includes("feira") ||
+          lower.includes("carrefour") ||
+          lower.includes("pão de açúcar")
+        ) {
           return res.json({ category: "Groceries" });
         }
-        if (lower.includes("salário") || lower.includes("pagamento") || lower.includes("folha") || lower.includes("equipe") || lower.includes("honorários") || lower.includes("pro labore") || lower.includes("clt") || lower.includes("pj") || lower.includes("colaborador")) {
+        if (
+          lower.includes("salário") ||
+          lower.includes("pagamento") ||
+          lower.includes("folha") ||
+          lower.includes("equipe") ||
+          lower.includes("honorários") ||
+          lower.includes("pro labore") ||
+          lower.includes("clt") ||
+          lower.includes("pj") ||
+          lower.includes("colaborador")
+        ) {
           return res.json({ category: "Salários" });
         }
-        if (lower.includes("invest") || lower.includes("ações") || lower.includes("cripto") || lower.includes("tesouro") || lower.includes("fundo") || lower.includes("cdb")) {
+        if (
+          lower.includes("invest") ||
+          lower.includes("ações") ||
+          lower.includes("cripto") ||
+          lower.includes("tesouro") ||
+          lower.includes("fundo") ||
+          lower.includes("cdb")
+        ) {
           return res.json({ category: "Investimentos" });
         }
-        if (lower.includes("urgente") || lower.includes("emergência") || lower.includes("conserto") || lower.includes("médico") || lower.includes("hospital") || lower.includes("reparo") || lower.includes("manutenção urgente")) {
+        if (
+          lower.includes("urgente") ||
+          lower.includes("emergência") ||
+          lower.includes("conserto") ||
+          lower.includes("médico") ||
+          lower.includes("hospital") ||
+          lower.includes("reparo") ||
+          lower.includes("manutenção urgente")
+        ) {
           return res.json({ category: "Emergências" });
         }
-        if (lower.includes("transferência") || lower.includes("pix") || lower.includes("ted") || lower.includes("banco") || lower.includes("envio")) {
+        if (
+          lower.includes("transferência") ||
+          lower.includes("pix") ||
+          lower.includes("ted") ||
+          lower.includes("banco") ||
+          lower.includes("envio")
+        ) {
           return res.json({ category: "Money Transfer" });
         }
-        if (lower.includes("mensal") || lower.includes("fixo") || lower.includes("licença") || lower.includes("mensalidade") || lower.includes("sass") || lower.includes("software") || lower.includes("ferramenta")) {
+        if (
+          lower.includes("mensal") ||
+          lower.includes("fixo") ||
+          lower.includes("licença") ||
+          lower.includes("mensalidade") ||
+          lower.includes("sass") ||
+          lower.includes("software") ||
+          lower.includes("ferramenta")
+        ) {
           return res.json({ category: "Custo Mensal" });
         }
         return res.json({ category: "Despesa Variável" });
       }
     } catch (err: any) {
       console.error("Suggest Category API Error:", err);
-      res.status(500).json({ error: err.message || "Failed to suggest category." });
+      res
+        .status(500)
+        .json({ error: err.message || "Failed to suggest category." });
     }
   });
 
@@ -3481,10 +3946,13 @@ Responda APENAS com o nome exato da categoria, sem explicações ou aspas.`;
         return res.status(400).json({ error: "Nenhuma imagem enviada." });
       }
 
-      const match = image.match(/^data:(image\/[a-zA-Z0-9+.-]+|application\/pdf);base64,(.+)$/);
+      const match = image.match(
+        /^data:(image\/[a-zA-Z0-9+.-]+|application\/pdf);base64,(.+)$/,
+      );
       if (!match) {
         return res.status(400).json({
-          error: "Formato de arquivo inválido. Deve ser base64 data-uri (imagem ou PDF).",
+          error:
+            "Formato de arquivo inválido. Deve ser base64 data-uri (imagem ou PDF).",
         });
       }
 
@@ -3496,9 +3964,10 @@ Responda APENAS com o nome exato da categoria, sem explicações ou aspas.`;
       // Keep the original filename (sanitized) alongside a UUID prefix so the
       // stored file stays visually identifiable — a bare random UUID made it
       // impossible for users to confirm they opened the receipt they attached.
-      const sanitizedOriginal = typeof filename === "string"
-        ? filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80)
-        : "";
+      const sanitizedOriginal =
+        typeof filename === "string"
+          ? filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80)
+          : "";
       const safeName = sanitizedOriginal
         ? `${crypto.randomUUID()}-${sanitizedOriginal}`
         : `${crypto.randomUUID()}.${ext}`;
@@ -3524,7 +3993,9 @@ Responda APENAS com o nome exato da categoria, sem explicações ou aspas.`;
 
       // Browser MediaRecorder blobs often carry codec params (e.g. "audio/webm;codecs=opus"),
       // so extra ";key=value" segments before the final ";base64," marker must be tolerated.
-      const match = audio.match(/^data:(audio\/[a-zA-Z0-9.+-]+)(?:;[a-zA-Z0-9=_.-]*)*;base64,(.+)$/);
+      const match = audio.match(
+        /^data:(audio\/[a-zA-Z0-9.+-]+)(?:;[a-zA-Z0-9=_.-]*)*;base64,(.+)$/,
+      );
       if (!match) {
         return res.status(400).json({
           error: "Formato de áudio inválido. Deve ser base64 data-uri.",
@@ -3544,7 +4015,9 @@ Responda APENAS com o nome exato da categoria, sem explicações ou aspas.`;
 
       const groq = getGroq();
       if (!groq) {
-        console.warn("[Audio Transcribe API] GROQ_API_KEY não configurada, pulando transcrição.");
+        console.warn(
+          "[Audio Transcribe API] GROQ_API_KEY não configurada, pulando transcrição.",
+        );
         return res.json({ url, text: "" });
       }
 

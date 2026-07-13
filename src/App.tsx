@@ -831,8 +831,8 @@ export default function App() {
               />
             )}
             {/* Elegant footer */}
-            <footer className={`mt-16 pt-8 pb-4 border-t text-center text-[10px] uppercase tracking-[0.2em] font-medium transition-colors ${
-              theme === 'light' ? 'border-gray-200 text-gray-400' : 'border-white/5 text-gray-650'
+            <footer className={`mt-16 pt-8 pb-4 border-t text-center text-[8px] uppercase tracking-[0.18em] font-medium transition-colors ${
+              theme === 'light' ? 'border-gray-200/60 text-neutral-500/40' : 'border-white/5 text-neutral-400/30'
             }`}>
               Leadium © 2026. Todos os direitos reservados.
             </footer>
