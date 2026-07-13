@@ -42,7 +42,7 @@ const EMPTY_FORM: Partial<GeneralExpense> = {
 };
 
 const formatCurrency = (val: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 }).format(val || 0);
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val || 0);
 
 export default function GeneralExpensesView({ theme, clients }: GeneralExpensesViewProps) {
   const isDark = theme !== 'light';

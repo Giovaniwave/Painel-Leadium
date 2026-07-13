@@ -8,7 +8,6 @@ import {
   Plus,
   Search,
   Trash2,
-  Download,
   ArrowUpRight,
   ArrowDownLeft,
   TrendingUp,
@@ -55,6 +54,29 @@ interface TransactionsViewProps {
 
 const PAGE_SIZE = 6;
 
+const CATEGORY_DEFINITIONS = [
+  { name: 'Venda de Serviços', color: '#22c55e' },
+  { name: 'Custo Mensal', color: '#ef4444' },
+  { name: 'Gestão de Tráfego', color: '#3b82f6' },
+  { name: 'Social Media', color: '#8b5cf6' },
+  { name: 'CRM & Automação', color: '#06b6d4' },
+  { name: 'Investimentos', color: '#f59e0b' },
+  { name: 'Salários', color: '#ec4899' },
+  { name: 'Emergências', color: '#f97316' },
+  { name: 'Despesa Variável', color: '#eab308' },
+  { name: 'Cafe & Restaurants', color: '#a16207' },
+  { name: 'Groceries', color: '#84cc16' },
+  { name: 'Money Transfer', color: '#14b8a6' },
+  { name: 'Utilities', color: '#6366f1' },
+  { name: 'Other', color: '#71717a' }
+] as const;
+
+const CATEGORY_COLOR_MAP = Object.fromEntries(
+  CATEGORY_DEFINITIONS.map(category => [category.name, category.color])
+) as Record<string, string>;
+
+const categoryColor = (category: string) => CATEGORY_COLOR_MAP[category] || '#94a3b8';
+
 // Translate internal category slugs to friendly PT-BR labels
 const categoryLabel = (cat: string): string => {
   const map: Record<string, string> = {
@@ -99,6 +121,7 @@ export default function TransactionsView({
     new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
+      minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }).format(val);
 
@@ -187,18 +210,20 @@ export default function TransactionsView({
       groups[key] = (groups[key] || 0) + tx.amount;
       total += tx.amount;
     });
-    const entries = Object.entries(groups)
+    const knownEntries = CATEGORY_DEFINITIONS.map(({ name }) => ({
+      name,
+      value: groups[name] || 0,
+      percentage: total === 0 ? 0 : Math.round(((groups[name] || 0) / total) * 1000) / 10
+    }));
+    const extraEntries = Object.entries(groups)
+      .filter(([name]) => !CATEGORY_COLOR_MAP[name])
       .map(([name, value]) => ({
         name,
         value,
         percentage: total === 0 ? 0 : Math.round((value / total) * 1000) / 10
-      }))
-      .sort((a, b) => b.value - a.value);
-    return { entries, total };
+      }));
+    return { entries: [...knownEntries, ...extraEntries], total };
   }, [transactions]);
-
-  // Categorical palette: color improves recognition across donut segments.
-  const ramp = ['#22c55e', '#3b82f6', '#f59e0b', '#a855f7', '#ef4444', '#06b6d4'];
 
   // ---- Daily flow (area chart) ----
   const flowData = useMemo(() => {
@@ -367,20 +392,18 @@ export default function TransactionsView({
         <div className="flex items-center gap-3">
           <button
             onClick={handleExport}
-            className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider border transition-colors ${
+            className={`flex items-center px-3.5 py-2 rounded-lg text-[10px] font-normal uppercase tracking-[0.08em] border transition-colors ${
               isDark ? 'border-white/10 text-white hover:bg-white/5' : 'border-black/10 text-gray-900 hover:bg-gray-50'
             }`}
           >
-            <Download className="w-4 h-4" />
             <span>Exportar</span>
           </button>
           <button
             onClick={onOpenAddModal}
-            className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors ${
+            className={`flex items-center px-3.5 py-2 rounded-lg text-[10px] font-normal uppercase tracking-[0.08em] transition-colors ${
               isDark ? 'bg-white text-black hover:bg-gray-200' : 'bg-black text-white keep-white hover:bg-gray-800'
             }`}
           >
-            <Plus className="w-4 h-4" />
             <span>Nova Transação</span>
           </button>
         </div>
@@ -450,8 +473,8 @@ export default function TransactionsView({
 
                       {/* Origem */}
                       <td className="py-4 px-6 max-w-[180px]">
-                        <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${tx.clientId ? t.textPrimary : t.textMuted}`}>
-                          {tx.clientId ? <Building2 className="w-3.5 h-3.5 text-blue-500" /> : <CreditCard className="w-3.5 h-3.5" />}
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${t.textPrimary}`}>
+                          {tx.clientId ? <Building2 className="w-3.5 h-3.5" /> : <CreditCard className="w-3.5 h-3.5" />}
                           <span className="truncate" title={getOrigin(tx)}>{getOrigin(tx)}</span>
                         </span>
                       </td>
@@ -492,7 +515,7 @@ export default function TransactionsView({
 
                       {/* Valor */}
                       <td className="py-4 px-6 text-right">
-                        <span className={`font-mono font-bold text-sm ${isIncome ? t.textPrimary : t.textMuted}`}>
+                        <span className={`font-mono font-bold text-sm ${t.textPrimary}`}>
                           {isIncome ? '+' : '−'} {formatCurrency(tx.amount)}
                         </span>
                       </td>
@@ -585,7 +608,7 @@ export default function TransactionsView({
 
               <div className={`rounded-xl border p-4 mb-4 ${isDark ? 'bg-white/[0.025] border-white/10' : 'bg-gray-50 border-gray-200'}`}>
                 <span className={`text-[10px] uppercase tracking-wider ${t.textMuted}`}>{isIncome ? 'Receita' : 'Despesa'}</span>
-                <div className={`text-2xl font-semibold mt-1 ${isIncome ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
+                <div className={`text-2xl font-semibold mt-1 ${t.textPrimary}`}>
                   {isIncome ? '+' : '−'} {formatCurrency(tx.amount)}
                 </div>
               </div>
@@ -640,7 +663,7 @@ export default function TransactionsView({
             <p className={`text-xs mt-0.5 ${t.textMuted}`}>Total movimentado no período</p>
           </div>
 
-          {categoryBreakdown.entries.length === 0 ? (
+          {categoryBreakdown.total === 0 ? (
             <div className={`h-48 flex flex-col items-center justify-center text-xs ${t.textMuted}`}>
               <Activity className="w-6 h-6 mb-2 opacity-50" />
               Nenhuma transação registrada.
@@ -650,7 +673,7 @@ export default function TransactionsView({
               <div className="relative w-40 h-40 shrink-0">
                 <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
                   <circle cx="50" cy="50" r="40" fill="transparent" stroke={isDark ? '#222' : '#E5E7EB'} strokeWidth="10" />
-                  {categoryBreakdown.entries.slice(0, 6).reduce((acc, cat, idx) => {
+                  {categoryBreakdown.entries.filter(cat => cat.value > 0).reduce((acc, cat) => {
                     const circ = 251.2;
                     const pct = categoryBreakdown.total === 0 ? 0 : (cat.value / categoryBreakdown.total) * 100;
                     const len = (circ * pct) / 100;
@@ -660,7 +683,7 @@ export default function TransactionsView({
                         key={cat.name}
                         cx="50" cy="50" r="40"
                         fill="transparent"
-                        stroke={ramp[idx % ramp.length]}
+                        stroke={categoryColor(cat.name)}
                         strokeWidth="10"
                         strokeDasharray={`${len} ${circ - len}`}
                         strokeDashoffset={-acc.running}
@@ -676,15 +699,15 @@ export default function TransactionsView({
                 </div>
               </div>
 
-              <div className="flex-1 w-full space-y-3">
-                {categoryBreakdown.entries.slice(0, 5).map((cat, idx) => (
+              <div className="flex-1 w-full space-y-2 max-h-64 overflow-y-auto pr-2 scrollbar-thin">
+                {categoryBreakdown.entries.map((cat) => (
                   <div key={cat.name} className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: ramp[idx % ramp.length] }} />
-                      <span className={`truncate ${t.textMuted}`}>{categoryLabel(cat.name)}</span>
+                      <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: categoryColor(cat.name) }} />
+                      <span className={`truncate ${cat.value > 0 ? t.textMuted : t.textFaint}`}>{categoryLabel(cat.name)}</span>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                      <span className={`font-mono ${t.textPrimary}`}>{formatCurrency(cat.value)}</span>
+                      <span className={`font-mono ${cat.value > 0 ? t.textPrimary : t.textFaint}`}>{formatCurrency(cat.value)}</span>
                       <span className={`font-mono w-12 text-right ${t.textFaint}`}>{cat.percentage}%</span>
                     </div>
                   </div>

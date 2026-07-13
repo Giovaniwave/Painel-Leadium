@@ -187,7 +187,8 @@ export default function BudgetingView({
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
-      maximumFractionDigits: 0
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(val);
   };
 
@@ -633,7 +634,7 @@ export default function BudgetingView({
                   fontSize={10}
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(value) => `R$ ${value}`}
+                  tickFormatter={(value) => formatValue(Number(value))}
                 />
                 <Tooltip content={<BudgetTooltip />} cursor={{ fill: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)' }} />
                 <Legend

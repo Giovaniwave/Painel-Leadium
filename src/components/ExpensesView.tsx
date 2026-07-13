@@ -1573,13 +1573,12 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     <button
                       onClick={runAiAuditor}
                       disabled={isAnalyzing}
-                      className={`w-full sm:w-auto px-4 py-2.5 rounded-lg font-sans font-bold text-xs uppercase tracking-wider transition inline-flex items-center gap-2 ${
+                      className={`w-full sm:w-auto px-3.5 py-2 rounded-lg font-sans font-normal text-[10px] uppercase tracking-[0.08em] transition inline-flex items-center ${
                         isDark
                           ? 'bg-white text-black !text-black hover:opacity-90'
                           : 'bg-neutral-950 text-white keep-white hover:opacity-90'
                       } disabled:opacity-50`}
                     >
-                      <FileText className="w-3.5 h-3.5" />
                       {isAnalyzing ? 'Processando...' : 'AUDITORIA'}
                     </button>
 

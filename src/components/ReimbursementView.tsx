@@ -396,13 +396,12 @@ export default function ReimbursementView({ theme, clients }: ReimbursementViewP
         </div>
         <button
           onClick={() => (isFormOpen ? closeForm() : openNewForm())}
-          className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border-[1.58px] px-4 py-2.5 shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl text-xs font-bold font-mono uppercase tracking-wider ${
+          className={`inline-flex cursor-pointer items-center justify-center rounded-lg border px-3.5 py-2 transition-colors text-[10px] font-normal uppercase tracking-[0.08em] ${
             isDark
               ? 'bg-white border-zinc-200 text-zinc-950 hover:bg-zinc-50'
               : 'bg-zinc-950 border-zinc-600 text-slate-200 hover:bg-zinc-900 keep-white text-keep-white'
           }`}
         >
-          {isFormOpen ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
           {isFormOpen ? 'Cancelar' : 'Novo Reembolso'}
         </button>
       </div>

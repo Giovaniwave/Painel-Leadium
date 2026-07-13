@@ -23,6 +23,13 @@ interface ClientsViewProps {
 
 const PORTUGUESE_MONTHS_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
+const formatBRL = (value: number) => new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+}).format(Number(value) || 0);
+
 function getPaymentInfo(nextPaymentDate: string | undefined): {
   displayStr: string;
   daysLeft: number | null;
@@ -911,7 +918,7 @@ export default function ClientsView({
                     <option value="">-- Selecione uma Receita --</option>
                     {orphanedTransactions.map(t => (
                       <option key={t.id} value={t.id}>
-                        {t.description ? `${t.description} - ` : ''}R$ {t.amount.toLocaleString('pt-BR')} ({formatSystemDate(t.date)})
+                        {t.description ? `${t.description} - ` : ''}R$ {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({formatSystemDate(t.date)})
                       </option>
                     ))}
                   </select>
@@ -963,7 +970,7 @@ export default function ClientsView({
               <TrendingUp className="w-3.5 h-3.5 text-zinc-500" />
             </div>
             <h3 className={`text-lg sm:text-lg font-mono font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              R$ {mrr.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              R$ {mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
           </div>
           <p className={`text-[10px] mt-1 font-sans ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Recebimento mensal</p>
@@ -984,7 +991,7 @@ export default function ClientsView({
               <ArrowUpRight className="w-3.5 h-3.5 text-zinc-500" />
             </div>
             <h3 className={`text-lg sm:text-lg font-mono font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              R$ {arr.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              R$ {arr.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
           </div>
           <p className={`text-[10px] mt-1 font-sans ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Múltiplo anual (MRR * 12)</p>
@@ -1005,7 +1012,7 @@ export default function ClientsView({
               <Sparkles className="w-3.5 h-3.5 text-zinc-500" />
             </div>
             <h3 className={`text-lg sm:text-lg font-mono font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              R$ {totalHistoricalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              R$ {totalHistoricalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
           </div>
           <p className={`text-[10px] mt-1 font-sans ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Soma de recebimentos</p>
@@ -1026,7 +1033,7 @@ export default function ClientsView({
               <DollarSign className="w-3.5 h-3.5 text-zinc-500" />
             </div>
             <h3 className={`text-lg sm:text-lg font-mono font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              R$ {averageContractValue.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              R$ {averageContractValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
           </div>
           <p className={`text-[10px] mt-1 font-sans ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Valor médio mensal</p>
@@ -1763,11 +1770,11 @@ export default function ClientsView({
                       <div className="grid grid-cols-2 gap-3 text-xs">
                         <div>
                           <span className={`block text-[9px] uppercase tracking-wider font-extrabold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>MRR</span>
-                          <span className={`font-mono font-semibold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>R$ {c.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                          <span className={`font-mono font-semibold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>R$ {c.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div>
                           <span className={`block text-[9px] uppercase tracking-wider font-extrabold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>LTV</span>
-                          <span className="font-mono font-bold text-zinc-500">R$ {totalPaidAmount.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                          <span className="font-mono font-bold text-zinc-500">R$ {totalPaidAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div className="col-span-2">
                           <span className={`block text-[9px] uppercase tracking-wider font-extrabold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Próx. Pgto</span>
@@ -1836,7 +1843,7 @@ export default function ClientsView({
                     fontSize={10}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(v: number) => `R$ ${v}`}
+                    tickFormatter={(v: number) => formatBRL(v)}
                   />
                   <Tooltip
                     content={({ active, payload }: any) => {
@@ -1847,7 +1854,7 @@ export default function ClientsView({
                           isDark ? 'bg-[#18181B]/95 border-white/10 text-white' : 'bg-white border-gray-200 text-zinc-900'
                         }`}>
                           <p className="font-bold mb-1">{point.label}</p>
-                          <p>R$ {point.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                          <p>R$ {point.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </div>
                       );
                     }}

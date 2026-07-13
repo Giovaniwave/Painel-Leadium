@@ -141,7 +141,8 @@ const money = (value: number) =>
   new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value);
 const dateTime = (value?: string | null) => {
   if (!value) return "";

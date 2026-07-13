@@ -127,14 +127,16 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
       className="fixed inset-0 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 z-50 animate-fadeIn" 
       id="add-transaction-modal"
     >
-      <div className={`${isDark ? 'bg-[#101012] border-white/10' : 'bg-white border-black/10'} border w-full max-w-xl rounded-[28px] overflow-hidden shadow-[0_30px_100px_rgba(0,0,0,0.55)] relative max-h-[94vh] flex flex-col`}>
+      <div className={`${isDark ? 'bg-[#101012] border-white/10' : 'bg-white border-black/10'} border w-full max-w-2xl rounded-2xl overflow-hidden shadow-[0_30px_100px_rgba(0,0,0,0.55)] relative max-h-[94vh] flex flex-col`}>
         {/* Header Block */}
-        <div className={`px-5 sm:px-7 py-5 border-b flex justify-between items-center shrink-0 ${isDark ? 'border-white/[.07] bg-white/[.018]' : 'border-black/[.07] bg-neutral-50'}`}>
-          <div className="flex items-center gap-3">
-            <span className={`flex h-10 w-10 items-center justify-center rounded-2xl ${type === 'income' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>{type === 'income' ? <ArrowDownLeft className="h-5 w-5" /> : <ArrowUpRight className="h-5 w-5" />}</span>
-            <h3 className={`text-[11px] uppercase tracking-[0.2em] font-extrabold ${isDark ? 'text-white' : 'text-neutral-950'}`}>
-              Adicionar Transação Manual
+        <div className="px-5 sm:px-7 pt-5 pb-3 flex justify-between items-start shrink-0">
+          <div>
+            <h3 className={`text-xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-neutral-950'}`}>
+              Nova transação
             </h3>
+            <p className={`mt-1 text-sm ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
+              Registre uma entrada ou saída no fluxo financeiro.
+            </p>
           </div>
           <button 
             type="button"
@@ -145,7 +147,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 sm:p-7 space-y-6 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+        <form onSubmit={handleSubmit} className="px-5 pb-5 pt-4 sm:px-7 sm:pb-6 space-y-6 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-500 p-3.5 rounded-xl text-xs font-semibold font-mono">
               {error}
@@ -157,31 +159,21 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
             <label className={`text-[9px] uppercase font-bold tracking-[0.2em] text-left block ${labelClass}`}>
               Tipo de Operação
             </label>
-            <div className={`grid grid-cols-2 gap-1.5 rounded-2xl border p-1.5 ${isDark ? 'border-white/[.08] bg-black/20' : 'border-black/[.08] bg-neutral-100'}`}>
+            <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => handleTypeChange('expense')}
-                className="min-h-14 px-3 rounded-xl text-[10px] uppercase tracking-[0.14em] font-extrabold border transition-all duration-200 text-center flex items-center justify-center gap-2 cursor-pointer"
-                style={{
-                  backgroundColor: type === 'expense' ? '#DF3C3C' : 'transparent',
-                  color: type === 'expense' ? '#FFFFFF' : '#888888',
-                  borderColor: type === 'expense' ? '#DF3C3C' : 'transparent',
-                }}
+                className={`min-h-12 px-3 rounded-xl text-[10px] uppercase tracking-[0.14em] font-extrabold border transition-all duration-200 text-center flex items-center justify-center gap-2 cursor-pointer ${type === 'expense' ? (isDark ? 'border-white/30 bg-white/[.07] text-white' : 'border-black/30 bg-neutral-100 text-neutral-950') : (isDark ? 'border-white/10 text-neutral-500 hover:border-white/20' : 'border-black/10 text-neutral-500 hover:border-black/20')}`}
               >
-                <span className={`w-2 h-2 rounded-full ${type === 'expense' ? 'bg-white' : 'bg-red-500'}`}></span>
+                <ArrowUpRight className="h-4 w-4 text-red-500" />
                 Saída (-)
               </button>
               <button
                 type="button"
                 onClick={() => handleTypeChange('income')}
-                className="min-h-14 px-3 rounded-xl text-[10px] uppercase tracking-[0.14em] font-extrabold border transition-all duration-200 text-center flex items-center justify-center gap-2 cursor-pointer"
-                style={{
-                  backgroundColor: type === 'income' ? '#0CA673' : 'transparent',
-                  color: type === 'income' ? '#FFFFFF' : '#888888',
-                  borderColor: type === 'income' ? '#0CA673' : 'transparent',
-                }}
+                className={`min-h-12 px-3 rounded-xl text-[10px] uppercase tracking-[0.14em] font-extrabold border transition-all duration-200 text-center flex items-center justify-center gap-2 cursor-pointer ${type === 'income' ? (isDark ? 'border-white/30 bg-white/[.07] text-white' : 'border-black/30 bg-neutral-100 text-neutral-950') : (isDark ? 'border-white/10 text-neutral-500 hover:border-white/20' : 'border-black/10 text-neutral-500 hover:border-black/20')}`}
               >
-                <span className={`w-2 h-2 rounded-full ${type === 'income' ? 'bg-white' : 'bg-emerald-500'}`}></span>
+                <ArrowDownLeft className="h-4 w-4 text-emerald-500" />
                 Entrada (+)
               </button>
             </div>
@@ -235,7 +227,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
               {/* Amount form input */}
               <div className="space-y-1.5 text-left">
                 <label className={`text-[9px] uppercase font-bold tracking-[0.2em] flex items-center gap-1.5 ${labelClass}`}>
-                  <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+                  <DollarSign className="w-3.5 h-3.5 text-[#6B6B6B]" />
                   Valor (R$)
                 </label>
                 <input
@@ -321,7 +313,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
               </select>
               {suggestedByIA && (
                 <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono mt-1">
-                  <Sparkles className="w-3 h-3 text-emerald-400" />
+                  <Sparkles className="w-3 h-3" />
                   Sugerido
                 </span>
               )}
@@ -332,7 +324,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5 text-left">
                   <span className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`}>
-                    <Repeat className="w-3.5 h-3.5 text-amber-500" />
+                    <Repeat className="w-3.5 h-3.5 text-[#6B6B6B]" />
                     Transação Recorrente
                   </span>
                   <p className="text-[9px] text-gray-500 font-sans">
@@ -343,7 +335,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
                   type="button"
                   onClick={() => setIsRecurring(!isRecurring)}
                   className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    isRecurring ? 'bg-amber-500' : (isDark ? 'bg-white/10' : 'bg-black/15')
+                    isRecurring ? (isDark ? 'bg-white' : 'bg-black') : (isDark ? 'bg-white/10' : 'bg-black/15')
                   }`}
                 >
                   <span
@@ -363,7 +355,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
                     <select
                       value={frequency}
                       onChange={(e) => setFrequency(e.target.value as any)}
-                      className="w-full bg-[#141414] border border-white/10 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-[#6B6B6B] cursor-pointer"
+                    className={`${fieldClass} h-10 cursor-pointer`}
                     >
                       <option value="weekly">Semanal</option>
                       <option value="monthly">Mensal</option>
@@ -375,7 +367,7 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
                     <label className="text-[9px] uppercase font-bold tracking-[0.25em] text-gray-400">
                       Próxima Ocorrência
                     </label>
-                    <div className="w-full bg-white/5 border border-white/5 rounded-xl py-2.5 px-3 text-xs text-amber-500 font-mono flex items-center h-10">
+                    <div className={`${fieldClass} text-xs font-mono flex items-center h-10`}>
                       {calculateNextOccurrence(date, frequency) ? (
                         <span>
                           {calculateNextOccurrence(date, frequency).split('-').reverse().join('/')}
@@ -391,13 +383,22 @@ export default function AddTransactionModal({ isOpen, onClose, onAdd, budgetGoal
 
           </div>
 
-          <button
-            type="submit"
-            className={`w-full h-13 flex items-center justify-center gap-2 px-4 font-extrabold rounded-xl transition-all cursor-pointer mt-4 text-sm shadow-lg ${type === 'income' ? 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-emerald-500/10' : 'bg-red-500 hover:bg-red-400 text-white shadow-red-500/10'}`}
-          >
-            <Check className="h-4 w-4" />
-            Salvar Lançamento
-          </button>
+          <div className="flex items-center justify-end gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className={`h-11 px-5 rounded-xl text-[10px] uppercase tracking-wide font-bold transition-colors cursor-pointer ${isDark ? 'text-neutral-400 hover:text-white hover:bg-white/5' : 'text-neutral-600 hover:text-black hover:bg-black/5'}`}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className={`h-11 flex items-center justify-center gap-2 px-6 font-bold rounded-xl transition-all cursor-pointer text-[10px] uppercase tracking-wide ${isDark ? 'bg-white hover:bg-neutral-200 text-black' : 'bg-black hover:bg-neutral-800 text-white'}`}
+            >
+              <Check className="h-3.5 w-3.5" />
+              Salvar transação
+            </button>
+          </div>
         </form>
       </div>
     </div>
