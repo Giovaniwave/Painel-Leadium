@@ -26,6 +26,7 @@ import {
 import { Transaction, BudgetGoal } from '../types';
 import AnimatedCounter from './AnimatedCounter';
 import NeuralNetworkBackground from './NeuralNetworkBackground';
+import { newestDateFirst } from '../utils/date';
 import { generateMonthlyReportPDF } from '../utils/pdfGenerator';
 import {
   LineChart as ReChartsLineChart,
@@ -466,18 +467,18 @@ export default function DashboardView({
     }
   ];
 
-  const gaugeRadius = 84;
-  const gaugeCircumference = 2 * Math.PI * gaugeRadius;
 
   return (
-    <div className="space-y-10 py-4 animate-fadeIn">
+    <div className="dashboard-view space-y-8 py-2 animate-fadeIn">
       {/* Card 3: Faturamento vs Meta */}
-      <div className={`border rounded-3xl p-6 sm:p-8 relative overflow-hidden group transition-all duration-300 flex flex-col gap-6 ${
+      <div className={`dashboard-hero border rounded-3xl p-6 sm:p-8 relative overflow-hidden group transition-all duration-300 flex flex-col gap-6 ${
         theme === 'light'
           ? 'bg-white border-black/5 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:border-black/10'
           : 'bg-black/90 border-white/5 shadow-[0_12px_40px_rgba(0,0,0,0.6)] hover:border-white/10'
       }`}>
-        <NeuralNetworkBackground theme={theme} />
+        <div className="dashboard-neural-layer" aria-hidden="true">
+          <NeuralNetworkBackground theme={theme} />
+        </div>
 
         {/* Top Label with Small Action Buttons */}
         <div className="relative flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-2 z-10">
@@ -592,52 +593,34 @@ export default function DashboardView({
           </div>
         </div>
 
-        {/* Radial gauge: Faturamento vs Meta */}
+        {/* Data core: a living matrix represents progress without a conventional chart. */}
         <div className="relative flex flex-col items-center gap-8 py-4 z-10">
-          <div className="relative w-48 h-48 sm:w-56 sm:h-56 shrink-0">
-            <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90">
-              <circle
-                cx="100" cy="100" r={gaugeRadius}
-                fill="none"
-                strokeWidth="12"
-                className={theme === 'light' ? 'stroke-gray-100' : 'stroke-white/[0.06]'}
-              />
-              <motion.circle
-                cx="100" cy="100" r={gaugeRadius}
-                fill="none"
-                strokeWidth="12"
-                strokeLinecap="round"
-                stroke={theme === 'light' ? 'url(#gaugeGradientLight)' : 'url(#gaugeGradientDark)'}
-                style={{
-                  filter: theme === 'light' ? 'none' : 'drop-shadow(0 0 10px rgba(255,255,255,0.35))'
-                }}
-                strokeDasharray={gaugeCircumference}
-                initial={{ strokeDashoffset: gaugeCircumference }}
-                animate={{ strokeDashoffset: gaugeCircumference * (1 - Math.min(percentageRevenueReached, 100) / 100) }}
-                transition={{ duration: 1.6, ease: [0.16, 1, 0.3, 1] }}
-              />
-              <defs>
-                <linearGradient id="gaugeGradientDark" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="#FFFFFF" />
-                  <stop offset="100%" stopColor="#8A8A8A" />
-                </linearGradient>
-                <linearGradient id="gaugeGradientLight" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="#111111" />
-                  <stop offset="100%" stopColor="#4B4B4B" />
-                </linearGradient>
-              </defs>
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className={`text-4xl sm:text-5xl font-extrabold font-sans tracking-tighter leading-none ${
-                theme === 'light' ? 'text-gray-950' : 'text-white'
-              }`}>
-                <AnimatedCounter value={percentageRevenueReached} formatter={(v) => `${Math.round(v)}%`} />
-              </span>
-              <span className={`text-[9px] uppercase tracking-[0.2em] font-bold mt-2 ${
-                theme === 'light' ? 'text-gray-500' : 'text-gray-400'
-              }`}>
-                da meta
-              </span>
+          <div className="goal-iris" aria-label={`${Math.round(percentageRevenueReached)}% da meta de faturamento`}>
+            <div className="goal-iris-halo" aria-hidden="true" />
+            <div
+              className="goal-orbital-progress"
+              style={{ '--goal-progress': `${Math.min(Math.max(percentageRevenueReached, 0), 100) * 3.6}deg` } as React.CSSProperties}
+              aria-hidden="true"
+            />
+            <div className="goal-orbital-field" aria-hidden="true">
+              <span className="goal-orbital-track goal-orbital-track-a"><i /></span>
+              <span className="goal-orbital-track goal-orbital-track-b"><i /></span>
+              <span className="goal-orbital-track goal-orbital-track-c"><i /></span>
+              <span className="goal-orbital-axis goal-orbital-axis-a" />
+              <span className="goal-orbital-axis goal-orbital-axis-b" />
+            </div>
+            <div className="goal-iris-readout goal-brand-core goal-brand-core-minimal">
+              <div className="goal-brand-pulses" aria-hidden="true"><i /><i /><i /></div>
+              <div className="goal-brand-mark">
+                <span className="goal-brand-glow" aria-hidden="true" />
+                <img
+                  src={theme === 'light'
+                    ? 'https://i.ibb.co/M5kWMmTJ/logo-para-versao-white-removebg-preview.png'
+                    : 'https://i.ibb.co/k245JhFM/logotipooficialleadium.png'}
+                  alt="Leadium"
+                  decoding="async"
+                />
+              </div>
             </div>
           </div>
 
@@ -706,14 +689,14 @@ export default function DashboardView({
       </div>
 
       {/* Main Core Net stats grids */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-4 sm:mt-6 lg:mt-12">
+      <div className="dashboard-kpis grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {kpiCards.map((card) => {
           const Icon = card.icon;
           const SubIcon = card.subIcon;
           return (
             <div
               key={card.key}
-              className={`metric-card-interactive glass-container p-5 border-l-2 shadow-lg text-left cursor-pointer ${card.order} ${
+              className={`metric-card-interactive glass-container p-5 border-l-2 text-left cursor-pointer ${card.order} ${
                 theme === 'light' ? 'border-l-black/10' : 'border-l-white/20'
               }`}
               style={{
@@ -735,90 +718,45 @@ export default function DashboardView({
         })}
       </div>
 
-      {/* Real-time Budget Goals Progress Bars */}
-      <div className="space-y-4 text-left">
-        <div className="flex justify-between items-center">
-          <h3 className={`text-xs uppercase font-bold tracking-widest flex items-center gap-2 ${
-            theme === 'dark' ? 'text-[#F9FAFB]' : 'text-zinc-800'
-          }`}>
-            <Activity className={`w-4 h-4 ${theme === 'dark' ? 'text-white/70' : 'text-zinc-700'}`} />
-            <span>Progresso das Metas Orçamentárias</span>
-          </h3>
-          <button
-            type="button"
-            onClick={() => onNavigateToTab('budgeting')}
-            className="text-[10px] font-mono font-bold uppercase text-white/80 hover:underline cursor-pointer bg-transparent border-0"
-          >
-            Ajustar Alocações →
+      <section className={`recent-transactions rounded-2xl border overflow-hidden ${theme === 'dark' ? 'bg-[#111114] border-white/10' : 'bg-white border-black/10'}`}>
+        <div className={`flex items-center justify-between gap-4 px-5 py-4 border-b ${theme === 'dark' ? 'border-white/10' : 'border-black/10'}`}>
+          <div>
+            <h3 className={`text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Transações recentes</h3>
+            <p className={`text-[10px] mt-0.5 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>Todas as entradas e saídas registradas</p>
+          </div>
+          <button type="button" onClick={() => onNavigateToTab('transactions')} className={`text-xs font-semibold px-3 py-2 rounded-lg border transition-colors ${theme === 'dark' ? 'border-white/10 text-gray-300 hover:bg-white/5 hover:text-white' : 'border-black/10 text-gray-600 hover:bg-gray-50 hover:text-black'}`}>
+            Ver transações
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-          {budgetGoals.map((goal, idx) => {
-            const spent = filteredTransactions
-              .filter(tx => tx.type === 'expense' && tx.category === goal.name)
-              .reduce((sum, tx) => sum + tx.amount, 0);
-            
-            const percent = goal.allocated > 0 ? Math.round((spent / goal.allocated) * 100) : 0;
-            const cappedPercent = Math.min(100, percent);
-            
-            let barColor = 'bg-[#10B981]'; // Green default
-            let textColor = 'text-emerald-400';
-            if (percent > 100) {
-              barColor = 'bg-rose-500';
-              textColor = 'text-rose-400';
-            } else if (percent > 80) {
-              barColor = 'bg-amber-500';
-              textColor = 'text-amber-400';
-            }
-
-            return (
-              <div 
-                key={goal.id} 
-                className="glass-container rounded-xl p-5 flex flex-col justify-between hover:border-white/10 transition-all duration-300 relative overflow-hidden"
-              >
-                <div className="space-y-3">
-                  <div className="flex justify-between items-start">
-                    <span className={`text-[10px] uppercase font-bold tracking-wider truncate max-w-[120px] ${
-                      theme === 'dark' ? 'text-gray-400' : 'text-zinc-600'
-                    }`} title={goal.name}>
-                      {goal.name}
+        <div className="max-h-[520px] overflow-y-auto">
+          {filteredTransactions.length === 0 ? (
+            <div className={`py-14 text-center text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>Nenhuma transação registrada neste período.</div>
+          ) : (
+            filteredTransactions
+              .slice()
+              .sort(newestDateFirst)
+              .map((tx) => {
+                const isIncome = tx.type === 'income';
+                const date = tx.date ? new Date(`${tx.date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : '--';
+                return (
+                  <button key={tx.id} type="button" onClick={() => onNavigateToTab('transactions')} className={`w-full grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[110px_minmax(0,1fr)_170px_auto] items-center gap-3 px-5 py-3.5 text-left border-b last:border-b-0 transition-colors ${theme === 'dark' ? 'border-white/5 hover:bg-white/[0.025]' : 'border-black/5 hover:bg-gray-50'}`}>
+                    <span className={`hidden sm:block text-xs font-mono ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>{date}</span>
+                    <span className="min-w-0">
+                      <span className={`block text-xs font-medium truncate ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>{tx.description || 'Sem descrição'}</span>
+                      <span className={`block text-[10px] mt-0.5 truncate ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>{tx.category} · {tx.account || 'Sem origem'}</span>
                     </span>
-                    <span className={`text-[11px] font-mono font-black ${textColor}`}>
-                      <AnimatedCounter value={percent} formatter={(val) => `${Math.round(val)}%`} />
-                    </span>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    {/* Progress Bar */}
-                    <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden relative border border-white/5">
-                      <div 
-                        className={`h-full ${barColor} rounded-full transition-all duration-500`}
-                        style={{ width: `${cappedPercent}%` }}
-                      ></div>
-                    </div>
-
-                    <div className="flex justify-between items-baseline pt-1">
-                      <span className={`text-sm font-mono font-bold ${
-                        theme === 'dark' ? 'text-white' : 'text-zinc-900'
-                      }`}>
-                        <AnimatedCounter value={spent} formatter={formatCurrency} />
-                      </span>
-                      <span className="text-[10px] text-gray-500 font-mono">
-                        limite {formatCurrency(goal.allocated)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                    <span className={`hidden sm:inline-flex justify-self-start items-center px-2 py-1 rounded-full text-[9px] font-bold uppercase border ${isIncome ? (theme === 'dark' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-700 bg-emerald-50 border-emerald-200') : (theme === 'dark' ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-red-700 bg-red-50 border-red-200')}`}>{isIncome ? 'Entrada' : 'Saída'}</span>
+                    <span className={`text-sm font-mono font-semibold whitespace-nowrap ${isIncome ? (theme === 'dark' ? 'text-emerald-400' : 'text-emerald-700') : (theme === 'dark' ? 'text-red-400' : 'text-red-700')}`}>{isIncome ? '+' : '−'} {formatCurrency(tx.amount)}</span>
+                  </button>
+                );
+              })
+          )}
         </div>
-      </div>
-
+      </section>
 
       {/* Charts section with dynamic layouts */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="dashboard-insights hidden grid-cols-1 lg:grid-cols-12 gap-5">
         
         {/* Dynamic Category Spending distribution custom chart graphic (LHS) */}
         <div className="lg:col-span-6 glass-container rounded-xl p-6">
@@ -861,9 +799,7 @@ export default function DashboardView({
                     const strokeLength = (strokeDash * percentScaled) / 100;
                     const offset = strokeDash - strokeLength + acc.runningOffset;
                     
-                    const colors = theme === 'light'
-                      ? ['#111111', '#3D3D3D', '#5C5C5C', '#7A7A7A', '#999999', '#B8B8B8']
-                      : ['#FFFFFF', '#C7C7C7', '#9A9A9A', '#707070', '#4A4A4A', '#2E2E2E'];
+                    const colors = ['#22c55e', '#3b82f6', '#f59e0b', '#a855f7', '#ef4444', '#06b6d4'];
                     const color = colors[idx % colors.length];
 
                     acc.elements.push(
@@ -875,8 +811,8 @@ export default function DashboardView({
                         fill="transparent"
                         stroke={color}
                         strokeWidth="10"
-                        strokeDasharray={strokeDash}
-                        strokeDashoffset={offset}
+                        strokeDasharray={`${strokeLength} ${strokeDash - strokeLength}`}
+                        strokeDashoffset={-acc.runningOffset}
                         className="gauge-transition hover:stroke-[12px] cursor-help transition-all duration-150"
                         onMouseEnter={() => setHoveredCategory(cat)}
                         onMouseLeave={() => setHoveredCategory(null)}
@@ -912,9 +848,7 @@ export default function DashboardView({
               {/* Categoric percentage side legend table lists */}
               <div className="flex-1 space-y-3.5 w-full">
                 {categoryChartData.slice(0, 5).map((choice, idx) => {
-                  const colors = theme === 'light'
-                    ? ['bg-[#111111]', 'bg-[#3D3D3D]', 'bg-[#5C5C5C]', 'bg-[#7A7A7A]', 'bg-[#999999]']
-                    : ['bg-[#FFFFFF]', 'bg-[#C7C7C7]', 'bg-[#9A9A9A]', 'bg-[#707070]', 'bg-[#4A4A4A]'];
+                  const colors = ['bg-green-500', 'bg-blue-500', 'bg-amber-500', 'bg-purple-500', 'bg-red-500', 'bg-cyan-500'];
                   const colorDot = colors[idx % colors.length];
                   return (
                     <div key={choice.name} className="flex justify-between items-center text-xs">
@@ -1049,7 +983,7 @@ export default function DashboardView({
       </div>
 
       {/* Trend Analysis Comparative Line Chart (Recharts Line Chart) */}
-      <div className="glass-container rounded-xl p-6 text-left mt-8">
+      <div className="dashboard-comparison hidden glass-container rounded-xl p-6 text-left">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
             <h3 className={`text-xs uppercase font-bold tracking-widest flex items-center gap-2 ${

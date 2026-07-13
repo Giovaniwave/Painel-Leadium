@@ -5,25 +5,28 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
-import { 
+import {
   X,
-  Plus, 
-  Trash2, 
-  Edit, 
-  Car, 
-  RefreshCw, 
-  MapPin, 
-  Search, 
-  CheckCircle2, 
-  Clock, 
+  Plus,
+  Trash2,
+  Edit,
+  Car,
+  RefreshCw,
+  MapPin,
+  Search,
+  CheckCircle2,
+  Clock,
   AlertTriangle,
   ChevronRight,
+  ChevronLeft,
+  ChevronDown,
   Copy,
   Check,
   User,
   Sliders,
   FileText,
   TrendingUp,
+  TrendingDown,
   ShieldCheck,
   Calendar,
   Layers,
@@ -32,7 +35,13 @@ import {
   Zap,
   Award,
   Eye,
-  UploadCloud
+  UploadCloud,
+  Route,
+  Share2,
+  Fuel,
+  Wallet,
+  Gauge,
+  MoreHorizontal
 } from 'lucide-react';
 
 const COMMON_CARS = [
@@ -221,7 +230,7 @@ const RouteAuditMap: React.FC<RouteAuditMapProps> = ({
 
       // Add start marker
       const startIcon = L.divIcon({
-        html: `<div class="w-6 h-6 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center text-white font-bold text-[10px] shadow-lg">A</div>`,
+        html: `<div class="w-6 h-6 rounded-full bg-zinc-500 border-2 border-white flex items-center justify-center text-white font-bold text-[10px] shadow-lg">A</div>`,
         className: '',
         iconSize: [24, 24],
         iconAnchor: [12, 12]
@@ -304,6 +313,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
   const [filterEmployee, setFilterEmployee] = useState<string>('todos');
   const [filterCity, setFilterCity] = useState<string>('todos');
   const [searchTerm, setSearchTerm] = useState('');
+  const [collaboratorsPage, setCollaboratorsPage] = useState(1);
+  const COLLABORATORS_PAGE_SIZE = 10;
 
   // AI Auditor results state (simplified without unrequested starry fluff)
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -1044,6 +1055,83 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
 
   const metrics = getCorporateMetrics();
 
+  // Real month-over-month deltas for the top KPI cards (derived from actual displacement dates,
+  // since the fleet has no historical snapshots to compare against)
+  const pctDelta = (curr: number, prev: number): number | null => {
+    if (prev === 0 && curr === 0) return 0;
+    if (prev === 0) return null;
+    return Math.round(((curr - prev) / prev) * 100);
+  };
+
+  const sumForMonthKey = (key: string) => {
+    const list = data.displacements.filter(d => d.date && d.date.startsWith(key));
+    const km = list.reduce((s, d) => s + (Number(d.kmTraveled) || 0), 0);
+    const spent = list.reduce((s, d) => s + (Number(d.amount) || 0), 0);
+    const visits = list.length;
+    const liters = spent > 0 ? spent / 6.29 : 0;
+    const efficiency = liters > 0 ? km / liters : 0;
+    return { km, spent, visits, efficiency };
+  };
+
+  const nowRef = new Date();
+  const currentMonthKey = `${nowRef.getFullYear()}-${String(nowRef.getMonth() + 1).padStart(2, '0')}`;
+  const prevMonthDate = new Date(nowRef.getFullYear(), nowRef.getMonth() - 1, 1);
+  const prevMonthKey = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
+  const currentPeriodSums = sumForMonthKey(currentMonthKey);
+  const previousPeriodSums = sumForMonthKey(prevMonthKey);
+  const costPerKmCurrent = currentPeriodSums.km > 0 ? currentPeriodSums.spent / currentPeriodSums.km : 0;
+  const costPerKmPrevious = previousPeriodSums.km > 0 ? previousPeriodSums.spent / previousPeriodSums.km : 0;
+
+  // Monthly series (months with real trips only) driving the small trend lines on the right column
+  const monthlySeries = (() => {
+    const map: Record<string, { km: number; spent: number }> = {};
+    data.displacements.forEach(d => {
+      if (!d.date) return;
+      const key = d.date.substring(0, 7);
+      if (!map[key]) map[key] = { km: 0, spent: 0 };
+      map[key].km += Number(d.kmTraveled) || 0;
+      map[key].spent += Number(d.amount) || 0;
+    });
+    return Object.keys(map).sort().map(key => {
+      const v = map[key];
+      const liters = v.spent > 0 ? v.spent / 6.29 : 0;
+      return {
+        key,
+        km: v.km,
+        spent: v.spent,
+        efficiency: liters > 0 ? v.km / liters : 0,
+        costPerKm: v.km > 0 ? v.spent / v.km : 0
+      };
+    });
+  })();
+
+  const sparklinePoints = (values: number[]) => {
+    if (values.length <= 1) return '0,20 60,20';
+    const max = Math.max(...values);
+    const min = Math.min(...values);
+    const range = max - min || 1;
+    const step = 60 / (values.length - 1);
+    return values.map((v, i) => `${(i * step).toFixed(1)},${(20 - ((v - min) / range) * 18).toFixed(1)}`).join(' ');
+  };
+
+  // Fleet status breakdown for the "Resumo da Frota" donut — there's no maintenance/inactive tracking
+  // yet, so every registered vehicle counts as active
+  const employeeAvgConsumption = (employeeId: string) => {
+    const vehs = data.vehicles.filter(v => v.employeeId === employeeId);
+    if (vehs.length === 0) return metrics.averageConsumption;
+    return vehs.reduce((sum, v) => sum + (Number(v.avgConsumption) || 0), 0) / vehs.length;
+  };
+
+  const fleetActiveCount = data.vehicles.length;
+
+  const cardWrap = `rounded-2xl border p-5 sm:p-6 ${isDark ? 'bg-white/[0.02] border-white/5' : 'bg-white border-gray-200/80'}`;
+
+  const collaboratorsTotalPages = Math.max(1, Math.ceil(metrics.employeeBalances.length / COLLABORATORS_PAGE_SIZE));
+  const paginatedCollaborators = metrics.employeeBalances.slice(
+    (collaboratorsPage - 1) * COLLABORATORS_PAGE_SIZE,
+    collaboratorsPage * COLLABORATORS_PAGE_SIZE
+  );
+
   // Search filter
   const getFilteredDisplacements = () => {
     let list = [...data.displacements];
@@ -1089,11 +1177,11 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-medium bg-black text-white keep-white border border-neutral-900 shadow-sm shrink-0">
           {isApproved ? (
             <>
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500/10 shrink-0" /> Aprovada (Reembolsada)
+              <CheckCircle2 className="w-3.5 h-3.5 text-zinc-500 fill-zinc-500/10 shrink-0" /> Aprovada (Reembolsada)
             </>
           ) : (
             <>
-              <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" /> {status}
+              <Clock className="w-3.5 h-3.5 text-zinc-500 shrink-0" /> {status}
             </>
           )}
         </span>
@@ -1103,16 +1191,16 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
       return (
         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-medium shrink-0 ${
           isApproved 
-            ? 'bg-emerald-950/20 text-emerald-400 border border-emerald-900/40' 
-            : 'bg-amber-950/20 text-amber-400 border border-amber-800/40'
+            ? 'bg-zinc-950/20 text-zinc-400 border border-zinc-900/40' 
+            : 'bg-zinc-950/20 text-zinc-400 border border-zinc-800/40'
         }`}>
           {isApproved ? (
             <>
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Aprovada (Reembolsada)
+              <CheckCircle2 className="w-3.5 h-3.5 text-zinc-500 shrink-0" /> Aprovada (Reembolsada)
             </>
           ) : (
             <>
-              <Clock className="w-3.5 h-3.5 text-amber-500 animate-pulse shrink-0" /> {status}
+              <Clock className="w-3.5 h-3.5 text-zinc-500 animate-pulse shrink-0" /> {status}
             </>
           )}
         </span>
@@ -1120,147 +1208,166 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
     }
   };
 
-  return (
-    <div className={`space-y-6 ${isDark ? 'text-neutral-200' : 'text-neutral-800'} px-3 sm:px-6 max-w-4xl mx-auto py-4`}>
-      {/* Title Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 dark:border-neutral-800 pb-5">
-        <div className="space-y-1">
-          <h2 className={`text-2xl font-sans tracking-tight font-bold flex items-center gap-2.5 ${isDark ? 'text-neutral-50' : 'text-black'}`}>
-            <span>Consumo da Frota</span>
-          </h2>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            Controle integrado de rotas, consumo médio de combustível e reembolsos da frota.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={fetchExpenses}
-            className="flex items-center gap-2 text-xs font-medium px-3.5 py-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition active:scale-95"
-            title="Atualizar dados"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>Sincronizar</span>
-          </button>
-        </div>
-      </div>
+  const kpiCards: Array<{
+    key: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    iconBgClass: string;
+    iconClass: string;
+    value: string;
+    sublabel: string;
+    delta: number | null;
+  }> = [
+    {
+      key: 'total',
+      label: 'Total Acumulado',
+      icon: Layers,
+      iconBgClass: isDark ? 'bg-zinc-400/10' : 'bg-zinc-500/10',
+      iconClass: isDark ? 'text-zinc-400' : 'text-zinc-600',
+      value: `R$ ${metrics.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+      sublabel: 'Total de reembolsos',
+      delta: pctDelta(currentPeriodSums.spent, previousPeriodSums.spent)
+    },
+    {
+      key: 'distancia',
+      label: 'Distância Total',
+      icon: Route,
+      iconBgClass: isDark ? 'bg-zinc-400/10' : 'bg-zinc-500/10',
+      iconClass: isDark ? 'text-zinc-400' : 'text-zinc-600',
+      value: `${metrics.totalKm.toLocaleString('pt-BR')} km`,
+      sublabel: 'Percorridos no período',
+      delta: pctDelta(currentPeriodSums.km, previousPeriodSums.km)
+    },
+    {
+      key: 'visitas',
+      label: 'Total de Visitas',
+      icon: Share2,
+      iconBgClass: isDark ? 'bg-zinc-400/10' : 'bg-zinc-500/10',
+      iconClass: isDark ? 'text-zinc-400' : 'text-zinc-600',
+      value: `${metrics.totalVisits} visita${metrics.totalVisits === 1 ? '' : 's'}`,
+      sublabel: 'Registradas no período',
+      delta: pctDelta(currentPeriodSums.visits, previousPeriodSums.visits)
+    },
+    {
+      key: 'consumo',
+      label: 'Média de Consumo',
+      icon: Fuel,
+      iconBgClass: isDark ? 'bg-zinc-400/10' : 'bg-zinc-500/10',
+      iconClass: isDark ? 'text-zinc-400' : 'text-zinc-600',
+      value: `${metrics.averageConsumption.toFixed(1)} km/l`,
+      sublabel: 'Rendimento médio',
+      delta: pctDelta(currentPeriodSums.efficiency, previousPeriodSums.efficiency)
+    }
+  ];
 
+  return (
+    <div className={`space-y-6 ${isDark ? 'text-neutral-200' : 'text-neutral-800'} px-3 sm:px-6 py-4`}>
       {isLoading ? (
         <div className="py-20 text-center text-xs font-mono text-neutral-400 tracking-wider">
           CARREGANDO INFORMAÇÕES CORPORATIVAS DE VIAGEM...
         </div>
       ) : (
         <>
-          {/* Main Core Dashboard Numbers (Minimalist, Large typography, No neon effects) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className={`p-4 rounded-xl border ${
-              isDark 
-                ? 'border-neutral-800 bg-[#141414] text-neutral-100' 
-                : 'border-neutral-200 bg-white text-neutral-900 shadow-xs'
-            }`}>
-              <span className={`block text-[10px] font-mono uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-500 font-bold'}`}>Total Acumulado</span>
-              <span className={`text-xl font-sans font-bold mt-1.5 block ${isDark ? 'text-white' : 'text-neutral-950'}`}>
-                R$ {metrics.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-
-            <div className={`p-4 rounded-xl border ${
-              isDark 
-                ? 'border-neutral-800 bg-[#141414] text-neutral-100' 
-                : 'border-neutral-200 bg-white text-neutral-900 shadow-xs'
-            }`}>
-              <span className={`block text-[10px] font-mono uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-500 font-bold'}`}>Distância Total</span>
-              <span className={`text-xl font-sans font-bold mt-1.5 block ${isDark ? 'text-white' : 'text-neutral-950'}`}>
-                {metrics.totalKm.toLocaleString('pt-BR')} km
-              </span>
-            </div>
-
-            <div className={`p-4 rounded-xl border ${
-              isDark 
-                ? 'border-neutral-800 bg-[#141414] text-neutral-100' 
-                : 'border-neutral-200 bg-white text-neutral-900 shadow-xs'
-            }`}>
-              <span className={`block text-[10px] font-mono uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-500 font-bold'}`}>Total de Visitas</span>
-              <span className={`text-xl font-sans font-bold mt-1.5 block ${isDark ? 'text-white' : 'text-neutral-950'}`}>
-                {metrics.totalVisits} visitas
-              </span>
-            </div>
-
-            <div className={`p-4 rounded-xl border ${
-              isDark
-                ? 'border-neutral-800 bg-neutral-900 text-white'
-                : 'border-neutral-200 bg-neutral-950 text-white'
-            }`}>
-              <span className={`block text-[10px] font-mono uppercase tracking-wider ${isDark ? 'text-neutral-400' : 'text-neutral-300'}`}>Média Consumo Frota</span>
-              <span className="text-xl font-sans font-bold mt-1.5 block text-white keep-white">
-                {metrics.averageConsumption.toFixed(1)} km/l
-              </span>
-            </div>
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={fetchExpenses}
+              className={`h-9 rounded-xl border px-3.5 flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer ${
+                isDark ? 'bg-white/[0.03] border-white/10 hover:bg-white/[0.07] text-white' : 'bg-neutral-950 border-neutral-950 hover:bg-neutral-800 text-white keep-white'
+              }`}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              <span className="text-[9px] font-bold uppercase tracking-[0.14em]">Sincronizar dados</span>
+            </button>
           </div>
 
-          {/* Sub-Navigation (Crisp button tabs, full visual contrast) */}
-          <div className={`flex border-b overflow-x-auto no-scrollbar gap-2 p-0.5 ${
-            isDark ? 'border-neutral-800' : 'border-neutral-200'
-          }`}>
-            <button
-              onClick={() => setActiveSubTab('dashboard')}
-              className={`pb-3 px-3 text-sm font-sans font-medium transition-all relative border-b-2 whitespace-nowrap ${
-                activeSubTab === 'dashboard'
-                  ? `border-[#FFFFFF] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
-                  : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
-              }`}
-            >
-              Reembolso Colaborador
-            </button>
-            <button
-              onClick={() => setActiveSubTab('entries')}
-              className={`pb-3 px-3 text-sm font-sans font-medium transition-all relative border-b-2 whitespace-nowrap ${
-                activeSubTab === 'entries'
-                  ? `border-[#FFFFFF] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
-                  : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
-              }`}
-            >
-              Viagens ({filteredDisplacements.length})
-            </button>
-            <button
-              onClick={() => setActiveSubTab('fuel_reimbursement')}
-              className={`pb-3 px-3 text-sm font-sans font-medium transition-all relative border-b-2 whitespace-nowrap ${
-                activeSubTab === 'fuel_reimbursement'
-                  ? `border-[#FFFFFF] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
-                  : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
-              }`}
-            >
-              Reembolso Combustível
-            </button>
-            <button
-              onClick={() => setActiveSubTab('employees')}
-              className={`pb-3 px-3 text-sm font-sans font-medium transition-all relative border-b-2 whitespace-nowrap ${
-                activeSubTab === 'employees'
-                  ? `border-[#FFFFFF] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
-                  : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
-              }`}
-            >
-              Equipe ({data.employees.length})
-            </button>
-            <button
-              onClick={() => setActiveSubTab('vehicles')}
-              className={`pb-3 px-3 text-sm font-sans font-medium transition-all relative border-b-2 whitespace-nowrap ${
-                activeSubTab === 'vehicles'
-                  ? `border-[#FFFFFF] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
-                  : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
-              }`}
-            >
-              Veículos Cadastrados
-            </button>
-            <button
-              onClick={() => setActiveSubTab('routes_audit')}
-              className={`pb-3 px-3 text-sm font-sans font-medium transition-all relative border-b-2 whitespace-nowrap ${
-                activeSubTab === 'routes_audit'
-                  ? `border-[#FFFFFF] font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-950'}`
-                  : `border-transparent ${isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-900'}`
-              }`}
-            >
-              Auditoria de Rotas
-            </button>
+          {/* Top KPI row */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {kpiCards.map(card => {
+              const Icon = card.icon;
+              return (
+                <div key={card.key} className={cardWrap}>
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${card.iconBgClass}`}>
+                    <Icon className={`w-4.5 h-4.5 ${card.iconClass}`} />
+                  </div>
+                  <span className={`block text-[10px] font-medium ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                    {card.label}
+                  </span>
+                  <span className={`text-lg font-sans font-bold mt-1 block ${isDark ? 'text-white' : 'text-neutral-950'}`}>
+                    {card.value}
+                  </span>
+                  <p className={`text-[10px] mt-1.5 ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
+                    {card.sublabel}
+                  </p>
+                  <p className={`text-[10px] font-bold mt-0.5 ${
+                    card.delta === null ? (isDark ? 'text-neutral-500' : 'text-neutral-400')
+                      : card.delta > 0 ? 'text-zinc-500'
+                      : card.delta < 0 ? 'text-zinc-500'
+                      : (isDark ? 'text-neutral-500' : 'text-neutral-400')
+                  }`}>
+                    {card.delta === null ? 'Novo neste período' : `${card.delta > 0 ? '+' : ''}${card.delta}% vs mês anterior`}
+                  </p>
+                </div>
+              );
+            })}
+
+          </div>
+
+          {/* Sub-Navigation */}
+          <div
+            className={`grid grid-cols-2 gap-1.5 rounded-xl border p-1.5 sm:grid-cols-3 xl:grid-cols-6 ${
+              isDark ? 'border-white/10 bg-white/[0.025]' : 'border-neutral-200 bg-neutral-100/70'
+            }`}
+            role="tablist"
+            aria-label="Seções do controle de frota"
+          >
+            {([
+              { id: 'dashboard' as const, label: 'Reembolso', detail: 'Colaborador', icon: Wallet },
+              { id: 'entries' as const, label: 'Viagens', detail: `${filteredDisplacements.length} registros`, icon: Route },
+              { id: 'fuel_reimbursement' as const, label: 'Combustível', detail: 'Reembolsos', icon: Fuel },
+              { id: 'employees' as const, label: 'Equipe', detail: `${data.employees.length} colaboradores`, icon: User },
+              { id: 'vehicles' as const, label: 'Veículos', detail: 'Gestão da frota', icon: Car },
+              { id: 'routes_audit' as const, label: 'Auditoria', detail: 'Rotas e despesas', icon: ShieldCheck }
+            ]).map(tab => {
+              const TabIcon = tab.icon;
+              const isActive = activeSubTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setActiveSubTab(tab.id)}
+                  className={`group flex min-h-[52px] items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
+                    isActive
+                      ? isDark
+                        ? 'border-white/20 bg-white text-black shadow-[0_8px_24px_rgba(0,0,0,0.28)] focus-visible:ring-white focus-visible:ring-offset-black'
+                        : 'border-neutral-950 bg-neutral-950 !text-white shadow-[0_6px_18px_rgba(0,0,0,0.14)] focus-visible:ring-neutral-950 focus-visible:ring-offset-white'
+                      : isDark
+                        ? 'border-transparent bg-black/20 text-neutral-300 hover:border-white/10 hover:bg-white/[0.06] focus-visible:ring-white/70 focus-visible:ring-offset-black'
+                        : 'border-transparent bg-white/70 text-neutral-700 hover:border-neutral-300 hover:bg-white focus-visible:ring-neutral-900 focus-visible:ring-offset-white'
+                  }`}
+                >
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                    isActive
+                      ? isDark ? 'border-black/10 bg-black/[0.06]' : 'border-white/20 bg-white/10 !text-white'
+                      : isDark ? 'border-white/10 bg-white/[0.04] group-hover:bg-white/[0.08]' : 'border-neutral-200 bg-neutral-50'
+                  }`}>
+                    <TabIcon className={`h-3.5 w-3.5 ${isActive && !isDark ? '!text-white' : ''}`} strokeWidth={1.9} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className={`block truncate text-[11px] font-bold leading-tight ${isActive && !isDark ? '!text-white' : ''}`}>{tab.label}</span>
+                    <span className={`mt-1 block truncate text-[9px] leading-tight ${
+                      isActive
+                        ? isDark ? 'text-black/55' : '!text-white/75'
+                        : 'text-neutral-500'
+                    }`}>
+                      {tab.detail}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {/* ============================== */}
@@ -1350,111 +1457,137 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                 </div>
               )}
 
-              {/* Card - Direct payout visual list by dynamic stats */}
-              <div className={`rounded-xl border overflow-hidden ${
-                isDark ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white shadow-xs'
-              }`}>
-                <div className={`p-4 border-b ${
-                  isDark ? 'bg-neutral-900/50 border-neutral-800' : 'bg-neutral-100 border-neutral-200'
-                }`}>
-                  <h3 className={`text-xs font-mono uppercase tracking-wider ${isDark ? 'text-neutral-400' : 'text-neutral-700 font-bold'}`}>
-                    Controle de Saldos & Pagamento por Colaborador
-                  </h3>
-                </div>
-
-                <div className={`divide-y ${isDark ? 'divide-neutral-800' : 'divide-neutral-200'}`}>
-                  {metrics.employeeBalances.map(emp => {
-                    const totalOwed = emp.pendingReimbursement;
-                    return (
-                      <div 
-                        key={emp.id} 
-                        onClick={() => {
-                          setSelectedEmployeeId(emp.id);
-                          setActiveModal('employee-details');
-                        }}
-                        className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all cursor-pointer active:scale-[0.98] ${
-                          isDark ? 'hover:bg-neutral-900/40' : 'hover:bg-neutral-50'
-                        }`}
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className={`font-bold text-sm ${isDark ? 'text-neutral-100' : 'text-neutral-900'}`}>
-                              {emp.name}
-                            </span>
-                            <span className={`text-[11px] font-mono ${isDark ? 'text-neutral-500' : 'text-neutral-600'}`}>
-                              ({emp.role})
-                            </span>
-                          </div>
-                          
-                          <div className={`flex flex-wrap gap-x-4 gap-y-1 text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                            <span>🚗 <strong>{emp.km} km</strong> percorridos</span>
-                            <span>📍 <strong>{emp.visitsCount} visitas</strong> registradas</span>
-                          </div>
-                        </div>
-
-                        {/* Reimbursement columns (clean alignment) */}
-                        <div className="flex items-start sm:items-center gap-4 text-xs font-mono">
-                          <div className="space-y-0.5">
-                            <span className={`block text-[9px] uppercase font-bold ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>A pagar</span>
-                            <span className="font-bold text-sm text-[#FFFFFF] block text-left sm:text-right">
-                              R$ {totalOwed.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-
-                          <div className={`space-y-0.5 border-l pl-4 ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`}>
-                            <span className={`block text-[9px] uppercase font-bold ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>Pago</span>
-                            <span className={`font-bold text-sm block text-left sm:text-right ${isDark ? 'text-neutral-400' : 'text-neutral-700'}`}>
-                              R$ {emp.paidReimbursement.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {metrics.employeeBalances.length === 0 && (
-                    <div className="p-10 text-center text-xs text-neutral-400 font-mono">
-                      Nenhum colaborador registrado. Cadastre profissionais na aba "Equipe".
+              {/* Saldos + Auditoria (main column) / Resumo & Desempenho da Frota (sidebar) */}
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.75fr)] gap-6 items-start">
+                <div className="space-y-6">
+                  {/* Controle de Saldos & Pagamentos por Colaborador */}
+                  <div className={cardWrap}>
+                    <div className="mb-4">
+                      <h3 className={`text-sm font-sans font-bold ${isDark ? 'text-white' : 'text-neutral-950'}`}>
+                        Controle de Saldos & Pagamentos por Colaborador
+                      </h3>
+                      <p className={`text-[11px] mt-0.5 ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
+                        Acompanhe o saldo acumulado e os pagamentos realizados
+                      </p>
                     </div>
-                  )}
-                </div>
-              </div>
 
-              {/* Professional Minimalist Auditor Analysis */}
-              <div className={`p-5 rounded-xl border ${
-                isDark ? 'border-neutral-800 bg-[#111111]/40' : 'border-neutral-200 bg-neutral-50 shadow-xs'
-              } space-y-3`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4.5 h-4.5 text-[#FFFFFF]" />
-                    <span className={`text-xs font-mono font-bold uppercase tracking-wider ${isDark ? 'text-neutral-200' : 'text-neutral-900'}`}>
-                      Auditoria e Validação Fiscal
-                    </span>
+                    <div className={`divide-y ${isDark ? 'divide-white/5' : 'divide-neutral-100'}`}>
+                      {metrics.employeeBalances.map(emp => {
+                        const initials = emp.name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase();
+                        return (
+                          <div
+                            key={emp.id}
+                            onClick={() => {
+                              setSelectedEmployeeId(emp.id);
+                              setActiveModal('employee-details');
+                            }}
+                            className={`py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all cursor-pointer active:scale-[0.98] ${
+                              isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-neutral-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${
+                                isDark ? 'bg-zinc-400/15 text-zinc-300' : 'bg-zinc-500/10 text-zinc-700'
+                              }`}>
+                                {initials || <User className="w-4 h-4" />}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`font-bold text-sm truncate ${isDark ? 'text-neutral-100' : 'text-neutral-900'}`}>
+                                    {emp.name}
+                                  </span>
+                                  <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                                    isDark ? 'bg-white/10 text-neutral-300' : 'bg-neutral-100 text-neutral-600'
+                                  }`}>
+                                    {emp.role || 'Colaborador'}
+                                  </span>
+                                </div>
+                                <div className={`flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] mt-0.5 ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
+                                  <span>{emp.km.toLocaleString('pt-BR')} km percorridos</span>
+                                  <span>{emp.visitsCount} visitas registradas</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-4 shrink-0 pl-12 sm:pl-0">
+                              <div className="text-left sm:text-right">
+                                <span className={`block text-[9px] uppercase font-bold ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>Saldo a pagar</span>
+                                <span className={`font-bold text-sm ${isDark ? 'text-white' : 'text-neutral-950'}`}>
+                                  R$ {emp.pendingReimbursement.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              <div className="text-left sm:text-right">
+                                <span className={`block text-[9px] uppercase font-bold ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>Pago</span>
+                                <span className="font-bold text-sm text-zinc-500">
+                                  R$ {emp.paidReimbursement.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              <ChevronRight className={`w-4 h-4 hidden sm:block ${isDark ? 'text-neutral-600' : 'text-neutral-400'}`} />
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {metrics.employeeBalances.length === 0 && (
+                        <div className="py-10 text-center text-xs text-neutral-400 font-mono">
+                          Nenhum colaborador registrado. Cadastre profissionais na aba "Equipe".
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <span className={`text-[10px] font-mono ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>Gasolina de referência: R$ 6,29/L</span>
-                </div>
-                
-                <p className={`text-xs leading-relaxed ${isDark ? 'text-neutral-400' : 'text-neutral-700'}`}>
-                  Avalie o cumprimento de rotas com base na quilometragem declarada e na eficiência cadastrada de cada veículo. O auditor inteligente analisa desperdícios ou faturamentos anômalos.
-                </p>
 
-                <button
-                  onClick={runAiAuditor}
-                  disabled={isAnalyzing}
-                  className={`w-full sm:w-auto px-4 py-2 rounded-lg font-mono font-bold text-xs uppercase tracking-wider transition ${
-                    isDark 
-                      ? 'bg-white text-black !text-black hover:opacity-90' 
-                      : 'bg-neutral-950 text-white keep-white hover:opacity-90'
-                  } disabled:opacity-50`}
-                >
-                  {isAnalyzing ? 'Processando auditoria...' : 'Emitir Relatório de Auditoria'}
-                </button>
+                  {/* Auditoria & Validação Fiscal */}
+                  <div className={cardWrap}>
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className={`w-4.5 h-4.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`} />
+                        <h3 className={`text-sm font-sans font-bold ${isDark ? 'text-white' : 'text-neutral-950'}`}>
+                          Auditoria & Validação Fiscal
+                        </h3>
+                      </div>
+                      <span className={`text-[10px] font-mono ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>Gasolina de referência: R$ 6,29/L</span>
+                    </div>
+
+                    <p className={`text-xs leading-relaxed mb-4 ${isDark ? 'text-neutral-400' : 'text-neutral-700'}`}>
+                      Garanta conformidade e eficiência com nossa auditoria inteligente baseada em quilometragem e dados fiscais.
+                    </p>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+                      {[
+                        { icon: MapPin, label: 'Quilometragem declarada', sub: 'Validação com base em evidências' },
+                        { icon: Fuel, label: 'Eficiência por veículo', sub: 'Análise de consumo e padrões' },
+                        { icon: AlertTriangle, label: 'Despesas anômalas', sub: 'Detecção de inconsistências' },
+                        { icon: FileText, label: 'Relatório completo', sub: 'Para auditoria e compliance' }
+                      ].map(item => {
+                        const ItemIcon = item.icon;
+                        return (
+                          <div key={item.label} className="space-y-1.5">
+                            <ItemIcon className={`w-4 h-4 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`} />
+                            <p className={`text-xs font-bold ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`}>{item.label}</p>
+                            <p className={`text-[10px] ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>{item.sub}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <button
+                      onClick={runAiAuditor}
+                      disabled={isAnalyzing}
+                      className={`w-full sm:w-auto px-4 py-2.5 rounded-lg font-sans font-bold text-xs uppercase tracking-wider transition inline-flex items-center gap-2 ${
+                        isDark
+                          ? 'bg-white text-black !text-black hover:opacity-90'
+                          : 'bg-neutral-950 text-white keep-white hover:opacity-90'
+                      } disabled:opacity-50`}
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      {isAnalyzing ? 'Processando...' : 'AUDITORIA'}
+                    </button>
 
                 {aiReport && (() => {
                   const parsed = parseAuditReport(aiReport);
                   return (
-                    <div className={`mt-5 p-5 rounded-xl border ${
-                      isDark ? 'border-neutral-800 bg-[#141414]' : 'border-neutral-200 bg-white shadow-sm'
+                    <div className={`mt-5 pt-5 border-t ${
+                      isDark ? 'border-neutral-800' : 'border-neutral-200'
                     } space-y-5 animate-scaleIn`}>
                       
                       {/* Header bar */}
@@ -1472,7 +1605,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                               isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-500 hover:text-neutral-900'
                             }`}
                           >
-                            {copiedReport ? <Check className="w-3 text-emerald-500" /> : <Copy className="w-3" />}
+                            {copiedReport ? <Check className="w-3 text-zinc-500" /> : <Copy className="w-3" />}
                             {copiedReport ? 'Copiado' : 'Copiar'}
                           </button>
                           <button 
@@ -1501,7 +1634,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                           isDark ? 'bg-[#111111] border-neutral-800/60' : 'bg-neutral-50/50 border-neutral-200/80'
                         } space-y-2.5`}>
                           <div className="flex items-center gap-2 pb-1 border-b border-neutral-200 dark:border-neutral-800/40">
-                            <BarChart3 className="w-4 h-4 text-emerald-500" />
+                            <BarChart3 className="w-4 h-4 text-zinc-500" />
                             <h4 className={`text-xs font-mono uppercase tracking-wider font-bold ${isDark ? 'text-white' : 'text-neutral-800'}`}>
                               Painel Analítico Geral
                             </h4>
@@ -1510,7 +1643,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                             <ul className="space-y-1.5 text-xs">
                               {parsed.general.map((point, index) => (
                                 <li key={index} className={`flex gap-1.5 items-start ${isDark ? 'text-neutral-300' : 'text-neutral-600'}`}>
-                                  <span className="text-emerald-500 mt-0.5">•</span>
+                                  <span className="text-zinc-500 mt-0.5">•</span>
                                   <span>{point}</span>
                                 </li>
                               ))}
@@ -1525,7 +1658,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                           isDark ? 'bg-[#111111] border-neutral-800/60' : 'bg-neutral-50/50 border-neutral-200/80'
                         } space-y-2.5`}>
                           <div className="flex items-center gap-2 pb-1 border-b border-neutral-200 dark:border-neutral-800/40">
-                            <Zap className="w-4 h-4 text-amber-500" />
+                            <Zap className="w-4 h-4 text-zinc-500" />
                             <h4 className={`text-xs font-mono uppercase tracking-wider font-bold ${isDark ? 'text-white' : 'text-neutral-800'}`}>
                               Eficiência Individual
                             </h4>
@@ -1534,7 +1667,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                             <ul className="space-y-1.5 text-xs">
                               {parsed.efficiency.map((point, index) => (
                                 <li key={index} className={`flex gap-1.5 items-start ${isDark ? 'text-neutral-300' : 'text-neutral-600'}`}>
-                                  <span className="text-amber-500 mt-0.5">⚡</span>
+                                  <span className="text-zinc-500 mt-0.5">⚡</span>
                                   <span>{point}</span>
                                 </li>
                               ))}
@@ -1546,43 +1679,43 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
 
                         {/* 3. Inconsistências & Desperdiços */}
                         <div className={`p-4 rounded-lg border ${
-                          isDark ? 'bg-[#1C1616] border-red-950/40' : 'bg-rose-50/30 border-red-100'
+                          isDark ? 'bg-[#1C1616] border-zinc-950/40' : 'bg-zinc-50/30 border-zinc-100'
                         } space-y-2.5`}>
-                          <div className="flex items-center gap-2 pb-1 border-b border-rose-100/50 dark:border-red-950/20">
-                            <AlertTriangle className="w-4 h-4 text-rose-500 animate-pulse" />
-                            <h4 className="text-xs font-mono uppercase tracking-wider font-bold text-rose-600 dark:text-rose-450">
+                          <div className="flex items-center gap-2 pb-1 border-b border-zinc-100/50 dark:border-zinc-950/20">
+                            <AlertTriangle className="w-4 h-4 text-zinc-500 animate-pulse" />
+                            <h4 className="text-xs font-mono uppercase tracking-wider font-bold text-zinc-600 dark:text-zinc-450">
                               Desperdícios & Alertas
                             </h4>
                           </div>
                           {parsed.inconsistencies.length > 0 ? (
                             <ul className="space-y-1.5 text-xs">
                               {parsed.inconsistencies.map((point, index) => (
-                                <li key={index} className="flex gap-1.5 items-start text-rose-800 dark:text-rose-300">
-                                  <span className="text-rose-500 mt-0.5">⚠️</span>
+                                <li key={index} className="flex gap-1.5 items-start text-zinc-800 dark:text-zinc-300">
+                                  <span className="text-zinc-500 mt-0.5">⚠️</span>
                                   <span>{point}</span>
                                 </li>
                               ))}
                             </ul>
                           ) : (
-                            <p className="text-xs text-emerald-700 dark:text-emerald-400 italic">Parabéns! Nenhuma inconsistência identificada nesta rodada.</p>
+                            <p className="text-xs text-zinc-700 dark:text-zinc-400 italic">Parabéns! Nenhuma inconsistência identificada nesta rodada.</p>
                           )}
                         </div>
 
                         {/* 4. Recomendações e Economia */}
                         <div className={`p-4 rounded-lg border ${
-                          isDark ? 'bg-[#121A1A] border-emerald-950/40' : 'bg-emerald-50/20 border-emerald-100 animate-transition'
+                          isDark ? 'bg-[#121A1A] border-zinc-950/40' : 'bg-zinc-50/20 border-zinc-100 animate-transition'
                         } space-y-2.5`}>
-                          <div className="flex items-center gap-2 pb-1 border-b border-emerald-100/50 dark:border-emerald-950/20">
-                            <Award className="w-4 h-4 text-emerald-500" />
-                            <h4 className="text-xs font-mono uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-400">
+                          <div className="flex items-center gap-2 pb-1 border-b border-zinc-100/50 dark:border-zinc-950/20">
+                            <Award className="w-4 h-4 text-zinc-500" />
+                            <h4 className="text-xs font-mono uppercase tracking-wider font-bold text-zinc-700 dark:text-zinc-400">
                               Oportunidades de Economia
                             </h4>
                           </div>
                           {parsed.recommendations.length > 0 ? (
                             <ul className="space-y-1.5 text-xs">
                               {parsed.recommendations.map((point, index) => (
-                                <li key={index} className="flex gap-1.5 items-start text-emerald-800 dark:text-emerald-300">
-                                  <span className="text-emerald-500 mt-0.5">💡</span>
+                                <li key={index} className="flex gap-1.5 items-start text-zinc-800 dark:text-zinc-300">
+                                  <span className="text-zinc-500 mt-0.5">💡</span>
                                   <span>{point}</span>
                                 </li>
                               ))}
@@ -1613,6 +1746,247 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     </div>
                   );
                 })()}
+                  </div>
+                </div>
+
+                {/* Sidebar: desempenho operacional */}
+                <div className="space-y-6">
+                  <div className="hidden" aria-hidden="true">
+                    <div className="flex items-center justify-between mb-5">
+                      <h3 className={`text-sm font-sans font-bold ${isDark ? 'text-white' : 'text-neutral-950'}`}>Resumo da Frota</h3>
+                      <span className={`text-[10px] font-medium flex items-center gap-1 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                        Este mês <ChevronDown className="w-3 h-3" />
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-5">
+                      <div className="relative w-36 h-36 shrink-0">
+                        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                          <circle cx="50" cy="50" r="40" fill="transparent" stroke={isDark ? '#222222' : '#E5E7EB'} strokeWidth="10" />
+                          {fleetActiveCount > 0 && (
+                            <circle
+                              cx="50" cy="50" r="40" fill="transparent"
+                              stroke="#22c55e"
+                              strokeWidth="10"
+                              strokeDasharray={251.2}
+                              strokeDashoffset={0}
+                              strokeLinecap="round"
+                            />
+                          )}
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <span className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-neutral-950'}`}>{data.vehicles.length}</span>
+                          <span className={`text-[9px] uppercase tracking-wider font-bold ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>Total</span>
+                        </div>
+                      </div>
+
+                      <div className="w-full space-y-2.5">
+                        {[
+                          { label: 'Ativos', value: fleetActiveCount, color: 'bg-green-500 shadow-[0_0_7px_rgba(34,197,94,0.5)]' },
+                          { label: 'Inativos', value: 0, color: 'bg-red-500 shadow-[0_0_7px_rgba(239,68,68,0.35)]' },
+                          { label: 'Em manutenção', value: 0, color: 'bg-amber-400 shadow-[0_0_7px_rgba(251,191,36,0.4)]' }
+                        ].map(row => {
+                          const pct = data.vehicles.length > 0 ? Math.round((row.value / data.vehicles.length) * 100) : 0;
+                          return (
+                            <div key={row.label} className="flex items-center justify-between text-xs">
+                              <span className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${row.color}`} />
+                                <span className={isDark ? 'text-neutral-300' : 'text-neutral-700'}>{row.label}</span>
+                              </span>
+                              <span className={`font-mono ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>{row.value} ({pct}%)</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={cardWrap}>
+                    <div className="flex items-center justify-between mb-5">
+                      <h3 className={`text-sm font-sans font-bold ${isDark ? 'text-white' : 'text-neutral-950'}`}>Desempenho da Frota</h3>
+                      <span className={`text-[10px] font-medium flex items-center gap-1 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                        Este mês <ChevronDown className="w-3 h-3" />
+                      </span>
+                    </div>
+
+                    <div className="space-y-4">
+                      {[
+                        {
+                          icon: Route, label: 'Distância total', value: `${metrics.totalKm.toLocaleString('pt-BR')} km`,
+                          delta: pctDelta(currentPeriodSums.km, previousPeriodSums.km),
+                          series: monthlySeries.map(m => m.km),
+                          color: isDark ? '#FFFFFF' : '#6B6B6B', badgeBg: isDark ? 'bg-zinc-400/10' : 'bg-zinc-500/10', badgeText: isDark ? 'text-zinc-400' : 'text-zinc-600'
+                        },
+                        {
+                          icon: Fuel, label: 'Consumo médio', value: `${metrics.averageConsumption.toFixed(1)} km/l`,
+                          delta: pctDelta(currentPeriodSums.efficiency, previousPeriodSums.efficiency),
+                          series: monthlySeries.map(m => m.efficiency),
+                          color: isDark ? '#FFFFFF' : '#6B6B6B', badgeBg: isDark ? 'bg-zinc-400/10' : 'bg-zinc-500/10', badgeText: isDark ? 'text-zinc-400' : 'text-zinc-600'
+                        },
+                        {
+                          icon: Gauge, label: 'Custo por km', value: `R$ ${costPerKmCurrent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                          delta: pctDelta(costPerKmCurrent, costPerKmPrevious),
+                          series: monthlySeries.map(m => m.costPerKm),
+                          color: isDark ? '#FFFFFF' : '#6B6B6B', badgeBg: isDark ? 'bg-zinc-400/10' : 'bg-zinc-500/10', badgeText: isDark ? 'text-zinc-400' : 'text-zinc-600'
+                        },
+                        {
+                          icon: Wallet, label: 'Reembolsos', value: `R$ ${metrics.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                          delta: pctDelta(currentPeriodSums.spent, previousPeriodSums.spent),
+                          series: monthlySeries.map(m => m.spent),
+                          color: isDark ? '#FFFFFF' : '#6B6B6B', badgeBg: isDark ? 'bg-zinc-400/10' : 'bg-zinc-500/10', badgeText: isDark ? 'text-zinc-400' : 'text-zinc-600'
+                        }
+                      ].map(row => {
+                        const RowIcon = row.icon;
+                        return (
+                          <div key={row.label} className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${row.badgeBg}`}>
+                                <RowIcon className={`w-3.5 h-3.5 ${row.badgeText}`} />
+                              </div>
+                              <div className="min-w-0">
+                                <p className={`text-[10px] ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>{row.label}</p>
+                                <p className={`text-xs font-bold truncate ${isDark ? 'text-white' : 'text-neutral-950'}`}>{row.value}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`text-[10px] font-bold ${
+                                row.delta === null ? (isDark ? 'text-neutral-500' : 'text-neutral-400')
+                                  : row.delta > 0 ? 'text-zinc-500' : row.delta < 0 ? 'text-zinc-500' : (isDark ? 'text-neutral-500' : 'text-neutral-400')
+                              }`}>
+                                {row.delta === null ? '—' : `${row.delta > 0 ? '+' : ''}${row.delta}%`}
+                              </span>
+                              <svg viewBox="0 0 60 20" className="w-12 h-5 shrink-0">
+                                <polyline points={sparklinePoints(row.series)} fill="none" stroke={row.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Colaboradores */}
+              <div className={cardWrap}>
+                <div className="mb-4">
+                  <h3 className={`text-sm font-sans font-bold ${isDark ? 'text-white' : 'text-neutral-950'}`}>Colaboradores</h3>
+                  <p className={`text-[11px] mt-0.5 ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>Visão geral de colaboradores e seus indicadores</p>
+                </div>
+
+                <div className="overflow-x-auto -mx-2">
+                  <table className="w-full min-w-[760px] text-left border-collapse">
+                    <thead>
+                      <tr className={`text-[9px] uppercase tracking-wider font-bold ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
+                        <th className="px-2 py-2">Colaborador</th>
+                        <th className="px-2 py-2">Distância</th>
+                        <th className="px-2 py-2">Visitas</th>
+                        <th className="px-2 py-2">Consumo médio</th>
+                        <th className="px-2 py-2">Saldo a pagar</th>
+                        <th className="px-2 py-2">Pago</th>
+                        <th className="px-2 py-2">Status</th>
+                        <th className="px-2 py-2 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedCollaborators.map(emp => {
+                        const initials = emp.name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase();
+                        const fullEmployee = data.employees.find(e => e.id === emp.id);
+                        const isActive = (fullEmployee?.status || 'Ativo') === 'Ativo';
+                        return (
+                          <tr key={emp.id} className={`border-t text-xs ${isDark ? 'border-white/5' : 'border-neutral-100'}`}>
+                            <td className="px-2 py-3">
+                              <div className="flex items-center gap-2.5">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                                  isDark ? 'bg-zinc-400/15 text-zinc-300' : 'bg-zinc-500/10 text-zinc-700'
+                                }`}>
+                                  {initials || <User className="w-3.5 h-3.5" />}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`font-bold ${isDark ? 'text-neutral-100' : 'text-neutral-900'}`}>{emp.name}</span>
+                                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${isDark ? 'bg-white/10 text-neutral-300' : 'bg-neutral-100 text-neutral-600'}`}>
+                                      {emp.role || 'Colaborador'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className={`px-2 py-3 font-mono ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>{emp.km.toLocaleString('pt-BR')} km</td>
+                            <td className={`px-2 py-3 font-mono ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>{emp.visitsCount}</td>
+                            <td className={`px-2 py-3 font-mono ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>{employeeAvgConsumption(emp.id).toFixed(1)} km/l</td>
+                            <td className={`px-2 py-3 font-mono ${isDark ? 'text-white' : 'text-neutral-950'}`}>R$ {emp.pendingReimbursement.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                            <td className="px-2 py-3 font-mono text-zinc-500">R$ {emp.paidReimbursement.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                            <td className="px-2 py-3">
+                              <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider whitespace-nowrap ${
+                                isActive
+                                  ? (isDark ? 'bg-zinc-500/15 text-zinc-400' : 'bg-zinc-500/10 text-zinc-600')
+                                  : (isDark ? 'bg-neutral-700/30 text-neutral-400' : 'bg-neutral-200 text-neutral-500')
+                              }`}>
+                                {isActive ? 'Ativo' : 'Inativo'}
+                              </span>
+                            </td>
+                            <td className="px-2 py-3">
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => { setSelectedEmployeeId(emp.id); setActiveModal('employee-details'); }}
+                                  className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-white/10 text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'}`}
+                                  title="Ver detalhes"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                                {fullEmployee && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditEmployee(fullEmployee)}
+                                    className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-white/10 text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'}`}
+                                    title="Mais opções"
+                                  >
+                                    <MoreHorizontal className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {paginatedCollaborators.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="px-2 py-10 text-center text-xs text-neutral-400 font-mono">
+                            Nenhum colaborador registrado.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className={`flex items-center justify-between mt-4 pt-4 border-t text-[11px] ${isDark ? 'border-white/5 text-neutral-500' : 'border-neutral-100 text-neutral-500'}`}>
+                  <span>Mostrando {paginatedCollaborators.length} de {metrics.employeeBalances.length} colaborador{metrics.employeeBalances.length === 1 ? '' : 'es'}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCollaboratorsPage(p => Math.max(1, p - 1))}
+                      disabled={collaboratorsPage <= 1}
+                      className={`px-2.5 py-1.5 rounded-lg font-bold disabled:opacity-40 disabled:cursor-not-allowed ${isDark ? 'hover:bg-white/10' : 'hover:bg-neutral-100'}`}
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <span className={`w-6 h-6 flex items-center justify-center rounded-lg font-bold ${isDark ? 'bg-white text-black' : 'bg-neutral-950 text-white keep-white'}`}>
+                      {collaboratorsPage}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCollaboratorsPage(p => Math.min(collaboratorsTotalPages, p + 1))}
+                      disabled={collaboratorsPage >= collaboratorsTotalPages}
+                      className={`px-2.5 py-1.5 rounded-lg font-bold disabled:opacity-40 disabled:cursor-not-allowed ${isDark ? 'hover:bg-white/10' : 'hover:bg-neutral-100'}`}
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1659,7 +2033,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
 
               {/* Expandable filters dropdown (highly contrastive text layouts) */}
               {showFilters && (
-                <div className="p-4 rounded-xl border border-neutral-900 bg-black grid grid-cols-1 sm:grid-cols-3 gap-3 animate-fadeIn">
+                <div className="py-4 border-t border-b border-neutral-900 grid grid-cols-1 sm:grid-cols-3 gap-3 animate-fadeIn">
                   <div className="space-y-1.5 text-left">
                     <label className="inline-block bg-white text-black text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded leading-none">Período de Tempo</label>
                     <select
@@ -1712,9 +2086,9 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     <div 
                       key={disp.id} 
                       className={`p-4 rounded-xl border transition ${
-                        isDark 
-                          ? 'border-neutral-800 bg-[#141414] hover:border-neutral-700' 
-                          : 'border-neutral-200 bg-white hover:border-neutral-300 shadow-xs'
+                        isDark
+                          ? 'border-neutral-800 bg-[#141414] hover:border-neutral-700'
+                          : 'border-neutral-200 bg-white hover:border-neutral-300'
                       }`}
                     >
                       {/* Flex main info block header */}
@@ -1741,7 +2115,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                             }}
                             className={`mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono font-bold transition cursor-pointer ${
                               disp.refundReceiptImage
-                                ? (isDark ? 'bg-green-900/30 text-green-400 border border-green-800' : 'bg-green-100 text-green-700 border border-green-200')
+                                ? (isDark ? 'bg-zinc-900/30 text-zinc-400 border border-zinc-800' : 'bg-zinc-100 text-zinc-700 border border-zinc-200')
                                 : (isDark ? 'bg-neutral-800 text-neutral-300 border border-neutral-700' : 'bg-neutral-100 text-neutral-600 border border-neutral-200')
                             }`}
                             title={disp.refundReceiptImage ? "Visualizar Comprovante de Reembolso" : "Anexar Comprovante de Reembolso"}
@@ -1813,8 +2187,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                               onClick={() => setSelectedReceiptImage(disp.receiptImage || '')}
                               className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-mono font-medium transition cursor-pointer ${
                                 isDark
-                                  ? 'bg-blue-950/20 text-blue-400 border border-blue-900/50 hover:bg-blue-900/10'
-                                  : 'bg-blue-50 text-blue-750 border border-blue-200 hover:bg-blue-100'
+                                  ? 'bg-zinc-950/20 text-zinc-400 border border-zinc-900/50 hover:bg-zinc-900/10'
+                                  : 'bg-zinc-50 text-zinc-750 border border-zinc-200 hover:bg-zinc-100'
                               }`}
                               title="Visualizar Comprovante de Abastecimento"
                             >
@@ -1840,7 +2214,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => deleteDisplacement(disp.id)}
-                            className="p-1.5 sm:px-2.5 sm:py-1 rounded border border-red-200/50 hover:bg-rose-500/10 text-xs font-sans text-neutral-500 hover:text-rose-500 transition"
+                            className="p-1.5 sm:px-2.5 sm:py-1 rounded border border-zinc-200/50 hover:bg-zinc-500/10 text-xs font-sans text-neutral-500 hover:text-zinc-500 transition"
                             title="Excluir"
                           >
                             <Trash2 className="w-3 h-3 block sm:inline" />
@@ -1881,9 +2255,9 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   <div 
                     key={emp.id} 
                     className={`p-4 rounded-xl border flex items-center justify-between transition ${
-                      isDark 
-                        ? 'border-neutral-800 bg-[#141414] hover:border-neutral-700' 
-                        : 'border-neutral-200 bg-white hover:border-neutral-300 shadow-xs'
+                      isDark
+                        ? 'border-neutral-800 bg-[#141414] hover:border-neutral-700'
+                        : 'border-neutral-200 bg-white hover:border-neutral-300'
                     }`}
                   >
                     <div>
@@ -1891,7 +2265,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                         <span className={`font-bold text-sm ${isDark ? 'text-neutral-100' : 'text-neutral-900'}`}>{emp.name}</span>
                         <span className={`text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded ${
                           emp.status === 'Ativo' 
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' 
+                            ? 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-400' 
                             : 'bg-neutral-200 text-neutral-700'
                         }`}>{emp.status}</span>
                       </div>
@@ -1911,7 +2285,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       </button>
                       <button
                         onClick={() => deleteEmployee(emp.id, emp.name)}
-                        className="p-1 hover:bg-rose-500/10 rounded text-neutral-400 hover:text-rose-500 transition"
+                        className="p-1 hover:bg-zinc-500/10 rounded text-neutral-400 hover:text-zinc-500 transition"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1945,9 +2319,9 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     <div 
                       key={v.id} 
                       className={`p-4 rounded-xl border flex items-center justify-between transition ${
-                        isDark 
-                          ? 'border-neutral-800 bg-[#141414] hover:border-neutral-700' 
-                          : 'border-neutral-200 bg-white hover:border-neutral-300 shadow-xs'
+                        isDark
+                          ? 'border-neutral-800 bg-[#141414] hover:border-neutral-700'
+                          : 'border-neutral-200 bg-white hover:border-neutral-300'
                       }`}
                     >
                       <div>
@@ -1971,7 +2345,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                         </button>
                         <button
                           onClick={() => deleteVehicle(v.id, v.name)}
-                          className="p-1 hover:bg-rose-500/10 rounded text-neutral-400 hover:text-rose-500 transition"
+                          className="p-1 hover:bg-zinc-500/10 rounded text-neutral-400 hover:text-zinc-500 transition"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -1989,7 +2363,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
             <div className="space-y-6">
               {/* Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className={`p-4 rounded-xl border ${isDark ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white shadow-xs'}`}>
+                <div className={`p-4 border-l-2 ${isDark ? 'border-white/20' : 'border-black/10'}`}>
                   <span className={`block text-[10px] font-mono uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-500 font-bold'}`}>Litros Consumidos (Est.)</span>
                   <span className={`text-lg font-sans font-bold mt-1.5 block ${isDark ? 'text-white' : 'text-neutral-950'}`}>
                     {data.displacements.reduce((acc, d) => {
@@ -2000,14 +2374,14 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   </span>
                 </div>
 
-                <div className={`p-4 rounded-xl border ${isDark ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white shadow-xs'}`}>
+                <div className={`p-4 border-l-2 ${isDark ? 'border-white/20' : 'border-black/10'}`}>
                   <span className={`block text-[10px] font-mono uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-500 font-bold'}`}>Preço Gasolina (Ref.)</span>
                   <span className={`text-lg font-sans font-bold mt-1.5 block ${isDark ? 'text-white' : 'text-neutral-950'}`}>
                     R$ 6,29 / L
                   </span>
                 </div>
 
-                <div className={`p-4 rounded-xl border ${isDark ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white shadow-xs'}`}>
+                <div className={`p-4 border-l-2 ${isDark ? 'border-white/20' : 'border-black/10'}`}>
                   <span className={`block text-[10px] font-mono uppercase tracking-wider ${isDark ? 'text-neutral-500' : 'text-neutral-500 font-bold'}`}>Reembolso de Combustível</span>
                   <span className={`text-lg font-sans font-bold mt-1.5 block ${isDark ? 'text-white' : 'text-neutral-950'}`}>
                     R$ {data.displacements.reduce((acc, d) => {
@@ -2021,8 +2395,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
               </div>
 
               {/* Fuel Refund Table */}
-              <div className={`rounded-xl border overflow-hidden ${isDark ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white shadow-xs'}`}>
-                <div className={`p-4 border-b ${isDark ? 'bg-neutral-900/50 border-neutral-800' : 'bg-neutral-100 border-neutral-200'}`}>
+              <div>
+                <div className={`p-4 border-y ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`}>
                   <h3 className={`text-xs font-mono uppercase tracking-wider ${isDark ? 'text-neutral-400' : 'text-neutral-700 font-bold'}`}>
                     Lista Detalhada de Reembolso de Combustível
                   </h3>
@@ -2103,7 +2477,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                             ? 'border-[#FFFFFF] bg-[#FFFFFF]/5'
                             : isDark
                             ? 'border-neutral-800 bg-[#141414] hover:border-neutral-700'
-                            : 'border-neutral-200 bg-white hover:border-neutral-300 shadow-xs'
+                            : 'border-neutral-200 bg-white hover:border-neutral-300'
                         }`}
                       >
                         <div className="flex items-center justify-between">
@@ -2111,7 +2485,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                             {employee?.name || 'Não cadastrado'}
                           </span>
                           {isGps ? (
-                            <span className="px-1.5 py-0.5 rounded text-[8px] font-mono uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-bold">
+                            <span className="px-1.5 py-0.5 rounded text-[8px] font-mono uppercase bg-zinc-500/10 text-zinc-500 border border-zinc-500/20 font-bold">
                               📍 GPS
                             </span>
                           ) : (
@@ -2166,7 +2540,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                   return (
                     <div className="space-y-4">
                       {/* Interactive OpenStreetMap Map */}
-                      <div className={`rounded-xl border overflow-hidden relative shadow-sm h-[350px] ${
+                      <div className={`rounded-xl border overflow-hidden relative h-[350px] ${
                         isDark ? 'border-neutral-800' : 'border-neutral-200 bg-white'
                       }`}>
                         {isGps && selectedTrip.startLat !== undefined && selectedTrip.startLng !== undefined ? (
@@ -2180,7 +2554,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                           />
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-neutral-50 dark:bg-neutral-900 text-center">
-                            <AlertTriangle className="w-8 h-8 text-amber-500 mb-2" />
+                            <AlertTriangle className="w-8 h-8 text-zinc-500 mb-2" />
                             <span className={`text-sm font-semibold ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`}>Sem Dados de Georeferenciamento</span>
                             <span className="text-xs text-neutral-500 mt-1 max-w-xs leading-relaxed">
                               Esta rota foi preenchida de forma manual sem o uso de rastreamento por GPS nativo. A auditoria baseia-se na origem, destino informados e relatório da inteligência fiscal.
@@ -2190,8 +2564,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       </div>
 
                       {/* Travel Detailed Analytics */}
-                      <div className={`p-4 rounded-xl border ${
-                        isDark ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white'
+                      <div className={`pt-4 border-t ${
+                        isDark ? 'border-neutral-800' : 'border-neutral-200'
                       } space-y-4`}>
                         <div className="flex items-center justify-between pb-2 border-b border-neutral-100 dark:border-neutral-800">
                           <div>
@@ -2200,8 +2574,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                           </div>
                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono font-bold uppercase ${
                             selectedTrip.status === 'Aprovada' || selectedTrip.status === 'Reembolsada'
-                              ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                              : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                              ? 'bg-zinc-500/10 text-zinc-500 border border-zinc-500/20'
+                              : 'bg-zinc-500/10 text-zinc-500 border border-zinc-500/20'
                           }`}>
                             {selectedTrip.status}
                           </span>
@@ -2540,12 +2914,12 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
             {finishedTripSummary ? (
               /* PHASE 1: COMPLETED TRIP SUMMARY SCREEN */
               <div className="space-y-4 animate-fadeIn">
-                <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto text-emerald-500">
+                <div className="w-12 h-12 rounded-full bg-zinc-500/10 flex items-center justify-center mx-auto text-zinc-500">
                   <CheckCircle2 className="w-6 h-6" />
                 </div>
                 
                 <div className="text-center space-y-1">
-                  <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest font-mono">Chegada Confirmada!</p>
+                  <p className="text-xs font-bold text-zinc-600 uppercase tracking-widest font-mono">Chegada Confirmada!</p>
                   <p className="text-xs text-neutral-500 dark:text-neutral-400">Verifique os dados calculados abaixo:</p>
                 </div>
 
@@ -2720,7 +3094,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     </label>
                     
                     <div className="p-3 rounded border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-neutral-950 dark:text-white flex items-center gap-2 shadow-xs">
-                      <MapPin className={`w-4 h-4 shrink-0 ${gpsLoading ? 'text-[#FFFFFF] animate-pulse' : gpsStartStreet ? 'text-emerald-500' : 'text-[#FFFFFF] animate-bounce'}`} />
+                      <MapPin className={`w-4 h-4 shrink-0 ${gpsLoading ? 'text-[#FFFFFF] animate-pulse' : gpsStartStreet ? 'text-zinc-500' : 'text-[#FFFFFF] animate-bounce'}`} />
                       <span className={`text-xs font-bold truncate ${!gpsStartStreet ? 'text-[#FFFFFF] animate-pulse' : 'text-neutral-800 dark:text-neutral-200'}`}>
                         {gpsLoading ? 'Obtendo localização GPS...' : (gpsStartStreet || 'Aperte em Recarregar GPS')}
                       </span>
@@ -2803,12 +3177,12 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                       </div>
 
                       {geocodingError && (
-                        <p className="text-[10px] text-red-500 font-medium">{geocodingError}</p>
+                        <p className="text-[10px] text-zinc-500 font-medium">{geocodingError}</p>
                       )}
 
                       {/* Display of calculated metrics (KM and Value) */}
                       {calculatedDistance !== null && calculatedValue !== null && (
-                        <div className="grid grid-cols-2 gap-2 mt-2 p-2.5 rounded border border-emerald-500/30 bg-emerald-500/5 text-xs animate-fadeIn">
+                        <div className="grid grid-cols-2 gap-2 mt-2 p-2.5 rounded border border-zinc-500/30 bg-zinc-500/5 text-xs animate-fadeIn">
                           <div className="text-center">
                             <span className="text-[8px] uppercase font-mono text-neutral-400 block">Distância Estimada</span>
                             <span className="font-extrabold text-neutral-900 dark:text-white text-sm">{calculatedDistance} KM</span>
@@ -2966,7 +3340,7 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                     <button
                       type="button"
                       onClick={() => setDisplacementForm({ ...displacementForm, receiptImage: '' })}
-                      className="text-[10px] font-mono px-2 py-1 text-red-650 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded border border-rose-200 dark:border-rose-900 font-semibold shrink-0"
+                      className="text-[10px] font-mono px-2 py-1 text-zinc-650 hover:bg-zinc-50 dark:hover:bg-zinc-950/20 rounded border border-zinc-200 dark:border-zinc-900 font-semibold shrink-0"
                     >
                       Remover
                     </button>
@@ -3345,8 +3719,8 @@ export default function ExpensesView({ theme }: ExpensesViewProps) {
                           <div className="flex items-center gap-1.5 mt-1 justify-end">{disp.kmTraveled} km
                             <span className={`px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-bold ${
                               disp.status === 'Reembolsada' || disp.status === 'Aprovada'
-                                ? 'bg-emerald-500 text-white dark:bg-emerald-900/30 dark:text-emerald-400' 
-                                : 'bg-amber-500 text-white dark:bg-amber-900/30 dark:text-amber-400'
+                                ? 'bg-zinc-500 text-white dark:bg-zinc-900/30 dark:text-zinc-400' 
+                                : 'bg-zinc-500 text-white dark:bg-zinc-900/30 dark:text-zinc-400'
                             }`}>
                               {disp.status}
                             </span>

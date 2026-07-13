@@ -9,6 +9,8 @@ import InstallAppButton from './InstallAppButton';
 
 interface HeaderProps {
   title: string;
+  subtitle?: string;
+  searchPlaceholder?: string;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   onOpenAssistant: () => void;
@@ -21,9 +23,11 @@ interface HeaderProps {
   onNavigateToTab: (tab: 'dashboard' | 'budgeting' | 'transactions' | 'clients' | 'settings' | 'expenses') => void;
 }
 
-export default function Header({ 
-  title, 
-  searchQuery, 
+export default function Header({
+  title,
+  subtitle,
+  searchPlaceholder,
+  searchQuery,
   setSearchQuery, 
   onOpenAssistant,
   hasUnreadMessage,
@@ -44,11 +48,11 @@ export default function Header({
   ];
 
   return (
-    <header className="flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 sticky top-0 bg-[#0D0D0D]/95 backdrop-blur-md border-b border-white/10 z-40" id="app-header">
-      <div className="flex items-center gap-3 min-w-0">
+    <header className="flex items-center justify-between px-4 sm:px-8 py-3.5 sm:py-4 sticky top-0 bg-[#0D0D0D]/95 backdrop-blur-md border-b border-white/10 z-40" id="app-header">
+      <div className="flex flex-col gap-0.5 min-w-0">
         {/* Mobile Hamburger menu removed per user request for clean bottom tabs instead */}
 
-        <h1 className="text-lg sm:text-3xl font-serif italic text-white tracking-tight font-light truncate">
+        <h1 className="text-lg sm:text-xl font-sans font-semibold text-white tracking-tight truncate">
           {title === 'Financial Dashboard' ? (
             <>
               <span className="md:hidden font-sans uppercase font-extrabold tracking-wider text-white">LEADIUM</span>
@@ -58,6 +62,9 @@ export default function Header({
             title
           )}
         </h1>
+        {subtitle && (
+          <p className="hidden sm:block text-xs text-gray-500 truncate">{subtitle}</p>
+        )}
       </div>
 
       <div className="flex items-center gap-6">
@@ -70,7 +77,7 @@ export default function Header({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="bg-[#141414] border border-white/10 rounded-xl py-2 pl-9 pr-4 text-xs w-full text-white placeholder-gray-500 focus:outline-none focus:border-white/40 tracking-wider transition-all cursor-text animate-fadeIn"
-            placeholder="Search transactions..."
+            placeholder={searchPlaceholder || 'Buscar transações...'}
           />
         </div>
 

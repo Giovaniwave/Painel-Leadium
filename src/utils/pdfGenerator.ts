@@ -362,7 +362,6 @@ export const generateTransactionsPDF = (params: {
   const transactionTableBody = transactions.map((tx) => {
     return [
       formatDateBR(tx.date),
-      tx.sender || 'Favorecido não informado',
       tx.type === 'income' ? 'Entrada' : 'Saída',
       tx.category === 'Cafe & Restaurants' ? 'Café e Restaurantes' : tx.category === 'Groceries' ? 'Supermercado' : tx.category === 'Money Transfer' ? 'Transferência' : tx.category === 'Salary' ? 'Salário' : tx.category === 'Utilities' ? 'Serviços Públicos' : tx.category,
       tx.description || '',
@@ -372,7 +371,7 @@ export const generateTransactionsPDF = (params: {
 
   autoTable(doc, {
     startY: 57,
-    head: [['Data', 'Favorecido/Origem', 'Tipo', 'Categoria', 'Descrição', 'Valor']],
+    head: [['Data', 'Tipo', 'Categoria', 'Descrição', 'Valor']],
     body: transactionTableBody,
     theme: 'striped',
     headStyles: {
@@ -389,13 +388,13 @@ export const generateTransactionsPDF = (params: {
     },
     columnStyles: {
       0: { cellWidth: 20 },
-      2: { cellWidth: 18, halign: 'center' },
-      3: { cellWidth: 32 },
-      5: { cellWidth: 25, halign: 'right' }
+      1: { cellWidth: 18, halign: 'center' },
+      2: { cellWidth: 32 },
+      4: { cellWidth: 25, halign: 'right' }
     },
     didParseCell: (data) => {
       // Color-coding the row/type cell
-      if (data.column.index === 2) {
+      if (data.column.index === 1) {
         const val = data.cell.raw as string;
         if (val === 'Entrada') {
           data.cell.styles.textColor = [16, 185, 129]; // emerald
@@ -406,7 +405,7 @@ export const generateTransactionsPDF = (params: {
       }
 
       // Color-coding values column
-      if (data.column.index === 5) {
+      if (data.column.index === 4) {
         const val = data.cell.raw as string;
         if (val.startsWith('+')) {
           data.cell.styles.textColor = [16, 185, 129];

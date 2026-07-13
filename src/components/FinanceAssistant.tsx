@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, X, Sparkles, MessageSquare, CircleAlert, Trash2, Mic, Square, Loader2 } from 'lucide-react';
+import { Send, X, Sparkles, MessageSquare, CircleAlert, Trash2, Mic, Square, Loader2, Paperclip, FileText } from 'lucide-react';
 import { Transaction, BudgetGoal } from '../types';
 
 interface Message {
@@ -15,6 +15,11 @@ interface Message {
 // User audio messages are persisted as `${AUDIO_PREFIX}<url>` so the chat bubble can be
 // re-rendered as a playable voice note (WhatsApp-style) instead of showing the raw transcript.
 const AUDIO_PREFIX = '__AUDIO__:';
+// Photo/document attachments are persisted as `${FILE_PREFIX}<url>` so the bubble can be
+// re-rendered as an image thumbnail or a document link on reload.
+const FILE_PREFIX = '__FILE__:';
+
+const isImageUrl = (url: string) => /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif)(\?|$)/i.test(url);
 
 interface FinanceAssistantProps {
   isOpen: boolean;
@@ -45,9 +50,13 @@ export default function FinanceAssistant({
   const [confirmClear, setConfirmClear] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<{ url: string; type: string; name: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const audioFallbackInputRef = useRef<HTMLInputElement>(null);
 
   // Load persistent conversation history from the server-side database
   useEffect(() => {
@@ -113,23 +122,44 @@ export default function FinanceAssistant({
 
   if (!isOpen) return null;
 
-  const handleSendMessage = async (textToSend: string, audioUrl?: string) => {
-    if ((!textToSend.trim() && !audioUrl) || isLoading) return;
+  const handleSendMessage = async (
+    textToSend: string,
+    audioUrl?: string,
+    attachment?: { url: string; type: string; name: string }
+  ) => {
+    if ((!textToSend.trim() && !audioUrl && !attachment) || isLoading) return;
 
-    const userMessage: Message = { sender: 'user', text: audioUrl ? `${AUDIO_PREFIX}${audioUrl}` : textToSend };
-    setMessages(prev => [...prev, userMessage]);
+    // When a file is attached we push two bubbles: the attachment itself and (if present) the caption,
+    // so the caption text isn't lost on reload the way a single combined bubble would.
+    if (attachment) {
+      setMessages(prev => [
+        ...prev,
+        { sender: 'user', text: `${FILE_PREFIX}${attachment.url}` },
+        ...(textToSend.trim() ? [{ sender: 'user' as const, text: textToSend }] : []),
+      ]);
+    } else {
+      const userMessage: Message = { sender: 'user', text: audioUrl ? `${AUDIO_PREFIX}${audioUrl}` : textToSend };
+      setMessages(prev => [...prev, userMessage]);
+    }
     setInputText('');
     setIsLoading(true);
 
     try {
+      const promptFallback = audioUrl
+        ? 'Usuário enviou um áudio, mas não consegui identificar o que foi dito.'
+        : attachment
+          ? `Usuário anexou um arquivo (${attachment.name}). Se ele pedir para lançar uma despesa ou transação, use este anexo como comprovante.`
+          : '';
       const response = await fetch('/api/gemini/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          prompt: textToSend.trim() || 'Usuário enviou um áudio, mas não consegui identificar o que foi dito.',
+          prompt: textToSend.trim() || promptFallback,
           audioUrl,
+          attachmentUrl: attachment?.url,
+          attachmentType: attachment?.type,
           transactionsContext: transactions,
           budgetGoalsContext: budgetGoals,
           currentDate: new Date().toISOString().substring(0, 10),
@@ -154,10 +184,27 @@ export default function FinanceAssistant({
     }
   };
 
+  // iOS Safari (and some Android browsers) reject `new MediaRecorder(stream)` with default settings —
+  // it only accepts specific containers. Picking a supported mimeType is what makes recording work on
+  // smartphones, where the desktop path (default construction) silently failed before.
+  const pickSupportedAudioMime = () => {
+    const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac', 'audio/ogg'];
+    if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return '';
+    return candidates.find(c => MediaRecorder.isTypeSupported(c)) || '';
+  };
+
   const startRecording = async () => {
+    // If MediaRecorder / mic access isn't available (older mobile browsers, insecure context, etc.),
+    // fall back to the phone's native recorder via a file input so the user can still send a voice note.
+    if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      audioFallbackInputRef.current?.click();
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      const mimeType = pickSupportedAudioMime();
+      const mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (e) => {
@@ -166,7 +213,8 @@ export default function FinanceAssistant({
 
       mediaRecorder.onstop = () => {
         stream.getTracks().forEach(track => track.stop());
-        const blob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
+        const type = mediaRecorder.mimeType || mimeType || 'audio/webm';
+        const blob = new Blob(audioChunksRef.current, { type });
         handleAudioRecorded(blob);
       };
 
@@ -175,10 +223,8 @@ export default function FinanceAssistant({
       setIsRecording(true);
     } catch (err) {
       console.error('Erro ao acessar microfone:', err);
-      setMessages(prev => [...prev, {
-        sender: 'system',
-        text: 'Não foi possível acessar o microfone. Verifique as permissões do navegador.'
-      }]);
+      // Last resort on mobile: offer the native recorder/file picker instead of a dead end.
+      audioFallbackInputRef.current?.click();
     }
   };
 
@@ -217,6 +263,52 @@ export default function FinanceAssistant({
       }]);
     } finally {
       setIsTranscribing(false);
+    }
+  };
+
+  // Uploads a photo/document picked in the chat and stages it as a pending attachment,
+  // so the user can add a caption ("lança essa despesa") before sending it to Kairos.
+  const handleAttachmentFile = async (file: File) => {
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl, filename: file.name })
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        setPendingAttachment({ url: data.url, type: file.type || 'arquivo', name: file.name });
+      } else {
+        setMessages(prev => [...prev, {
+          sender: 'system',
+          text: `Não consegui anexar o arquivo: ${data.error || 'formato não suportado (envie imagem ou PDF).'}`
+        }]);
+      }
+    } catch (err) {
+      console.error('Erro ao anexar arquivo:', err);
+      setMessages(prev => [...prev, { sender: 'system', text: 'Falha ao enviar o anexo.' }]);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFormSubmit = () => {
+    if (isLoading || isUploading) return;
+    if (pendingAttachment) {
+      const att = pendingAttachment;
+      setPendingAttachment(null);
+      handleSendMessage(inputText, undefined, att);
+    } else {
+      handleSendMessage(inputText);
     }
   };
 
@@ -371,6 +463,7 @@ export default function FinanceAssistant({
 
           const isAssistant = m.sender === 'assistant';
           const audioUrl = !isAssistant && m.text?.startsWith(AUDIO_PREFIX) ? m.text.slice(AUDIO_PREFIX.length) : null;
+          const fileUrl = !isAssistant && m.text?.startsWith(FILE_PREFIX) ? m.text.slice(FILE_PREFIX.length) : null;
           return (
             <div 
               key={idx} 
@@ -410,6 +503,22 @@ export default function FinanceAssistant({
                     renderMessageContent(m.text)
                   ) : audioUrl ? (
                     <audio controls src={audioUrl} className="h-9 max-w-[200px]" />
+                  ) : fileUrl ? (
+                    isImageUrl(fileUrl) ? (
+                      <a href={fileUrl} target="_blank" rel="noopener noreferrer">
+                        <img src={fileUrl} alt="Anexo" className="rounded-lg max-w-[200px] max-h-[220px] object-cover" />
+                      </a>
+                    ) : (
+                      <a
+                        href={fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 underline decoration-dotted"
+                      >
+                        <FileText className="w-4 h-4 shrink-0" />
+                        <span className="text-xs">Ver documento anexado</span>
+                      </a>
+                    )
                   ) : (
                     m.text
                   )}
@@ -479,12 +588,60 @@ export default function FinanceAssistant({
           </div>
         )}
 
+        {/* Hidden inputs: photo/document attachment + native audio-recorder fallback for mobile */}
+        <input
+          ref={attachmentInputRef}
+          type="file"
+          accept="image/*,application/pdf"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAttachmentFile(f); e.target.value = ''; }}
+        />
+        <input
+          ref={audioFallbackInputRef}
+          type="file"
+          accept="audio/*"
+          capture
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAudioRecorded(f); e.target.value = ''; }}
+        />
+
+        {/* Pending attachment preview chip */}
+        {(pendingAttachment || isUploading) && (
+          <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs animate-fadeIn ${
+            isDark ? 'bg-[#161616] border border-white/10 text-gray-300' : 'bg-gray-100 border border-black/5 text-gray-700'
+          }`}>
+            {isUploading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                <span className="truncate">Enviando anexo...</span>
+              </>
+            ) : pendingAttachment && (
+              <>
+                {isImageUrl(pendingAttachment.url) ? (
+                  <img src={pendingAttachment.url} alt="" className="w-8 h-8 rounded-md object-cover shrink-0" />
+                ) : (
+                  <FileText className="w-4 h-4 shrink-0" />
+                )}
+                <span className="truncate flex-1">{pendingAttachment.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setPendingAttachment(null)}
+                  className={`p-1 rounded-full shrink-0 ${isDark ? 'hover:bg-white/10 text-gray-400' : 'hover:bg-black/5 text-gray-500'}`}
+                  title="Remover anexo"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Custom Form input fields */}
-        <form 
-          onSubmit={(e) => { e.preventDefault(); handleSendMessage(inputText); }}
+        <form
+          onSubmit={(e) => { e.preventDefault(); handleFormSubmit(); }}
           className={`flex items-center gap-2 border rounded-xl py-1 px-1.5 transition-all ${
-            isDark 
-              ? 'bg-[#121212] border-white/10 focus-within:border-white/30' 
+            isDark
+              ? 'bg-[#121212] border-white/10 focus-within:border-white/30'
               : 'bg-gray-100 border-black/5 shadow-inner focus-within:border-black/20'
           }`}
         >
@@ -503,11 +660,24 @@ export default function FinanceAssistant({
             <Sparkles className="w-3.5 h-3.5 animate-pulse" />
           </button>
 
+          {/* Attachment (photo/document) button */}
+          <button
+            type="button"
+            onClick={() => attachmentInputRef.current?.click()}
+            disabled={isRecording || isTranscribing || isUploading}
+            className={`p-1.5 rounded-lg transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+              isDark ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-black hover:bg-black/5'
+            }`}
+            title="Anexar foto ou documento"
+          >
+            <Paperclip className="w-4 h-4" />
+          </button>
+
           <input
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder={isRecording ? 'Gravando áudio...' : 'Digite sua pergunta...'}
+            placeholder={isRecording ? 'Gravando áudio...' : pendingAttachment ? 'Adicione uma legenda (opcional)...' : 'Digite sua pergunta...'}
             disabled={isRecording || isTranscribing}
             className={`flex-1 bg-transparent px-2 py-1.5 text-xs focus:outline-none focus:ring-0 disabled:opacity-50 ${
               isDark ? 'text-white placeholder-gray-600' : 'text-black placeholder-gray-400'

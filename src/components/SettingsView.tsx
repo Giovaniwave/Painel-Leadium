@@ -171,8 +171,8 @@ export default function SettingsView({
           )}
 
           {/* Core profile details module */}
-          <div className={`p-6 rounded-2xl border ${
-            isDark ? 'bg-black/30 border-white/5' : 'bg-white border-black/5 shadow-sm'
+          <div className={`py-6 border-t border-b ${
+            isDark ? 'border-white/5' : 'border-black/5'
           } space-y-6`}>
             
             {/* Header info */}
@@ -303,9 +303,7 @@ export default function SettingsView({
                 <label className={`text-[10px] uppercase tracking-[0.2em] font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'} block`}>
                   Notificações no Navegador (Web Notification API)
                 </label>
-                <div className={`p-4 rounded-xl border ${
-                  isDark ? 'bg-white/[0.02] border-white/5' : 'bg-zinc-50 border-gray-150'
-                } flex flex-col md:flex-row md:items-center justify-between gap-4`}>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="space-y-1 flex-1 text-left">
                     <div className="flex items-center gap-2">
                       {notificationPermission === 'granted' ? (

@@ -16,8 +16,10 @@ import {
   ChevronRight,
   X,
   MessageSquare,
-  Receipt,
-  Truck
+  Truck,
+  HandCoins,
+  Radar,
+  ChevronDown
 } from 'lucide-react';
 import { ActiveTab } from '../types';
 
@@ -42,17 +44,23 @@ export default function Sidebar({
   onOpenAssistant,
   theme
 }: SidebarProps) {
+  const [workspaceOpen, setWorkspaceOpen] = React.useState(true);
+  const [prospectingOpen, setProspectingOpen] = React.useState(true);
   const logoUrl = theme === 'light'
     ? "https://i.ibb.co/M5kWMmTJ/logo-para-versao-white-removebg-preview.png"
     : "https://i.ibb.co/k245JhFM/logotipooficialleadium.png";
 
   const menuItems = [
-    { id: 'dashboard' as ActiveTab, label: 'Painel', icon: LayoutDashboard },
-    { id: 'budgeting' as ActiveTab, label: 'Carteira', icon: Wallet },
+    { id: 'dashboard' as ActiveTab, label: 'Visão geral', icon: LayoutDashboard },
+    { id: 'budgeting' as ActiveTab, label: 'Planejamento', icon: Wallet },
     { id: 'transactions' as ActiveTab, label: 'Transações', icon: ArrowLeftRight },
     { id: 'expenses' as ActiveTab, label: 'Frota', icon: Truck },
-    { id: 'general_expenses' as ActiveTab, label: 'Despesas', icon: Receipt },
+    { id: 'reimbursements' as ActiveTab, label: 'Reembolsos', icon: HandCoins },
     { id: 'clients' as ActiveTab, label: 'Clientes', icon: Users },
+  ];
+
+  const prospectingItems = [
+    { id: 'prospecting' as ActiveTab, label: 'Pipeline comercial', icon: Radar },
   ];
 
   const bottomItems = [
@@ -92,7 +100,7 @@ export default function Sidebar({
                   Leadium
                 </span>
                 <span className="text-[7px] uppercase tracking-[0.22em] text-[#666666] font-medium mt-1">
-                  Gestão Financeira
+                  Operação & finanças
                 </span>
               </div>
             </div>
@@ -131,8 +139,14 @@ export default function Sidebar({
         </div>
 
         {/* Main Navigation Menu */}
-        <nav className={`flex-1 px-3 space-y-1 mt-4 ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
-          {menuItems.map((item) => {
+        <nav className={`flex-1 px-3 space-y-1 mt-4 ${isCollapsed ? 'flex flex-col items-center' : ''}`} aria-label="Navegação principal">
+          {(!isCollapsed || isOpenMobile) && (
+            <button type="button" onClick={() => setWorkspaceOpen(open => !open)} className={`flex w-full items-center justify-between rounded-lg px-2 py-2 transition-colors ${theme === 'light' ? 'hover:bg-black/[.04]' : 'hover:bg-white/[.04]'}`} aria-expanded={workspaceOpen}>
+              <span className="sidebar-section-label !mb-0">Workspace</span>
+              <ChevronDown className={`h-3 w-3 transition-transform duration-300 ${theme === 'light' ? 'text-neutral-400' : 'text-neutral-600'} ${workspaceOpen ? 'rotate-180' : ''}`} />
+            </button>
+          )}
+          {((isCollapsed && !isOpenMobile) || workspaceOpen) && <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} className="w-full space-y-1 overflow-hidden">{menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             const isDark = theme !== 'light';
@@ -176,7 +190,31 @@ export default function Sidebar({
                 {(!isCollapsed || isOpenMobile) && <span className="relative">{item.label}</span>}
               </button>
             );
-          })}
+          })}</motion.div>}
+          <div className={`pt-4 mt-3 border-t ${theme === 'light' ? 'border-black/10' : 'border-white/10'} w-full`}>
+            {(!isCollapsed || isOpenMobile) && <button type="button" onClick={() => setProspectingOpen(open => !open)} className={`flex w-full items-center justify-between rounded-lg px-2 py-2 transition-colors ${theme === 'light' ? 'hover:bg-black/[.04]' : 'hover:bg-white/[.04]'}`} aria-expanded={prospectingOpen}>
+              <span className="sidebar-section-label !mb-0">Prospecção</span>
+              <ChevronDown className={`h-3 w-3 transition-transform duration-300 ${theme === 'light' ? 'text-neutral-400' : 'text-neutral-600'} ${prospectingOpen ? 'rotate-180' : ''}`} />
+            </button>}
+          </div>
+          {((isCollapsed && !isOpenMobile) || prospectingOpen) && <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} className="w-full space-y-1 overflow-hidden">{prospectingItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            const isDark = theme !== 'light';
+            return (
+              <button
+                key={item.id}
+                id={`sidebar-tab-${item.id}`}
+                onClick={() => { setActiveTab(item.id); setIsOpenMobile(false); }}
+                className={`relative w-full group flex items-center gap-3 py-2.5 text-[11px] uppercase tracking-[0.12em] font-medium rounded-xl transition-all duration-300 cursor-pointer overflow-hidden ${(isCollapsed && !isOpenMobile) ? 'justify-center px-0 w-10 h-10' : 'px-4'} ${isActive ? (isDark ? 'text-black' : 'text-white keep-white') : (isDark ? 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent' : 'text-gray-600 hover:text-black hover:bg-gray-100 border border-transparent')}`}
+                title={(isCollapsed && !isOpenMobile) ? item.label : undefined}
+              >
+                {isActive && <motion.div layoutId="sidebarActivePill" className={`absolute inset-0 rounded-xl ${isDark ? 'bg-white border border-white' : 'bg-black border border-black active-tab-light-fix'}`} transition={{ type:'spring', stiffness:500, damping:40 }} />}
+                <Icon className={`relative w-3.5 h-3.5 ${isActive ? (isDark ? 'text-black' : 'text-white keep-white') : (isDark ? 'text-gray-400' : 'text-gray-500')}`} />
+                {(!isCollapsed || isOpenMobile) && <span className="relative">{item.label}</span>}
+              </button>
+            );
+          })}</motion.div>}
         </nav>
 
         {/* Bottom Option Menu */}

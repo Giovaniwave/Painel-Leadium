@@ -52,3 +52,19 @@ export function formatSystemDate(dateStr: string): string {
     return dateStr;
   }
 }
+
+/** Converts ISO, database timestamps and Brazilian DD/MM/YYYY dates to a sortable value. */
+export function dateValue(dateStr?: string): number {
+  if (!dateStr) return 0;
+  const raw = String(dateStr).trim();
+  const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/);
+  if (br) {
+    return new Date(Number(br[3]), Number(br[2]) - 1, Number(br[1]), Number(br[4] || 0), Number(br[5] || 0)).getTime();
+  }
+  const parsed = new Date(raw).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function newestDateFirst<T extends { date?: string }>(a: T, b: T): number {
+  return dateValue(b.date) - dateValue(a.date);
+}

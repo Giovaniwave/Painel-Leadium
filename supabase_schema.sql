@@ -2,12 +2,15 @@
 -- LEADIUMFY SUPABASE / POSTGRES TABLE SCHEMA - PROFESSIONAL VERSION
 -- ==========================================
 
+-- Módulo de implementação: execute também client_implementations_schema.sql
+-- após garantir que a tabela public.leadium_clients já existe.
+-- Módulo financeiro de clientes: depois, execute client_payments_schema.sql.
+
 -- 1. Tabela Nova de Transações (leadium_transactions) - Sem restrições CHECK problemáticas
 CREATE TABLE IF NOT EXISTS leadium_transactions (
   id UUID PRIMARY KEY,
   date TIMESTAMP WITH TIME ZONE NOT NULL,
   description TEXT NOT NULL,
-  sender TEXT NOT NULL DEFAULT '',
   type TEXT NOT NULL, -- 'income' or 'expense'
   amount NUMERIC NOT NULL,
   category TEXT NOT NULL,
@@ -20,6 +23,9 @@ CREATE TABLE IF NOT EXISTS leadium_transactions (
 
 -- Comando ALTER TABLE seguro (caso a tabela já existisse no Supabase)
 ALTER TABLE leadium_transactions ADD COLUMN IF NOT EXISTS client_id UUID;
+
+-- Remoção do campo Favorecido (sender) — não é mais usado nas transações
+ALTER TABLE leadium_transactions DROP COLUMN IF EXISTS sender;
 
 -- 2. Tabela Nova de Metas de Orçamentos (leadium_budget_goals)
 CREATE TABLE IF NOT EXISTS leadium_budget_goals (
@@ -192,8 +198,28 @@ CREATE TABLE IF NOT EXISTS leadium_general_expenses (
   amount NUMERIC NOT NULL DEFAULT 0,
   status TEXT DEFAULT 'pending',
   billing_type TEXT DEFAULT 'separate',
+  category TEXT DEFAULT 'Outros',
   notes TEXT DEFAULT '',
   receipt_image TEXT DEFAULT '',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+);
+
+-- Coluna de categoria adicionada para o painel "Despesas por Categoria" (safe p/ banco já existente)
+ALTER TABLE leadium_general_expenses ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Outros';
+
+-- Tabela de Reembolsos (leadium_reimbursements) — despesas pagas pelos colaboradores com recurso próprio
+CREATE TABLE IF NOT EXISTS leadium_reimbursements (
+  id UUID PRIMARY KEY,
+  date TEXT NOT NULL,
+  employee_id TEXT REFERENCES leadium_employees(id) ON DELETE SET NULL,
+  description TEXT NOT NULL,
+  amount NUMERIC NOT NULL DEFAULT 0,
+  expense_type TEXT DEFAULT 'one_off', -- 'fixed' (despesa fixa) | 'one_off' (avulsa)
+  category TEXT DEFAULT '',
+  client_id UUID REFERENCES leadium_clients(id) ON DELETE SET NULL,
+  status TEXT DEFAULT 'pending', -- 'pending' (pendente) | 'reimbursed' (reembolsada)
+  receipt_file TEXT DEFAULT '',
+  notes TEXT DEFAULT '',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
 );
 
@@ -202,6 +228,7 @@ ALTER TABLE leadium_employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE leadium_vehicles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE leadium_displacements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE leadium_general_expenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE leadium_reimbursements ENABLE ROW LEVEL SECURITY;
 
 -- Remover políticas existentes para evitar erros
 DROP POLICY IF EXISTS "Allow public select on leadium_employees" ON leadium_employees;
@@ -224,6 +251,11 @@ DROP POLICY IF EXISTS "Allow public insert on leadium_general_expenses" ON leadi
 DROP POLICY IF EXISTS "Allow public update on leadium_general_expenses" ON leadium_general_expenses;
 DROP POLICY IF EXISTS "Allow public delete on leadium_general_expenses" ON leadium_general_expenses;
 
+DROP POLICY IF EXISTS "Allow public select on leadium_reimbursements" ON leadium_reimbursements;
+DROP POLICY IF EXISTS "Allow public insert on leadium_reimbursements" ON leadium_reimbursements;
+DROP POLICY IF EXISTS "Allow public update on leadium_reimbursements" ON leadium_reimbursements;
+DROP POLICY IF EXISTS "Allow public delete on leadium_reimbursements" ON leadium_reimbursements;
+
 -- Adicionar políticas irrestritas públicas nas novas tabelas (matching leadium_transactions style)
 CREATE POLICY "Allow public select on leadium_employees" ON leadium_employees FOR SELECT TO public USING (true);
 CREATE POLICY "Allow public insert on leadium_employees" ON leadium_employees FOR INSERT TO public WITH CHECK (true);
@@ -244,4 +276,9 @@ CREATE POLICY "Allow public select on leadium_general_expenses" ON leadium_gener
 CREATE POLICY "Allow public insert on leadium_general_expenses" ON leadium_general_expenses FOR INSERT TO public WITH CHECK (true);
 CREATE POLICY "Allow public update on leadium_general_expenses" ON leadium_general_expenses FOR UPDATE TO public WITH CHECK (true);
 CREATE POLICY "Allow public delete on leadium_general_expenses" ON leadium_general_expenses FOR DELETE TO public USING (true);
+
+CREATE POLICY "Allow public select on leadium_reimbursements" ON leadium_reimbursements FOR SELECT TO public USING (true);
+CREATE POLICY "Allow public insert on leadium_reimbursements" ON leadium_reimbursements FOR INSERT TO public WITH CHECK (true);
+CREATE POLICY "Allow public update on leadium_reimbursements" ON leadium_reimbursements FOR UPDATE TO public WITH CHECK (true);
+CREATE POLICY "Allow public delete on leadium_reimbursements" ON leadium_reimbursements FOR DELETE TO public USING (true);
 

@@ -84,11 +84,15 @@ async function startServer() {
     budget_goals: false,
     system_settings: false,
     clients: false,
+    client_implementations: false,
+    client_payments: false,
     employees: false,
     vehicles: false,
     displacements: false,
     general_expenses: false,
+    reimbursements: false,
     chat_messages: false,
+    prospecting_leads: false,
   };
 
   const tables = {
@@ -96,11 +100,15 @@ async function startServer() {
     budget_goals: "leadium_budget_goals",
     system_settings: "system_settings",
     clients: "leadium_clients",
+    client_implementations: "leadium_client_implementations",
+    client_payments: "leadium_client_payments",
     employees: "leadium_employees",
     vehicles: "leadium_vehicles",
     displacements: "leadium_displacements",
     general_expenses: "leadium_general_expenses",
+    reimbursements: "leadium_reimbursements",
     chat_messages: "leadium_chat_messages",
+    prospecting_leads: "leadium_prospecting_leads",
   };
 
   if (supabaseUrl && supabaseKey) {
@@ -210,6 +218,24 @@ async function startServer() {
         );
       }
 
+      const { error: implementationsErr } = await supabaseClient
+        .from(tables.client_implementations)
+        .select("id")
+        .limit(1);
+      if (!implementationsErr) {
+        tablesReady.client_implementations = true;
+        console.log("Supabase check: leadium_client_implementations table is ready.");
+      }
+
+      const { error: clientPaymentsErr } = await supabaseClient
+        .from(tables.client_payments)
+        .select("id")
+        .limit(1);
+      if (!clientPaymentsErr) {
+        tablesReady.client_payments = true;
+        console.log("Supabase check: leadium_client_payments table is ready.");
+      }
+
       // Test leadium_employees
       const { error: empErr } = await supabaseClient
         .from(tables.employees)
@@ -246,6 +272,21 @@ async function startServer() {
         );
       }
 
+      // Test leadium_reimbursements
+      const { error: reimbErr } = await supabaseClient
+        .from(tables.reimbursements)
+        .select("id")
+        .limit(1);
+      if (!reimbErr) {
+        tablesReady.reimbursements = true;
+        console.log("Supabase check: leadium_reimbursements table is ready.");
+      } else {
+        console.warn(
+          "Supabase info: leadium_reimbursements table not ready:",
+          reimbErr.message,
+        );
+      }
+
       // Test leadium_chat_messages
       const { error: chatErr } = await supabaseClient
         .from(tables.chat_messages)
@@ -259,6 +300,17 @@ async function startServer() {
           "Supabase info: leadium_chat_messages table not ready:",
           chatErr.message,
         );
+      }
+
+      const { error: prospectingErr } = await supabaseClient
+        .from(tables.prospecting_leads)
+        .select("id")
+        .limit(1);
+      if (!prospectingErr) {
+        tablesReady.prospecting_leads = true;
+        console.log("Supabase check: leadium_prospecting_leads table is ready.");
+      } else {
+        console.warn("Supabase info: leadium_prospecting_leads table not ready:", prospectingErr.message);
       }
     } catch (err: any) {
       console.warn(
@@ -334,6 +386,65 @@ async function startServer() {
     }
   }
 
+  const mapProspectingLead = (row: any) => ({
+    id: row.id,
+    company: row.company || "Lead sem empresa",
+    contact: row.contact || "",
+    email: row.email || "",
+    phone: row.phone || "",
+    service: row.service || "Aplicação estratégica",
+    source: row.source || "Site",
+    value: Number(row.estimated_value ?? row.value) || 0,
+    stage: row.stage || "new",
+    temperature: row.temperature || "hot",
+    nextContact: row.next_contact || row.nextContact || new Date().toISOString().slice(0, 10),
+    notes: row.notes || "",
+    createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+  });
+
+  async function loadProspectingLeads() {
+    if (supabaseClient && tablesReady.prospecting_leads) {
+      const { data, error } = await supabaseClient.from(tables.prospecting_leads)
+        .select("*").order("created_at", { ascending: false });
+      if (!error && data) {
+        const mapped = data.map(mapProspectingLead);
+        const local = fetchLocalDbData();
+        local.prospectingLeads = mapped;
+        writeLocalDbData(local);
+        return mapped;
+      }
+      if (error) console.warn("Failed to load prospecting leads:", error.message);
+    }
+    return fetchLocalDbData().prospectingLeads || [];
+  }
+
+  async function createProspectingLead(lead: any) {
+    const id = lead.id || crypto.randomUUID();
+    const normalized = mapProspectingLead({ ...lead, id });
+    if (supabaseClient && tablesReady.prospecting_leads) {
+      const { data, error } = await supabaseClient.from(tables.prospecting_leads).insert({
+        id,
+        company: normalized.company,
+        contact: normalized.contact,
+        email: normalized.email,
+        phone: normalized.phone,
+        service: normalized.service,
+        source: normalized.source,
+        estimated_value: normalized.value,
+        stage: normalized.stage,
+        temperature: normalized.temperature,
+        next_contact: normalized.nextContact,
+        notes: normalized.notes,
+      }).select("*").single();
+      if (error) throw new Error(error.message);
+      return mapProspectingLead(data);
+    }
+    const local = fetchLocalDbData();
+    local.prospectingLeads = [normalized, ...(local.prospectingLeads || [])];
+    writeLocalDbData(local);
+    return normalized;
+  }
+
   // Helper getters/setters supporting clean dual-writes
   async function loadTransactions() {
     if (supabaseClient && tablesReady.transactions) {
@@ -361,7 +472,6 @@ async function startServer() {
               id: t.id,
               date: t.date,
               description: t.description || "",
-              sender: t.sender || "",
               type: t.type,
               amount: Number(t.amount) || 0,
               category: t.category || "",
@@ -389,6 +499,101 @@ async function startServer() {
     }
     const local = fetchLocalDbData();
     return local.transactions || [];
+  }
+
+  async function loadGeneralExpenses() {
+    if (supabaseClient && tablesReady.general_expenses) {
+      try {
+        const { data, error } = await supabaseClient
+          .from(tables.general_expenses)
+          .select("*")
+          .order("date", { ascending: false });
+        if (!error && data) {
+          const mapped = data.map((e: any) => ({
+            id: e.id,
+            date: e.date,
+            clientId: e.client_id,
+            description: e.description,
+            amount: Number(e.amount) || 0,
+            status: e.status || "pending",
+            billingType: e.billing_type || "separate",
+            category: e.category || "Outros",
+            notes: e.notes || "",
+            receiptImage: e.receipt_image || "",
+          }));
+          const local = fetchLocalDbData();
+          local.generalExpenses = mapped;
+          writeLocalDbData(local);
+          return mapped;
+        }
+        if (error) {
+          console.warn(
+            "[Supabase Sync Logger] Fetch general-expenses issue:",
+            error.message,
+          );
+        }
+      } catch (err: any) {
+        console.warn(
+          "[Supabase Sync Logger] Failed to query general-expenses:",
+          err.message || err,
+        );
+      }
+    }
+    const local = fetchLocalDbData();
+    return local.generalExpenses || [];
+  }
+
+  function generalExpenseToTransaction(expense: any) {
+    const detailNotes = [
+      "Origem: Despesa Geral",
+      expense.status === "reimbursed" ? "Status: Paga" : "Status: Pendente",
+      expense.billingType === "monthly_fee" ? "Cobrança: Na mensalidade" : "Cobrança: Avulsa",
+      expense.notes || "",
+    ].filter(Boolean).join(" · ");
+
+    return {
+      id: parseOrGenerateUUID(expense.id),
+      date: expense.date,
+      description: expense.description || "Despesa",
+      type: "expense",
+      amount: Number(expense.amount) || 0,
+      category: expense.category || "Outros",
+      account: expense.clientId === "leadium" ? "Leadium (Interno)" : "Despesa geral",
+      notes: detailNotes,
+      clientId: expense.clientId && expense.clientId !== "leadium" ? expense.clientId : undefined,
+    };
+  }
+
+  async function syncGeneralExpensesToTransactions(expenses?: any[]) {
+    const sourceExpenses = expenses || await loadGeneralExpenses();
+    const currentTransactions = await loadTransactions();
+    const mergedById = new Map<string, any>(
+      currentTransactions.map((transaction: any) => [String(transaction.id), transaction]),
+    );
+    let changed = false;
+
+    for (const expense of sourceExpenses) {
+      const mapped = generalExpenseToTransaction(expense);
+      const key = String(mapped.id);
+      const existing = mergedById.get(key);
+      const isSame = existing
+        && existing.date === mapped.date
+        && existing.description === mapped.description
+        && existing.type === mapped.type
+        && Number(existing.amount) === Number(mapped.amount)
+        && existing.category === mapped.category
+        && existing.account === mapped.account
+        && (existing.notes || "") === (mapped.notes || "")
+        && (existing.clientId || undefined) === (mapped.clientId || undefined);
+      if (!isSame) {
+        mergedById.set(key, mapped);
+        changed = true;
+      }
+    }
+
+    const merged = Array.from(mergedById.values());
+    if (changed) await saveTransactions(merged);
+    return merged;
   }
 
   async function loadGoals() {
@@ -660,7 +865,6 @@ async function startServer() {
               client_id: t.clientId || null,
             };
             if (tables.transactions === "leadium_transactions") {
-              row.sender = t.sender || "";
               row.avatar_url = t.avatarUrl || null;
             }
             return row;
@@ -848,9 +1052,103 @@ async function startServer() {
   }
 
   // --- DATABASE PERSISTENT ENDPOINTS ---
+  app.get("/api/prospecting-leads", async (_req, res) => {
+    try { res.json(await loadProspectingLeads()); }
+    catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post("/api/prospecting-leads", async (req, res) => {
+    try {
+      const lead = req.body?.lead || req.body;
+      if (!lead?.contact && !lead?.nome_completo) return res.status(400).json({ error: "contact is required" });
+      res.status(201).json(await createProspectingLead(lead));
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.patch("/api/prospecting-leads/:id", async (req, res) => {
+    try {
+      const leads = await loadProspectingLeads();
+      const current = leads.find((lead: any) => String(lead.id) === req.params.id);
+      if (!current) return res.status(404).json({ error: "Lead not found" });
+      const updated = mapProspectingLead({ ...current, ...req.body, id: current.id });
+      if (supabaseClient && tablesReady.prospecting_leads) {
+        const { error } = await supabaseClient.from(tables.prospecting_leads).update({
+          company: updated.company, contact: updated.contact, email: updated.email,
+          phone: updated.phone, service: updated.service, source: updated.source,
+          estimated_value: updated.value, stage: updated.stage, temperature: updated.temperature,
+          next_contact: updated.nextContact, notes: updated.notes,
+        }).eq("id", current.id);
+        if (error) throw new Error(error.message);
+      }
+      const local = fetchLocalDbData();
+      local.prospectingLeads = leads.map((lead: any) => lead.id === current.id ? updated : lead);
+      writeLocalDbData(local);
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.delete("/api/prospecting-leads/:id", async (req, res) => {
+    try {
+      if (supabaseClient && tablesReady.prospecting_leads) {
+        const { error } = await supabaseClient.from(tables.prospecting_leads).delete().eq("id", req.params.id);
+        if (error) throw new Error(error.message);
+      }
+      const local = fetchLocalDbData();
+      local.prospectingLeads = (local.prospectingLeads || []).filter((lead: any) => String(lead.id) !== req.params.id);
+      writeLocalDbData(local);
+      res.json({ success: true });
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post("/api/webhooks/leads", async (req, res) => {
+    try {
+      const configuredSecret = process.env.LEAD_WEBHOOK_SECRET;
+      if (configuredSecret && req.header("x-webhook-secret") !== configuredSecret) {
+        return res.status(401).json({ error: "Invalid webhook secret" });
+      }
+      const payload = req.body || {};
+      const lead = payload.lead || {};
+      const name = String(lead.nome_completo || "").trim();
+      const email = String(lead.email || "").trim().toLowerCase();
+      const phone = String(lead.whatsapp || "").replace(/\D/g, "");
+      if (!name || (!email && !phone)) {
+        return res.status(400).json({ error: "Informe lead.nome_completo e pelo menos lead.email ou lead.whatsapp" });
+      }
+      const revenueText = String(lead.faturamento_mensal_atual || "");
+      const extractedValues = revenueText.match(/[\d.,]+/g) || [];
+      const estimatedValue = extractedValues.length
+        ? Number(extractedValues.at(-1)!.replace(/\./g, "").replace(",", ".")) * (/mil/i.test(revenueText) ? 1000 : 1)
+        : 0;
+      const created = await createProspectingLead({
+        company: lead.instagram || name,
+        contact: name,
+        email,
+        phone,
+        service: payload.contexto?.interesse || "Aplicação estratégica Leadium",
+        source: payload.origem || "site_leadium_premium",
+        value: estimatedValue,
+        stage: "new",
+        temperature: "hot",
+        nextContact: new Date().toISOString().slice(0, 10),
+        notes: [
+          lead.nicho && `Nicho: ${lead.nicho}`,
+          revenueText && `Faturamento atual: ${revenueText}`,
+          payload.evento && `Evento: ${payload.evento}`,
+          payload.contexto?.formulario && `Formulário: ${payload.contexto.formulario}`,
+          payload.contexto?.pagina && `Página: ${payload.contexto.pagina}`,
+          payload.contexto?.dispositivo && `Dispositivo: ${payload.contexto.dispositivo}`,
+          payload.contexto?.data_hora_envio && `Enviado em: ${payload.contexto.data_hora_envio}`,
+        ].filter(Boolean).join("\n"),
+      });
+      res.status(201).json({ success: true, message: "Lead criado no pipeline", lead: created });
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
   app.get("/api/transactions", async (req, res) => {
     try {
-      const txs = await loadTransactions();
+      // Despesas antigas (inclusive as criadas pelo Kairos) são incorporadas ao
+      // livro-caixa principal para manter uma única fonte visível no sistema.
+      const txs = await syncGeneralExpensesToTransactions();
       res.json(txs);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -914,39 +1212,132 @@ async function startServer() {
     }
   });
 
+  app.get("/api/client-implementations/:clientId", async (req, res) => {
+    try {
+      const { clientId } = req.params;
+      if (supabaseClient && tablesReady.client_implementations) {
+        const { data, error } = await supabaseClient
+          .from(tables.client_implementations)
+          .select("*")
+          .eq("client_id", clientId)
+          .maybeSingle();
+        if (error) throw error;
+        return res.json(data || null);
+      }
+      const local = fetchLocalDbData();
+      const rows = Array.isArray(local.clientImplementations) ? local.clientImplementations : [];
+      res.json(rows.find((row: any) => row.client_id === clientId) || null);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/client-implementations", async (req, res) => {
+    try {
+      const payload = {
+        id: req.body.id || crypto.randomUUID(),
+        client_id: req.body.client_id,
+        status: req.body.status || "pending",
+        fee: Number(req.body.fee) || 0,
+        start_date: req.body.start_date || null,
+        deadline: req.body.deadline || null,
+        notes: req.body.notes || "",
+        updated_at: new Date().toISOString(),
+      };
+      if (!payload.client_id) {
+        return res.status(400).json({ error: "client_id is required" });
+      }
+      if (supabaseClient && tablesReady.client_implementations) {
+        const { data, error } = await supabaseClient
+          .from(tables.client_implementations)
+          .upsert(payload, { onConflict: "client_id" })
+          .select()
+          .single();
+        if (error) throw error;
+        return res.json(data);
+      }
+      const local = fetchLocalDbData();
+      const rows = Array.isArray(local.clientImplementations) ? local.clientImplementations : [];
+      const index = rows.findIndex((row: any) => row.client_id === payload.client_id);
+      if (index >= 0) rows[index] = { ...rows[index], ...payload };
+      else rows.push(payload);
+      local.clientImplementations = rows;
+      writeLocalDbData(local);
+      res.json(payload);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/client-payments/:clientId", async (req, res) => {
+    try {
+      if (supabaseClient && tablesReady.client_payments) {
+        const { data, error } = await supabaseClient
+          .from(tables.client_payments)
+          .select("*")
+          .eq("client_id", req.params.clientId)
+          .order("due_date", { ascending: true });
+        if (error) throw error;
+        return res.json(data || []);
+      }
+      const local = fetchLocalDbData();
+      const rows = Array.isArray(local.clientPayments) ? local.clientPayments : [];
+      res.json(rows.filter((row: any) => row.client_id === req.params.clientId));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/client-payments", async (req, res) => {
+    try {
+      if (!Array.isArray(req.body.payments)) {
+        return res.status(400).json({ error: "payments must be an array" });
+      }
+      const payments = req.body.payments.map((row: any) => ({
+        id: row.id || crypto.randomUUID(),
+        client_id: row.client_id,
+        implementation_id: row.implementation_id || null,
+        payment_type: row.payment_type,
+        installment_number: Number(row.installment_number) || 1,
+        total_installments: Number(row.total_installments) || 1,
+        amount: Number(row.amount) || 0,
+        due_date: row.due_date || null,
+        paid_at: row.paid_at || null,
+        status: row.status || "pending",
+        transaction_id: row.transaction_id || null,
+        notes: row.notes || "",
+        updated_at: new Date().toISOString(),
+      }));
+      if (payments.some((row: any) => !row.client_id || !row.payment_type || row.amount <= 0)) {
+        return res.status(400).json({ error: "invalid payment schedule" });
+      }
+      if (supabaseClient && tablesReady.client_payments) {
+        const { data, error } = await supabaseClient
+          .from(tables.client_payments)
+          .upsert(payments)
+          .select();
+        if (error) throw error;
+        return res.json({ success: true, payments: data });
+      }
+      const local = fetchLocalDbData();
+      const rows = Array.isArray(local.clientPayments) ? local.clientPayments : [];
+      payments.forEach((payment: any) => {
+        const index = rows.findIndex((row: any) => row.id === payment.id);
+        if (index >= 0) rows[index] = { ...rows[index], ...payment };
+        else rows.push(payment);
+      });
+      local.clientPayments = rows;
+      writeLocalDbData(local);
+      res.json({ success: true, payments });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // GENERAL EXPENSES API
   app.get("/api/general-expenses", async (req, res) => {
     try {
-      if (supabaseClient && tablesReady.general_expenses) {
-        const { data, error } = await supabaseClient
-          .from(tables.general_expenses)
-          .select("*")
-          .order("date", { ascending: false });
-        if (!error && data) {
-          const mapped = data.map((e: any) => ({
-            id: e.id,
-            date: e.date,
-            clientId: e.client_id,
-            description: e.description,
-            amount: Number(e.amount) || 0,
-            status: e.status || "pending",
-            billingType: e.billing_type || "separate",
-            notes: e.notes || "",
-            receiptImage: e.receipt_image || "",
-          }));
-          const local = fetchLocalDbData();
-          local.generalExpenses = mapped;
-          writeLocalDbData(local);
-          return res.json(mapped);
-        } else if (error) {
-          console.warn(
-            "[Supabase Sync Logger] Fetch general-expenses issue:",
-            error.message,
-          );
-        }
-      }
-      const local = fetchLocalDbData();
-      res.json(local.generalExpenses || []);
+      res.json(await loadGeneralExpenses());
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -962,6 +1353,7 @@ async function startServer() {
         clientId,
         status,
         billingType,
+        category,
         notes,
         receiptImage,
       } = req.body;
@@ -979,6 +1371,7 @@ async function startServer() {
         clientId,
         status: status || "pending",
         billingType: billingType || "separate",
+        category: category || "Outros",
         notes: notes || "",
         receiptImage: receiptImage || "",
       };
@@ -990,19 +1383,34 @@ async function startServer() {
       writeLocalDbData(local);
 
       if (supabaseClient && tablesReady.general_expenses) {
-        const { error } = await supabaseClient
+        const baseRow: any = {
+          id: targetId,
+          description,
+          amount: Number(amount) || 0,
+          date,
+          client_id: clientId,
+          status: status || "pending",
+          billing_type: billingType || "separate",
+          category: category || "Outros",
+          notes: notes || "",
+          receipt_image: receiptImage || "",
+        };
+        let { error } = await supabaseClient
           .from(tables.general_expenses)
-          .upsert({
-            id: targetId,
-            description,
-            amount: Number(amount) || 0,
-            date,
-            client_id: clientId,
-            status: status || "pending",
-            billing_type: billingType || "separate",
-            notes: notes || "",
-            receipt_image: receiptImage || "",
-          });
+          .upsert(baseRow);
+        // Fallback: se a coluna `category` ainda não foi migrada no Supabase (42703),
+        // salva a despesa sem esse campo para não perder a persistência na nuvem.
+        if (error && (error.code === "42703" || /category/.test(error.message || ""))) {
+          const { category: _omit, ...withoutCategory } = baseRow;
+          ({ error } = await supabaseClient
+            .from(tables.general_expenses)
+            .upsert(withoutCategory));
+          if (!error) {
+            console.warn(
+              "[Supabase Sync Logger] Coluna 'category' ausente em leadium_general_expenses — rode o ALTER TABLE do supabase_schema.sql para persistir categorias na nuvem.",
+            );
+          }
+        }
         if (error) {
           console.warn(
             "[Supabase Sync Logger] Save general-expense issue:",
@@ -1010,6 +1418,8 @@ async function startServer() {
           );
         }
       }
+
+      await syncGeneralExpensesToTransactions(local.generalExpenses);
 
       res.json({ success: true, expenses: local.generalExpenses });
     } catch (err: any) {
@@ -1039,7 +1449,154 @@ async function startServer() {
         }
       }
 
+      const currentTransactions = await loadTransactions();
+      const transactionId = parseOrGenerateUUID(expenseId);
+      const remainingTransactions = currentTransactions.filter(
+        (transaction: any) => String(transaction.id) !== String(transactionId),
+      );
+      if (remainingTransactions.length !== currentTransactions.length) {
+        await saveTransactions(remainingTransactions);
+      }
+
       res.json({ success: true, expenses: local.generalExpenses });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/reimbursements", async (req, res) => {
+    try {
+      if (supabaseClient && tablesReady.reimbursements) {
+        const { data, error } = await supabaseClient
+          .from(tables.reimbursements)
+          .select("*")
+          .order("date", { ascending: false });
+        if (!error && data) {
+          const mapped = data.map((r: any) => ({
+            id: r.id,
+            date: r.date,
+            employeeId: r.employee_id,
+            description: r.description,
+            amount: Number(r.amount) || 0,
+            expenseType: r.expense_type || "one_off",
+            category: r.category || "",
+            clientId: r.client_id || "",
+            status: r.status || "pending",
+            receiptFile: r.receipt_file || "",
+            notes: r.notes || "",
+          }));
+          const local = fetchLocalDbData();
+          local.reimbursements = mapped;
+          writeLocalDbData(local);
+          return res.json(mapped);
+        } else if (error) {
+          console.warn(
+            "[Supabase Sync Logger] Fetch reimbursements issue:",
+            error.message,
+          );
+        }
+      }
+      const local = fetchLocalDbData();
+      res.json(local.reimbursements || []);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/reimbursements", async (req, res) => {
+    try {
+      const {
+        id,
+        description,
+        amount,
+        date,
+        employeeId,
+        expenseType,
+        category,
+        clientId,
+        status,
+        receiptFile,
+        notes,
+      } = req.body;
+      if (!description || !amount || !date || !employeeId) {
+        return res.status(400).json({ error: "Faltam dados obrigatórios" });
+      }
+      const targetId = id || crypto.randomUUID();
+      const local = fetchLocalDbData();
+      let arr = local.reimbursements || [];
+      const payload = {
+        id: targetId,
+        description,
+        amount: Number(amount) || 0,
+        date,
+        employeeId,
+        expenseType: expenseType || "one_off",
+        category: category || "",
+        clientId: clientId || "",
+        status: status || "pending",
+        receiptFile: receiptFile || "",
+        notes: notes || "",
+      };
+
+      const idx = arr.findIndex((x: any) => x.id === targetId);
+      if (idx !== -1) arr[idx] = payload;
+      else arr.push(payload);
+      local.reimbursements = arr;
+      writeLocalDbData(local);
+
+      if (supabaseClient && tablesReady.reimbursements) {
+        const { error } = await supabaseClient
+          .from(tables.reimbursements)
+          .upsert({
+            id: targetId,
+            description,
+            amount: Number(amount) || 0,
+            date,
+            employee_id: employeeId,
+            expense_type: expenseType || "one_off",
+            category: category || "",
+            client_id: clientId || null,
+            status: status || "pending",
+            receipt_file: receiptFile || "",
+            notes: notes || "",
+          });
+        if (error) {
+          console.warn(
+            "[Supabase Sync Logger] Save reimbursement issue:",
+            error.message,
+          );
+        }
+      }
+
+      res.json({ success: true, reimbursements: local.reimbursements });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/reimbursements/:id", async (req, res) => {
+    try {
+      const reimbursementId = req.params.id;
+      const local = fetchLocalDbData();
+      let arr = local.reimbursements || [];
+      arr = arr.filter((x: any) => x.id !== reimbursementId);
+      local.reimbursements = arr;
+      writeLocalDbData(local);
+
+      if (supabaseClient && tablesReady.reimbursements) {
+        const { error } = await supabaseClient
+          .from(tables.reimbursements)
+          .delete()
+          .eq("id", reimbursementId);
+        if (error) {
+          console.warn(
+            "[Supabase Sync Logger] Delete reimbursement issue:",
+            error.message,
+          );
+        }
+      }
+
+      res.json({ success: true, reimbursements: local.reimbursements });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -2003,6 +2560,8 @@ As análises individuais de consumo apontam os seguintes indicadores de eficiên
       const {
         prompt,
         audioUrl,
+        attachmentUrl,
+        attachmentType,
         currentDate = new Date().toISOString().substring(0, 10),
         userEmail,
       } = req.body;
@@ -2021,6 +2580,7 @@ As análises individuais de consumo apontam os seguintes indicadores de eficiên
       const budgetGoalsContext = await loadGoals();
       const faturamentoMetaContext = await loadRevenueGoal();
       const clientsContext = await loadClients();
+      const generalExpensesContext = (fetchLocalDbData().generalExpenses || []) as any[];
 
       // Load previous chat messages for this user to pass to Kairos (context memory)
       const emailToUse = userEmail || "anonymous";
@@ -2152,15 +2712,43 @@ ${Object.keys(dateBalances)
       d,
     ) => `Data: ${d} (Entradas: R$ ${dateBalances[d].income.toFixed(2)}, Saídas: R$ ${dateBalances[d].expense.toFixed(2)})
   Transações:
-  ${dateBalances[d].txs.map((t) => `- [${t.type === "income" ? "ENTRADA" : "SAÍDA"}] ${t.sender}: R$ ${t.amount.toFixed(2)} (${t.category} | ${t.description || "Sem descrição"})`).join("\n  ")}`,
+  ${dateBalances[d].txs.map((t) => `- [${t.type === "income" ? "ENTRADA" : "SAÍDA"}] R$ ${t.amount.toFixed(2)} (${t.category} | ${t.description || "Sem descrição"})`).join("\n  ")}`,
   )
   .join("\n\n")}
 
 4. TODAS AS TRANSAÇÕES BRUTAS EM DETALHE:
 ${JSON.stringify(transactionsContext, null, 2)}
 
+5. DESPESAS GERAIS REGISTRADAS (para consultar, editar status ou excluir por ID):
+${
+  generalExpensesContext.length === 0
+    ? "Nenhuma despesa geral registrada ainda."
+    : generalExpensesContext
+        .map((e: any) => {
+          const cliente =
+            e.clientId === "leadium"
+              ? "Leadium (Interno)"
+              : clientsContext.find((c: any) => c.id === e.clientId)?.name || e.clientId || "--";
+          return `- [ID: ${e.id}] ${e.date} | ${e.description} | R$ ${(Number(e.amount) || 0).toFixed(2)} | Categoria: ${e.category || "Outros"} | Status: ${e.status === "reimbursed" ? "Paga" : "Pendente"} | Cobrança: ${e.billingType === "monthly_fee" ? "Fixa/Mensalidade" : "Avulsa"} | Cliente/Setor: ${cliente}`;
+        })
+        .join("\n")
+}
+${
+  attachmentUrl
+    ? `\nANEXO ENVIADO AGORA: O usuário acabou de anexar um arquivo${attachmentType ? ` (${attachmentType})` : ""} disponível em "${attachmentUrl}". Se ele pedir para lançar uma despesa, transação ou reembolso, use ESSA URL como comprovante (campo receiptImage) automaticamente, sem pedir o link de novo.\n`
+    : ""
+}
 Lembre-se: Você é o Kairos, membro do time Leadium. Converse como um profissional humano de altíssimo nível, amigável, ágil e livre de scripts robóticos!
-Você pode executar ações no sistema através de funções: adicionar transações, adicionar despesas (viagens), adicionar clientes, definir alocação planejada e excluir transações/despesas. Caso não consiga extrair as informações necessárias, peça para o usuário complementar.`;
+
+CAPACIDADE DE AÇÃO NO CRM (use as funções disponíveis): você pode adicionar transações (entradas/saídas), adicionar DESPESAS GERAIS do negócio, adicionar clientes, registrar deslocamentos de frota, definir alocação planejada e excluir transações/despesas/deslocamentos.
+
+FLUXO OBRIGATÓRIO AO LANÇAR UMA DESPESA GERAL (função addGeneralExpense): antes de chamar a função, confirme com o usuário os campos que faltarem, de forma natural e enxuta (pode perguntar tudo de uma vez):
+- Categoria: uma entre Serviços, Marketing, Software, Infraestrutura ou Outros;
+- Tipo: despesa Fixa (entra na mensalidade) ou Avulsa;
+- Data: se ele disser "hoje" ou não informar, use a data de hoje (${todayStr});
+- Status: Paga ou Pendente;
+- Comprovante/anexo: pergunte se ele quer anexar algum documento/foto. Se ele já anexou um arquivo nesta conversa, use a URL do anexo como comprovante e não pergunte de novo.
+Se a despesa for do próprio negócio (não de um cliente específico), use clientId "leadium" (Interno). Só chame addGeneralExpense quando tiver categoria, tipo, data e status definidos. Se faltar algo, pergunte antes.`;
 
       const openaiTools = [
         {
@@ -2186,10 +2774,6 @@ Você pode executar ações no sistema através de funções: adicionar transaç
                   type: "number",
                   description: "O valor numérico (positivo).",
                 },
-                sender: {
-                  type: "string",
-                  description: "Nome do pagador/recebedor (Pessoa ou Empresa).",
-                },
                 description: {
                   type: "string",
                   description: "Descrição opcional.",
@@ -2199,7 +2783,7 @@ Você pode executar ações no sistema através de funções: adicionar transaç
                   description: "Data no formato YYYY-MM-DD.",
                 },
               },
-              required: ["type", "category", "amount", "sender", "date"],
+              required: ["type", "category", "amount", "date"],
             },
           },
         },
@@ -2252,6 +2836,50 @@ Você pode executar ações no sistema através de funções: adicionar transaç
                 },
               },
               required: ["name", "contractValue", "isRecurring", "category"],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "addGeneralExpense",
+            description:
+              "Adiciona uma nova DESPESA GERAL do negócio (ex: assinatura de software, marketing, serviços). Use quando o usuário pedir para lançar uma despesa/gasto que não seja deslocamento de frota. Confirme categoria, tipo (fixa/avulsa), data e status antes de chamar.",
+            parameters: {
+              type: "object",
+              properties: {
+                description: {
+                  type: "string",
+                  description: "Descrição do gasto (ex: 'Assinatura Google Workspace').",
+                },
+                amount: { type: "number", description: "Valor numérico positivo em Reais." },
+                date: { type: "string", description: "Data no formato YYYY-MM-DD. Se não informado, use a data de hoje." },
+                category: {
+                  type: "string",
+                  enum: ["Serviços", "Marketing", "Software", "Infraestrutura", "Outros"],
+                  description: "Categoria da despesa.",
+                },
+                status: {
+                  type: "string",
+                  enum: ["pending", "reimbursed"],
+                  description: "'pending' = Pendente, 'reimbursed' = Paga.",
+                },
+                billingType: {
+                  type: "string",
+                  enum: ["separate", "monthly_fee"],
+                  description: "'monthly_fee' = despesa Fixa (incluída na mensalidade), 'separate' = despesa Avulsa.",
+                },
+                clientId: {
+                  type: "string",
+                  description: "ID do cliente vinculado, ou 'leadium' para despesa interna do próprio negócio (padrão).",
+                },
+                notes: { type: "string", description: "Observações adicionais (opcional)." },
+                receiptImage: {
+                  type: "string",
+                  description: "URL do comprovante/anexo, se houver (ex: a URL de um arquivo anexado na conversa).",
+                },
+              },
+              required: ["description", "amount", "date", "category", "status", "billingType"],
             },
           },
         },
@@ -2328,11 +2956,10 @@ Você pode executar ações no sistema através de funções: adicionar transaç
               },
               category: { type: Type.STRING },
               amount: { type: Type.NUMBER },
-              sender: { type: Type.STRING },
               description: { type: Type.STRING },
               date: { type: Type.STRING },
             },
-            required: ["type", "category", "amount", "sender", "date"],
+            required: ["type", "category", "amount", "date"],
           },
         },
         {
@@ -2362,6 +2989,35 @@ Você pode executar ações no sistema através de funções: adicionar transaç
               category: { type: Type.STRING },
             },
             required: ["name", "contractValue", "isRecurring", "category"],
+          },
+        },
+        {
+          name: "addGeneralExpense",
+          description:
+            "Adiciona uma nova DESPESA GERAL do negócio (software, marketing, serviços, etc.). Use quando o usuário pedir para lançar uma despesa/gasto que não seja deslocamento de frota. Confirme categoria, tipo (fixa/avulsa), data e status antes de chamar.",
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              description: { type: Type.STRING },
+              amount: { type: Type.NUMBER },
+              date: { type: Type.STRING, description: "YYYY-MM-DD" },
+              category: {
+                type: Type.STRING,
+                description: "Serviços, Marketing, Software, Infraestrutura ou Outros.",
+              },
+              status: {
+                type: Type.STRING,
+                description: "'pending' (Pendente) ou 'reimbursed' (Paga).",
+              },
+              billingType: {
+                type: Type.STRING,
+                description: "'monthly_fee' (Fixa/mensalidade) ou 'separate' (Avulsa).",
+              },
+              clientId: { type: Type.STRING, description: "ID do cliente ou 'leadium' (interno)." },
+              notes: { type: Type.STRING },
+              receiptImage: { type: Type.STRING, description: "URL do comprovante/anexo, se houver." },
+            },
+            required: ["description", "amount", "date", "category", "status", "billingType"],
           },
         },
         {
@@ -2479,7 +3135,6 @@ Você pode executar ações no sistema através de funções: adicionar transaç
               type: toolArgs.type,
               category: toolArgs.category,
               amount: toolArgs.amount,
-              sender: toolArgs.sender,
               description: toolArgs.description || "",
               date: toolArgs.date,
               status: "completed",
@@ -2499,6 +3154,63 @@ Você pode executar ações no sistema através de funções: adicionar transaç
             });
             await saveClients(clients);
             textResponse = `Pronto! Cliente ${toolArgs.name} adicionado ao CRM com sucesso.`;
+          } else if (toolName === "addGeneralExpense") {
+            const targetId = crypto.randomUUID();
+            const expenseDate = toolArgs.date || todayStr;
+            const receipt = toolArgs.receiptImage || attachmentUrl || "";
+            const payload = {
+              id: targetId,
+              description: toolArgs.description,
+              amount: Number(toolArgs.amount) || 0,
+              date: expenseDate,
+              clientId: toolArgs.clientId || "leadium",
+              status: toolArgs.status || "pending",
+              billingType: toolArgs.billingType || "separate",
+              category: toolArgs.category || "Outros",
+              notes: toolArgs.notes || "",
+              receiptImage: receipt,
+            };
+
+            const local = fetchLocalDbData();
+            const arr = local.generalExpenses || [];
+            arr.push(payload);
+            local.generalExpenses = arr;
+            writeLocalDbData(local);
+
+            if (supabaseClient && tablesReady.general_expenses) {
+              const baseRow: any = {
+                id: targetId,
+                description: payload.description,
+                amount: payload.amount,
+                date: payload.date,
+                client_id: payload.clientId,
+                status: payload.status,
+                billing_type: payload.billingType,
+                category: payload.category,
+                notes: payload.notes,
+                receipt_image: payload.receiptImage,
+              };
+              let { error } = await supabaseClient
+                .from(tables.general_expenses)
+                .upsert(baseRow);
+              // Fallback caso a coluna `category` ainda não tenha sido migrada na nuvem.
+              if (error && (error.code === "42703" || /category/.test(error.message || ""))) {
+                const { category: _omit, ...withoutCategory } = baseRow;
+                ({ error } = await supabaseClient
+                  .from(tables.general_expenses)
+                  .upsert(withoutCategory));
+              }
+              if (error) {
+                console.warn(
+                  "[Supabase Sync Logger] Save general-expense (Kairos) issue:",
+                  error.message,
+                );
+              }
+            }
+
+            const statusLabel = payload.status === "reimbursed" ? "Paga" : "Pendente";
+            const tipoLabel = payload.billingType === "monthly_fee" ? "Fixa (mensalidade)" : "Avulsa";
+            textResponse = `Feito! Lancei a despesa **${payload.description}** de R$ ${payload.amount.toFixed(2)} (${payload.category} · ${tipoLabel} · ${statusLabel}) na data ${expenseDate}.${receipt ? " Comprovante anexado. ✅" : ""} Quer que eu registre mais alguma?`;
           } else if (toolName === "addDisplacement") {
             const expenses = await getExpensesData();
             expenses.displacements.push({
@@ -2576,7 +3288,11 @@ Você pode executar ações no sistema através de funções: adicionar transaç
       // Save user and assistant messages to database memory.
       // Audio messages are persisted as a marker pointing at the recording so the chat
       // bubble can be re-rendered as a player on reload; Kairos still reasons over the transcript.
-      const userDisplayText = audioUrl ? `__AUDIO__:${audioUrl}` : prompt;
+      const userDisplayText = audioUrl
+        ? `__AUDIO__:${audioUrl}`
+        : attachmentUrl
+          ? `__FILE__:${attachmentUrl}`
+          : prompt;
       await saveChatMessage(emailToUse, "user", userDisplayText);
       await saveChatMessage(emailToUse, "assistant", textResponse);
 
@@ -2760,15 +3476,15 @@ Responda APENAS com o nome exato da categoria, sem explicações ou aspas.`;
   // Base64 upload to public link converter endpoint
   app.post("/api/upload", async (req, res) => {
     try {
-      const { image } = req.body;
+      const { image, filename } = req.body;
       if (!image) {
         return res.status(400).json({ error: "Nenhuma imagem enviada." });
       }
 
-      const match = image.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+      const match = image.match(/^data:(image\/[a-zA-Z0-9+.-]+|application\/pdf);base64,(.+)$/);
       if (!match) {
         return res.status(400).json({
-          error: "Formato de imagem inválido. Deve ser base64 data-uri.",
+          error: "Formato de arquivo inválido. Deve ser base64 data-uri (imagem ou PDF).",
         });
       }
 
@@ -2777,7 +3493,15 @@ Responda APENAS com o nome exato da categoria, sem explicações ou aspas.`;
       const buffer = Buffer.from(base64Data, "base64");
 
       const ext = mimeType.split("/")[1] || "png";
-      const safeName = `${crypto.randomUUID()}.${ext}`;
+      // Keep the original filename (sanitized) alongside a UUID prefix so the
+      // stored file stays visually identifiable — a bare random UUID made it
+      // impossible for users to confirm they opened the receipt they attached.
+      const sanitizedOriginal = typeof filename === "string"
+        ? filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80)
+        : "";
+      const safeName = sanitizedOriginal
+        ? `${crypto.randomUUID()}-${sanitizedOriginal}`
+        : `${crypto.randomUUID()}.${ext}`;
       const filePath = path.join(uploadsDir, safeName);
 
       await fs.promises.writeFile(filePath, buffer);
@@ -2840,7 +3564,10 @@ Responda APENAS com o nome exato da categoria, sem explicações ou aspas.`;
   // Serve static UI assets with hot reload configurations
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: process.env.DISABLE_HMR === "true" ? false : undefined,
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);

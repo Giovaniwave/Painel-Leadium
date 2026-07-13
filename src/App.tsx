@@ -12,7 +12,8 @@ import TransactionsView from './components/TransactionsView';
 import ClientsView from './components/ClientsView';
 import SettingsView from './components/SettingsView';
 import ExpensesView from './components/ExpensesView';
-import GeneralExpensesView from './components/GeneralExpensesView';
+import ReimbursementView from './components/ReimbursementView';
+import ProspectingView from './components/ProspectingView';
 import AddTransactionModal from './components/AddTransactionModal';
 import FinanceAssistant from './components/FinanceAssistant';
 import LoginView from './components/LoginView';
@@ -20,7 +21,7 @@ import MobileNav from './components/MobileNav';
 
 import { ActiveTab, Transaction, BudgetGoal, Client } from './types';
 import { INITIAL_TRANSACTIONS } from './data/seedData';
-import { LayoutDashboard, Wallet, ArrowLeftRight, Settings as SettingsIcon, MessageSquare, X, Users, Receipt } from 'lucide-react';
+import { LayoutDashboard, Wallet, ArrowLeftRight, Settings as SettingsIcon, MessageSquare, X, Users } from 'lucide-react';
 import { sendBrowserNotification } from './utils/notifications';
 import { OfflineDb } from './utils/offlineDb';
 
@@ -370,13 +371,14 @@ export default function App() {
 
   // Command CRUD Operations: Add new transaction
   const handleAddClient = async (newClientData: Omit<Client, 'id'>) => {
-    const uuid = typeof window !== 'undefined' && window.crypto && typeof window.crypto.randomUUID === 'function'
+    const providedId = (newClientData as Client).id;
+    const uuid = providedId || (typeof window !== 'undefined' && window.crypto && typeof window.crypto.randomUUID === 'function'
       ? window.crypto.randomUUID()
       : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
           const r = (Math.random() * 16) | 0;
           const v = c === 'x' ? r : (r & 0x3) | 0x8;
           return v.toString(16);
-        });
+        }));
     const newClient: Client = {
       ...newClientData,
       id: uuid
@@ -658,9 +660,34 @@ export default function App() {
       case 'budgeting': return 'Plano de Carteira';
       case 'transactions': return 'Transações';
       case 'expenses': return 'Controle de Frota';
+      case 'reimbursements': return 'Reembolso';
       case 'clients': return 'Gestão de Clientes';
+      case 'prospecting': return 'Prospecção Comercial';
       case 'settings': return 'Configurações do Sistema';
       default: return 'Gestão Leadium';
+    }
+  };
+
+  const getHeaderSubtitle = () => {
+    switch (activeTab) {
+      case 'dashboard': return 'Visão geral da sua saúde financeira';
+      case 'budgeting': return 'Acompanhe suas metas e o desempenho da carteira';
+      case 'transactions': return 'Histórico completo de entradas e saídas';
+      case 'expenses': return 'Visão completa da sua operação em tempo real';
+      case 'reimbursements': return 'Solicitações e pagamentos de reembolso';
+      case 'clients': return 'Carteira de clientes ativos e histórico';
+      case 'prospecting': return 'Pipeline, agenda e inteligência comercial';
+      case 'settings': return 'Preferências e configurações da conta';
+      default: return '';
+    }
+  };
+
+  const getSearchPlaceholder = () => {
+    switch (activeTab) {
+      case 'expenses': return 'Buscar veículos, colaboradores...';
+      case 'clients': return 'Buscar clientes...';
+      case 'prospecting': return 'Buscar leads, empresas ou serviços...';
+      default: return 'Buscar transações...';
     }
   };
 
@@ -670,7 +697,7 @@ export default function App() {
   }
 
   return (
-    <div className={`flex h-screen bg-[#0D0D0D] text-[#E2E2EB] font-sans overflow-hidden relative selection:bg-white selection:text-black ${theme === 'light' ? 'light-theme' : ''}`}>
+    <div className={`app-shell flex h-screen bg-[#0D0D0D] text-[#E2E2EB] font-sans overflow-hidden relative selection:bg-white selection:text-black ${theme === 'light' ? 'light-theme' : 'dark-theme'}`}>
       
       {/* Side navigation rail - hidden on mobile cells, shown on md and up */}
       <Sidebar 
@@ -692,12 +719,14 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         
         {/* Persistent top application banner menu */}
-        <Header 
-          title={getHeaderTitle()} 
+        <Header
+          title={getHeaderTitle()}
+          subtitle={getHeaderSubtitle()}
+          searchPlaceholder={getSearchPlaceholder()}
           searchQuery={searchQuery}
           setSearchQuery={(q) => {
             setSearchQuery(q);
-            if (activeTab !== 'transactions' && activeTab !== 'budgeting') {
+            if (activeTab !== 'transactions' && activeTab !== 'budgeting' && activeTab !== 'prospecting') {
               setActiveTab('transactions'); // redirect search inquiries to transaction ledger automatically
             }
           }}
@@ -715,7 +744,7 @@ export default function App() {
         />
 
         {/* Central main routing panels */}
-        <main className="p-4 sm:p-8 max-w-7xl w-full mx-auto flex-1 min-h-0">
+        <main className="p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto flex-1 min-h-0">
           <div className="pb-24 sm:pb-8">
             {activeTab === 'dashboard' && (
               <DashboardView 
@@ -737,11 +766,15 @@ export default function App() {
                 onUpdateGoal={handleUpdateGoal}
                 onNavigateToTab={(tab) => setActiveTab(tab)}
                 theme={theme}
+                clients={clients}
+                revenueGoal={revenueGoal}
+                onUpdateRevenueGoal={handleUpdateRevenueGoal}
               />
             )}
             {activeTab === 'transactions' && (
               <TransactionsView 
                 transactions={transactions}
+                clients={clients}
                 onOpenAddModal={() => setIsAddModalOpen(true)}
                 onDeleteTransaction={handleDeleteTransaction}
                 searchQuery={searchQuery}
@@ -761,11 +794,14 @@ export default function App() {
                 theme={theme}
               />
             )}
+            {activeTab === 'prospecting' && (
+              <ProspectingView theme={theme} searchQuery={searchQuery} />
+            )}
             {activeTab === 'expenses' && (
               <ExpensesView theme={theme} />
             )}
-            {activeTab === 'general_expenses' && (
-              <GeneralExpensesView theme={theme} clients={clients} />
+            {activeTab === 'reimbursements' && (
+              <ReimbursementView theme={theme} clients={clients} />
             )}
             {activeTab === 'settings' && (
               <SettingsView 
@@ -876,6 +912,7 @@ export default function App() {
         onAdd={handleAddTransaction}
         budgetGoals={budgetGoals}
         clients={clients}
+        theme={theme}
       />
 
       {/* Conversational AI sliding sidebar block */}

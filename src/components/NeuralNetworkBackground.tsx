@@ -20,8 +20,8 @@ export default function NeuralNetworkBackground({ theme = 'dark' }: NeuralNetwor
 
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const maxLinkDistance = 135;
-    const mouseRadius = 160;
+    const maxLinkDistance = 155;
+    const mouseRadius = 190;
 
     let width = 0;
     let height = 0;
@@ -40,7 +40,7 @@ export default function NeuralNetworkBackground({ theme = 'dark' }: NeuralNetwor
       canvas.style.height = `${height}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const count = Math.max(24, Math.min(60, Math.round((width * height) / 11000)));
+      const count = Math.max(30, Math.min(64, Math.round((width * height) / 10500)));
       particles = Array.from({ length: count }, () => ({
         x: Math.random() * width,
         y: Math.random() * height,
@@ -110,9 +110,9 @@ export default function NeuralNetworkBackground({ theme = 'dark' }: NeuralNetwor
           const dy = a.y - b.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist < maxLinkDistance) {
-            const opacity = (1 - dist / maxLinkDistance) * 0.3;
+            const opacity = (1 - dist / maxLinkDistance) * 0.52;
             ctx.strokeStyle = `rgba(${rgb}, ${opacity})`;
-            ctx.lineWidth = 1.1;
+            ctx.lineWidth = 1.25;
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
@@ -120,9 +120,9 @@ export default function NeuralNetworkBackground({ theme = 'dark' }: NeuralNetwor
           }
         }
 
-        ctx.fillStyle = `rgba(${rgb}, 0.6)`;
+        ctx.fillStyle = `rgba(${rgb}, 0.9)`;
         ctx.beginPath();
-        ctx.arc(particles[i].x, particles[i].y, 1.6, 0, Math.PI * 2);
+        ctx.arc(particles[i].x, particles[i].y, 2, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -143,7 +143,7 @@ export default function NeuralNetworkBackground({ theme = 'dark' }: NeuralNetwor
   }, [theme]);
 
   const contentMask =
-    'radial-gradient(ellipse 62% 58% at 50% 58%, transparent 0%, transparent 45%, black 85%)';
+    'radial-gradient(ellipse 70% 68% at 50% 55%, rgba(0,0,0,0.48) 0%, rgba(0,0,0,0.72) 48%, black 92%)';
 
   return (
     <canvas

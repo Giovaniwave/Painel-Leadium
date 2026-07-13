@@ -7,7 +7,6 @@ export interface Transaction {
   id: string;
   date: string; // YYYY-MM-DD format
   description: string;
-  sender: string;
   type: 'income' | 'expense';
   amount: number;
   category: string;
@@ -42,7 +41,21 @@ export interface Client {
   logo?: string;
 }
 
-export type ActiveTab = 'dashboard' | 'budgeting' | 'transactions' | 'clients' | 'settings' | 'help' | 'expenses' | 'general_expenses';
+export interface Reimbursement {
+  id: string;
+  date: string;
+  employeeId: string;
+  description: string;
+  amount: number;
+  expenseType: 'fixed' | 'one_off'; // Despesa fixa | Avulsa
+  category: string;
+  clientId?: string; // Vínculo opcional com um cliente
+  status: 'pending' | 'reimbursed'; // Pendente | Reembolsada
+  receiptFile?: string; // URL do PDF do comprovante
+  notes?: string;
+}
+
+export type ActiveTab = 'dashboard' | 'budgeting' | 'transactions' | 'clients' | 'prospecting' | 'settings' | 'help' | 'expenses' | 'reimbursements';
 
 export interface BudgetFilters {
   account: string;

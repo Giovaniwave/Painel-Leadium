@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Wallet, LayoutGrid, ArrowLeftRight } from 'lucide-react';
+import { Wallet, LayoutGrid, ArrowLeftRight, Radar } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface MobileNavProps {
@@ -20,6 +20,7 @@ export default function MobileNav({ activeTab, onTabChange, theme }: MobileNavPr
     { id: 'dashboard' as ActiveTab, label: 'PAINEL', icon: LayoutGrid },
     { id: 'budgeting' as ActiveTab, label: 'CARTEIRA', icon: Wallet },
     { id: 'transactions' as ActiveTab, label: 'TRANSAÇÕES', icon: ArrowLeftRight },
+    { id: 'prospecting' as ActiveTab, label: 'PROSPECÇÃO', icon: Radar },
   ];
 
   return (
