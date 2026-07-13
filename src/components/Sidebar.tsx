@@ -44,8 +44,8 @@ export default function Sidebar({
   onOpenAssistant,
   theme
 }: SidebarProps) {
-  const [workspaceOpen, setWorkspaceOpen] = React.useState(true);
-  const [prospectingOpen, setProspectingOpen] = React.useState(true);
+  const [workspaceOpen, setWorkspaceOpen] = React.useState(false);
+  const [prospectingOpen, setProspectingOpen] = React.useState(false);
   const logoUrl = theme === 'light'
     ? "https://i.ibb.co/M5kWMmTJ/logo-para-versao-white-removebg-preview.png"
     : "https://i.ibb.co/k245JhFM/logotipooficialleadium.png";
