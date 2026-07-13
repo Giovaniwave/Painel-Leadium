@@ -145,7 +145,7 @@ export default function Sidebar({
           {/* Desktop Shrink Button (Absolutely positioned on border, out of flex flow) */}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className={`fixed top-8 z-[60] hidden h-8 w-8 items-center justify-center rounded-xl border shadow-[0_8px_24px_rgba(0,0,0,.22)] transition-all duration-300 hover:scale-110 active:scale-95 md:flex ${isCollapsed ? "left-[calc(4rem-1rem)]" : "left-[calc(16rem-1rem)]"} ${theme === "light" ? "border-black/10 bg-black text-white hover:bg-neutral-800" : "border-white/15 bg-white text-black hover:bg-neutral-200"}`}
+            className={`fixed top-8 z-[60] hidden h-8 w-8 items-center justify-center bg-transparent transition-colors duration-200 md:flex ${isCollapsed ? "left-[calc(4rem-1rem)]" : "left-[calc(16rem-1rem)]"} ${theme === "light" ? "text-neutral-400 hover:text-neutral-900" : "text-neutral-600 hover:text-neutral-300"}`}
             title={isCollapsed ? "Expandir" : "Encolher"}
             aria-label={
               isCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"
@@ -153,9 +153,9 @@ export default function Sidebar({
             id="sidebar-toggle-btn"
           >
             {isCollapsed ? (
-              <ChevronRight className="h-4 w-4" strokeWidth={2.4} />
+              <ChevronRight className="h-4 w-4" strokeWidth={1.8} />
             ) : (
-              <ChevronLeft className="h-4 w-4" strokeWidth={2.4} />
+              <ChevronLeft className="h-4 w-4" strokeWidth={1.8} />
             )}
           </button>
         </div>
