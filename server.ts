@@ -86,9 +86,28 @@ async function startServer() {
   let supabaseClient: any = null;
   const supabaseUrl = process.env.SUPABASE_URL || "";
   const isProduction = process.env.NODE_ENV === "production";
+
+  // Lê o JWT da service_role diretamente do payload, em vez de confiar no nome
+  // da env var: em produção (ex: Hostinger) a chave costuma ficar salva em
+  // SUPABASE_KEY em vez de SUPABASE_SERVICE_ROLE_KEY, o que zerava supabaseKey
+  // e derrubava o login. Continuamos bloqueando a chave anon em produção,
+  // mas validando pelo claim "role" do token, não pelo nome da variável.
+  function getJwtRole(token: string): string | null {
+    try {
+      const payload = token.split(".")[1];
+      const json = JSON.parse(Buffer.from(payload, "base64").toString("utf8"));
+      return json.role || null;
+    } catch {
+      return null;
+    }
+  }
+
+  const rawSupabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || "";
   const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    (!isProduction ? process.env.SUPABASE_KEY || "" : "");
+    !isProduction || getJwtRole(rawSupabaseKey) === "service_role"
+      ? rawSupabaseKey
+      : "";
 
   const tablesReady = {
     transactions: false,
@@ -121,6 +140,12 @@ async function startServer() {
     chat_messages: "leadium_chat_messages",
     prospecting_leads: "leadium_prospecting_leads",
   };
+
+  if (isProduction && rawSupabaseKey && !supabaseKey) {
+    console.error(
+      "--- SUPABASE KEY REJECTED: a chave em SUPABASE_SERVICE_ROLE_KEY/SUPABASE_KEY não é uma service_role key. Login e acesso a dados privados vão falhar em produção. ---",
+    );
+  }
 
   if (supabaseUrl && supabaseKey) {
     try {
