@@ -997,62 +997,81 @@ async function startServer() {
 
     if (supabaseClient && tablesReady.transactions) {
       try {
-        const { error: deleteError } = await supabaseClient
-          .from(tables.transactions)
-          .delete()
-          .neq("type", "non_existent_type_value");
+        const formatted = updatedTxList.map((t: any) => {
+          let notesValue = t.notes || null;
+          if (t.isRecurring) {
+            notesValue =
+              "__RECURRING_METADATA__:" +
+              JSON.stringify({
+                isRecurring: t.isRecurring,
+                frequency: t.frequency,
+                nextOccurrenceDate: t.nextOccurrenceDate,
+                notes: t.notes || "",
+              });
+          }
+          const row: any = {
+            id: t.id,
+            date: t.date,
+            description: t.description || "",
+            type: t.type,
+            amount: Number(t.amount) || 0,
+            category: t.category || "",
+            account: t.account || "",
+            notes: notesValue,
+            client_id: t.clientId || null,
+          };
+          if (tables.transactions === "leadium_transactions") {
+            row.avatar_url = t.avatarUrl || null;
+          }
+          return row;
+        });
 
-        if (deleteError) {
-          console.warn(
-            "[Supabase Sync Logger] Batch deletion issue during sync:",
-            deleteError.message,
-          );
-        }
-
-        if (updatedTxList.length > 0) {
-          const formatted = updatedTxList.map((t: any) => {
-            let notesValue = t.notes || null;
-            if (t.isRecurring) {
-              notesValue =
-                "__RECURRING_METADATA__:" +
-                JSON.stringify({
-                  isRecurring: t.isRecurring,
-                  frequency: t.frequency,
-                  nextOccurrenceDate: t.nextOccurrenceDate,
-                  notes: t.notes || "",
-                });
-            }
-            const row: any = {
-              id: t.id,
-              date: t.date,
-              description: t.description || "",
-              type: t.type,
-              amount: Number(t.amount) || 0,
-              category: t.category || "",
-              account: t.account || "",
-              notes: notesValue,
-              client_id: t.clientId || null,
-            };
-            if (tables.transactions === "leadium_transactions") {
-              row.avatar_url = t.avatarUrl || null;
-            }
-            return row;
-          });
-          const { error: insertError } = await supabaseClient
+        // Grava (upsert) primeiro e só remove o que ficou de fora da lista
+        // depois que a gravação for confirmada. Nunca apaga antes de garantir
+        // que os dados novos entraram — evita perder a tabela inteira se um
+        // registro do lote violar alguma regra do banco.
+        if (formatted.length > 0) {
+          const { error: upsertError } = await supabaseClient
             .from(tables.transactions)
-            .insert(formatted);
-          if (insertError) {
+            .upsert(formatted, { onConflict: "id" });
+          if (upsertError) {
             console.warn(
-              "[Supabase Sync Logger] Batch insertion issue during sync:",
-              insertError.message,
+              "[Supabase Sync Logger] Batch upsert issue during sync:",
+              upsertError.message,
             );
-            throw new Error(insertError.message);
+            throw new Error(upsertError.message);
+          }
+
+          const idList = formatted.map((r: any) => `"${r.id}"`).join(",");
+          const { error: deleteError } = await supabaseClient
+            .from(tables.transactions)
+            .delete()
+            .not("id", "in", `(${idList})`);
+          if (deleteError) {
+            console.warn(
+              "[Supabase Sync Logger] Batch deletion issue during sync:",
+              deleteError.message,
+            );
+          }
+        } else {
+          const { error: deleteError } = await supabaseClient
+            .from(tables.transactions)
+            .delete()
+            .neq("type", "non_existent_type_value");
+          if (deleteError) {
+            console.warn(
+              "[Supabase Sync Logger] Batch deletion issue during sync:",
+              deleteError.message,
+            );
           }
         }
       } catch (err: any) {
         console.warn(
           "[Supabase Sync Logger] Failed to sync transactions list:",
           err.message || err,
+        );
+        throw new Error(
+          `Falha ao salvar transações no banco de dados: ${err.message || err}`,
         );
       }
     }
@@ -1115,18 +1134,6 @@ async function startServer() {
 
     if (supabaseClient && tablesReady.clients) {
       try {
-        const { error: deleteError } = await supabaseClient
-          .from(tables.clients)
-          .delete()
-          .neq("name", "non_existent_client"); // delete all
-
-        if (deleteError) {
-          console.warn(
-            "[Supabase Sync Logger] Batch deletion issue during clients sync:",
-            deleteError.message,
-          );
-        }
-
         if (updatedClientList.length > 0) {
           const formatted = updatedClientList.map((c: any) => {
             let dbDate = null;
@@ -1175,21 +1182,52 @@ async function startServer() {
               next_payment_date: dbDate,
             };
           });
-          const { error: insertError } = await supabaseClient
+
+          // Grava (upsert) primeiro e só remove o que ficou de fora da lista
+          // depois que a gravação for confirmada — mesma lógica de
+          // saveTransactions, pra nunca apagar antes de garantir que os
+          // dados novos entraram.
+          const { error: upsertError } = await supabaseClient
             .from(tables.clients)
-            .insert(formatted);
-          if (insertError) {
+            .upsert(formatted, { onConflict: "id" });
+          if (upsertError) {
             console.warn(
-              "[Supabase Sync Logger] Clients insertion issue during sync:",
-              insertError.message,
+              "[Supabase Sync Logger] Clients upsert issue during sync:",
+              upsertError.message,
             );
-            throw new Error(insertError.message);
+            throw new Error(upsertError.message);
+          }
+
+          const idList = formatted.map((r: any) => `"${r.id}"`).join(",");
+          const { error: deleteError } = await supabaseClient
+            .from(tables.clients)
+            .delete()
+            .not("id", "in", `(${idList})`);
+          if (deleteError) {
+            console.warn(
+              "[Supabase Sync Logger] Batch deletion issue during clients sync:",
+              deleteError.message,
+            );
+          }
+        } else {
+          const { error: deleteError } = await supabaseClient
+            .from(tables.clients)
+            .delete()
+            .neq("name", "non_existent_client"); // delete all
+          if (deleteError) {
+            console.warn(
+              "[Supabase Sync Logger] Batch deletion issue during clients sync:",
+              deleteError.message,
+            );
           }
         }
       } catch (err: any) {
         console.warn(
           "[Supabase Sync Logger] Failed to sync clients list:",
           err.message || err,
+        );
+        throw new Error(
+          `Falha ao salvar clientes no banco de dados: ${err.message || err}`,
         );
       }
     }
