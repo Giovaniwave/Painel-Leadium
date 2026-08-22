@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { CreditCard, Repeat, ExternalLink, Loader2, Mail, X } from 'lucide-react';
+import { CreditCard, Repeat, ExternalLink, Loader2, Mail, X, Trash2 } from 'lucide-react';
 import type { Client } from '../types';
 
 interface ClientPaymentRow {
@@ -60,6 +60,7 @@ export default function ClientPaymentsPanel({ client, isDark }: ClientPaymentsPa
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [successNote, setSuccessNote] = useState('');
 
@@ -144,6 +145,22 @@ export default function ClientPaymentsPanel({ client, isDark }: ClientPaymentsPa
       setError(err.message || 'Falha ao cancelar assinatura');
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const deletePayment = async (payment: ClientPaymentRow) => {
+    if (!window.confirm('Excluir essa cobrança? Isso remove ela do Asaas e do CRM.')) return;
+    setDeletingId(payment.id);
+    setError('');
+    try {
+      const res = await fetch(`/api/client-payments/${payment.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha ao excluir cobrança');
+      await loadPayments();
+    } catch (err: any) {
+      setError(err.message || 'Falha ao excluir cobrança');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -318,6 +335,20 @@ export default function ClientPaymentsPanel({ client, isDark }: ClientPaymentsPa
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
+                )}
+                {p.status !== 'paid' && (
+                  <button
+                    onClick={() => deletePayment(p)}
+                    disabled={deletingId === p.id}
+                    title="Excluir cobrança"
+                    className="text-gray-500 hover:text-red-500 transition-colors disabled:opacity-50"
+                  >
+                    {deletingId === p.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                  </button>
                 )}
               </div>
             </div>

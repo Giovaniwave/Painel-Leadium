@@ -138,6 +138,10 @@ export async function getPayment(id: string): Promise<AsaasPayment> {
   return asaasFetch(`/payments/${id}`);
 }
 
+export async function deletePayment(id: string): Promise<{ deleted: boolean; id: string }> {
+  return asaasFetch(`/payments/${id}`, { method: "DELETE" });
+}
+
 export async function getSubscription(id: string): Promise<AsaasSubscription> {
   return asaasFetch(`/subscriptions/${id}`);
 }

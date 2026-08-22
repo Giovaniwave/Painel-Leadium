@@ -1464,10 +1464,129 @@ export default function ClientsView({
         </div>
       )}
 
-      {/* 4. Main grid: client roster (left) + Receita Mensal / Vencimentos Próximos (right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Carteira de Clientes panel */}
-        <div className={`lg:col-span-2 rounded-2xl border p-5 sm:p-6 ${isDark ? 'bg-black/90 border-white/5' : 'bg-white border-black/5 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'}`} id="clients-roster-panel">
+      {/* 4. Receita Mensal (MRR) + Vencimentos Próximos — lado a lado, acima da carteira */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Receita Mensal (MRR) */}
+        <div className={`rounded-2xl border p-5 sm:p-6 ${isDark ? 'bg-black/90 border-white/5' : 'bg-white border-black/5 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'}`}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Receita Mensal (MRR)</h3>
+            <select
+              value={mrrChartRange}
+              onChange={(e) => setMrrChartRange(Number(e.target.value) as 3 | 6 | 12)}
+              className={`px-2 py-1 rounded-lg text-[10px] font-semibold border cursor-pointer outline-none ${
+                isDark ? 'bg-[#161616] border-white/10 text-gray-300' : 'bg-white border-gray-300 text-gray-700'
+              }`}
+            >
+              <option value={3}>Últimos 3 meses</option>
+              <option value={6}>Últimos 6 meses</option>
+              <option value={12}>Últimos 12 meses</option>
+            </select>
+          </div>
+          <div className="h-52 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={mrrTrendData} margin={{ top: 5, right: 5, left: -22, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
+                <XAxis
+                  dataKey="label"
+                  tickFormatter={(v: string) => v.split('/')[0]}
+                  stroke="#71717a"
+                  fontSize={10}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  stroke="#71717a"
+                  fontSize={10}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v: number) => formatBRL(v)}
+                />
+                <Tooltip
+                  content={({ active, payload }: any) => {
+                    if (!active || !payload || !payload.length) return null;
+                    const point = payload[0].payload;
+                    return (
+                      <div className={`p-2.5 rounded-lg border shadow-xl font-mono text-[10px] ${
+                        isDark ? 'bg-[#18181B]/95 border-white/10 text-white' : 'bg-white border-gray-200 text-zinc-900'
+                      }`}>
+                        <p className="font-bold mb-1">{point.label}</p>
+                        <p>R$ {point.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      </div>
+                    );
+                  }}
+                  cursor={{ stroke: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', strokeWidth: 1 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  stroke={isDark ? '#FFFFFF' : '#111111'}
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Vencimentos Próximos */}
+        <div className={`rounded-2xl border p-5 sm:p-6 ${isDark ? 'bg-black/90 border-white/5' : 'bg-white border-black/5 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'}`}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Vencimentos Próximos</h3>
+            {upcomingPayments.length > 5 && (
+              <button
+                onClick={() => setShowAllUpcoming(v => !v)}
+                className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer ${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-black'}`}
+              >
+                {showAllUpcoming ? 'Ver menos' : 'Ver todos'}
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          {visibleUpcomingPayments.length === 0 ? (
+            <div className="py-8 text-center text-xs text-gray-500 flex flex-col items-center gap-2">
+              <Clock className="w-6 h-6 opacity-40" />
+              <span>Nenhum vencimento agendado.</span>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {visibleUpcomingPayments.map(({ client, info }) => {
+                const day = info.targetDate ? String(info.targetDate.getDate()).padStart(2, '0') : '--';
+                const monthAbbrev = info.targetDate ? PORTUGUESE_MONTHS_SHORT[info.targetDate.getMonth()].toUpperCase() : '';
+                const daysLeft = info.daysLeft as number;
+                return (
+                  <div key={client.id} className="flex items-center gap-3">
+                    <div className={`w-11 h-11 rounded-lg flex flex-col items-center justify-center shrink-0 ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>
+                      <span className={`text-sm font-bold leading-none ${isDark ? 'text-white' : 'text-gray-900'}`}>{day}</span>
+                      <span className={`text-[8px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{monthAbbrev}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className={`font-semibold text-xs block truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{client.name}</span>
+                      <span className={`text-[10px] block ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        {client.is_recurring ? 'Pagamento recorrente' : 'Pagamento único'}
+                      </span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className={`font-mono font-bold text-xs block ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        R$ {client.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                      <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
+                        daysLeft === 0 ? 'bg-zinc-500/10 text-zinc-500' : 'bg-zinc-500/10 text-zinc-500'
+                      }`}>
+                        {daysLeft === 0 ? 'Hoje' : `Em ${daysLeft} dia${daysLeft !== 1 ? 's' : ''}`}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 5. Carteira de Clientes — largura total */}
+      <div className={`rounded-2xl border p-5 sm:p-6 ${isDark ? 'bg-black/90 border-white/5' : 'bg-white border-black/5 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'}`} id="clients-roster-panel">
           <div className="flex items-center justify-between mb-4">
             <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Carteira de Clientes</h3>
           </div>
@@ -1827,128 +1946,6 @@ export default function ClientsView({
             )}
           </div>
         </div>
-
-        {/* Right: Receita Mensal (MRR) + Vencimentos Próximos */}
-        <div className="space-y-6">
-          {/* Receita Mensal (MRR) */}
-          <div className={`rounded-2xl border p-5 sm:p-6 ${isDark ? 'bg-black/90 border-white/5' : 'bg-white border-black/5 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'}`}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Receita Mensal (MRR)</h3>
-              <select
-                value={mrrChartRange}
-                onChange={(e) => setMrrChartRange(Number(e.target.value) as 3 | 6 | 12)}
-                className={`px-2 py-1 rounded-lg text-[10px] font-semibold border cursor-pointer outline-none ${
-                  isDark ? 'bg-[#161616] border-white/10 text-gray-300' : 'bg-white border-gray-300 text-gray-700'
-                }`}
-              >
-                <option value={3}>Últimos 3 meses</option>
-                <option value={6}>Últimos 6 meses</option>
-                <option value={12}>Últimos 12 meses</option>
-              </select>
-            </div>
-            <div className="h-52 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={mrrTrendData} margin={{ top: 5, right: 5, left: -22, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
-                  <XAxis
-                    dataKey="label"
-                    tickFormatter={(v: string) => v.split('/')[0]}
-                    stroke="#71717a"
-                    fontSize={10}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    stroke="#71717a"
-                    fontSize={10}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v: number) => formatBRL(v)}
-                  />
-                  <Tooltip
-                    content={({ active, payload }: any) => {
-                      if (!active || !payload || !payload.length) return null;
-                      const point = payload[0].payload;
-                      return (
-                        <div className={`p-2.5 rounded-lg border shadow-xl font-mono text-[10px] ${
-                          isDark ? 'bg-[#18181B]/95 border-white/10 text-white' : 'bg-white border-gray-200 text-zinc-900'
-                        }`}>
-                          <p className="font-bold mb-1">{point.label}</p>
-                          <p>R$ {point.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                        </div>
-                      );
-                    }}
-                    cursor={{ stroke: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', strokeWidth: 1 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="value"
-                    stroke={isDark ? '#FFFFFF' : '#111111'}
-                    strokeWidth={2.5}
-                    dot={false}
-                    activeDot={{ r: 4 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Vencimentos Próximos */}
-          <div className={`rounded-2xl border p-5 sm:p-6 ${isDark ? 'bg-black/90 border-white/5' : 'bg-white border-black/5 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'}`}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Vencimentos Próximos</h3>
-              {upcomingPayments.length > 5 && (
-                <button
-                  onClick={() => setShowAllUpcoming(v => !v)}
-                  className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer ${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-black'}`}
-                >
-                  {showAllUpcoming ? 'Ver menos' : 'Ver todos'}
-                  <ArrowRight className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-
-            {visibleUpcomingPayments.length === 0 ? (
-              <div className="py-8 text-center text-xs text-gray-500 flex flex-col items-center gap-2">
-                <Clock className="w-6 h-6 opacity-40" />
-                <span>Nenhum vencimento agendado.</span>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {visibleUpcomingPayments.map(({ client, info }) => {
-                  const day = info.targetDate ? String(info.targetDate.getDate()).padStart(2, '0') : '--';
-                  const monthAbbrev = info.targetDate ? PORTUGUESE_MONTHS_SHORT[info.targetDate.getMonth()].toUpperCase() : '';
-                  const daysLeft = info.daysLeft as number;
-                  return (
-                    <div key={client.id} className="flex items-center gap-3">
-                      <div className={`w-11 h-11 rounded-lg flex flex-col items-center justify-center shrink-0 ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>
-                        <span className={`text-sm font-bold leading-none ${isDark ? 'text-white' : 'text-gray-900'}`}>{day}</span>
-                        <span className={`text-[8px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{monthAbbrev}</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className={`font-semibold text-xs block truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{client.name}</span>
-                        <span className={`text-[10px] block ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                          {client.is_recurring ? 'Pagamento recorrente' : 'Pagamento único'}
-                        </span>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className={`font-mono font-bold text-xs block ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                          R$ {client.contract_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                        <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
-                          daysLeft === 0 ? 'bg-zinc-500/10 text-zinc-500' : 'bg-zinc-500/10 text-zinc-500'
-                        }`}>
-                          {daysLeft === 0 ? 'Hoje' : `Em ${daysLeft} dia${daysLeft !== 1 ? 's' : ''}`}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* 5. Resumo Financeiro */}
       <div className={`rounded-2xl border p-5 sm:p-6 ${isDark ? 'bg-black/90 border-white/5' : 'bg-white border-black/5 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'}`}>

@@ -1813,6 +1813,57 @@ Responda somente com o JSON final revisado.`;
     }
   });
 
+  app.delete("/api/client-payments/:id", async (req, res) => {
+    try {
+      let row: any = null;
+      if (supabaseClient && tablesReady.client_payments) {
+        const { data, error } = await supabaseClient
+          .from(tables.client_payments)
+          .select("*")
+          .eq("id", req.params.id)
+          .maybeSingle();
+        if (error) throw error;
+        row = data;
+      } else {
+        const local = fetchLocalDbData();
+        const rows = Array.isArray(local.clientPayments) ? local.clientPayments : [];
+        row = rows.find((r: any) => r.id === req.params.id) || null;
+      }
+
+      if (!row) return res.status(404).json({ error: "Cobrança não encontrada" });
+      if (row.status === "paid") {
+        return res.status(400).json({
+          error: "Cobrança já paga não pode ser excluída — seria necessário estornar no Asaas.",
+        });
+      }
+
+      if (row.asaas_charge_id) {
+        try {
+          await asaas.deletePayment(row.asaas_charge_id);
+        } catch (err: any) {
+          if (!/404|not found/i.test(err.message || "")) throw err;
+        }
+      }
+
+      if (supabaseClient && tablesReady.client_payments) {
+        const { error } = await supabaseClient
+          .from(tables.client_payments)
+          .delete()
+          .eq("id", req.params.id);
+        if (error) throw error;
+      } else {
+        const local = fetchLocalDbData();
+        const rows = Array.isArray(local.clientPayments) ? local.clientPayments : [];
+        local.clientPayments = rows.filter((r: any) => r.id !== req.params.id);
+        writeLocalDbData(local);
+      }
+
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ASAAS INTEGRATION — cobrança de clientes via gateway de pagamentos
   async function getClientById(clientId: string): Promise<any | null> {
     if (supabaseClient && tablesReady.clients) {
