@@ -15,6 +15,9 @@ export function cleanEnvValue(value: string | undefined): string {
   ) {
     v = v.slice(1, -1);
   }
+  // O mesmo painel também escapa um `$` solto com uma barra invertida
+  // (provável proteção contra injeção) — desfaz isso também.
+  v = v.replace(/\\\$/g, "$");
   return v;
 }
 
