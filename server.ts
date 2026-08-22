@@ -84,6 +84,23 @@ async function startServer() {
     res.json({ status: "ok", time: new Date().toISOString() });
   });
 
+  // TEMP DIAGNOSTIC — remover depois de identificar o problema da chave Asaas
+  app.get("/api/_test/asaas-env-check", (req, res) => {
+    const raw = process.env.ASAAS_API_KEY || "";
+    const token = process.env.ASAAS_WEBHOOK_TOKEN || "";
+    res.json({
+      ASAAS_ENV: JSON.stringify(process.env.ASAAS_ENV),
+      keyLength: raw.length,
+      keyPrefix: raw.slice(0, 16),
+      keySuffix: raw.slice(-10),
+      keyHasLeadingQuote: /^['"]/.test(raw),
+      keyHasTrailingQuote: /['"]$/.test(raw),
+      keyHasWhitespace: /\s/.test(raw),
+      keyDollarSignCount: (raw.match(/\$/g) || []).length,
+      webhookTokenLength: token.length,
+    });
+  });
+
   app.post("/api/carousels/generate", async (req, res) => {
     try {
       const {
