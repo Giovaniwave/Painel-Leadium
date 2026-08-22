@@ -1,14 +1,31 @@
 // Cliente HTTP fino para a API do Asaas (gateway de pagamentos).
 // Docs: https://docs.asaas.com/reference
 
+// Alguns painéis de hospedagem salvam variáveis de ambiente com aspas
+// literais incluídas no valor (ex: ASAAS_ENV vira `"production"` em vez de
+// `production`). Isso já causou um bug silencioso — o app caía pra sandbox
+// mesmo com ASAAS_ENV=production configurado. Tira aspas acidentais na borda.
+export function cleanEnvValue(value: string | undefined): string {
+  if (!value) return "";
+  let v = value.trim();
+  if (
+    v.length >= 2 &&
+    ((v[0] === '"' && v[v.length - 1] === '"') ||
+      (v[0] === "'" && v[v.length - 1] === "'"))
+  ) {
+    v = v.slice(1, -1);
+  }
+  return v;
+}
+
 function baseUrl() {
-  return process.env.ASAAS_ENV === "production"
+  return cleanEnvValue(process.env.ASAAS_ENV) === "production"
     ? "https://api.asaas.com/v3"
     : "https://api-sandbox.asaas.com/v3";
 }
 
 async function asaasFetch(path: string, options: RequestInit = {}) {
-  const apiKey = process.env.ASAAS_API_KEY;
+  const apiKey = cleanEnvValue(process.env.ASAAS_API_KEY);
   if (!apiKey) {
     throw new Error("ASAAS_API_KEY não configurada no .env");
   }

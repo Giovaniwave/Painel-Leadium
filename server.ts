@@ -87,17 +87,18 @@ async function startServer() {
   // TEMP DIAGNOSTIC — remover depois de identificar o problema da chave Asaas
   app.get("/api/_test/asaas-env-check", (req, res) => {
     const raw = process.env.ASAAS_API_KEY || "";
-    const token = process.env.ASAAS_WEBHOOK_TOKEN || "";
+    const cleaned = asaas.cleanEnvValue(process.env.ASAAS_API_KEY);
     res.json({
-      ASAAS_ENV: JSON.stringify(process.env.ASAAS_ENV),
-      keyLength: raw.length,
-      keyPrefix: raw.slice(0, 16),
-      keySuffix: raw.slice(-10),
-      keyHasLeadingQuote: /^['"]/.test(raw),
-      keyHasTrailingQuote: /['"]$/.test(raw),
-      keyHasWhitespace: /\s/.test(raw),
-      keyDollarSignCount: (raw.match(/\$/g) || []).length,
-      webhookTokenLength: token.length,
+      ASAAS_ENV_raw: JSON.stringify(process.env.ASAAS_ENV),
+      ASAAS_ENV_cleaned: asaas.cleanEnvValue(process.env.ASAAS_ENV),
+      keyLength_raw: raw.length,
+      keyLength_cleaned: cleaned.length,
+      keyPrefix_cleaned: cleaned.slice(0, 16),
+      keySuffix_cleaned: cleaned.slice(-10),
+      keyDollarSignCount_cleaned: (cleaned.match(/\$/g) || []).length,
+      webhookTokenLength_cleaned: asaas.cleanEnvValue(
+        process.env.ASAAS_WEBHOOK_TOKEN,
+      ).length,
     });
   });
 
@@ -1987,7 +1988,7 @@ Responda somente com o JSON final revisado.`;
 
   app.post("/api/asaas/subscriptions", async (req, res) => {
     try {
-      if (process.env.ASAAS_SUBSCRIPTIONS_ENABLED !== "true") {
+      if (asaas.cleanEnvValue(process.env.ASAAS_SUBSCRIPTIONS_ENABLED) !== "true") {
         return res.status(403).json({
           error:
             "Assinaturas recorrentes estão desativadas por enquanto. Habilite ASAAS_SUBSCRIPTIONS_ENABLED=true no .env quando quiser começar a cobrar clientes de verdade.",
@@ -2028,7 +2029,7 @@ Responda somente com o JSON final revisado.`;
 
   app.post("/api/webhooks/asaas", async (req, res) => {
     try {
-      const configuredToken = process.env.ASAAS_WEBHOOK_TOKEN;
+      const configuredToken = asaas.cleanEnvValue(process.env.ASAAS_WEBHOOK_TOKEN);
       if (!configuredToken) {
         return res.status(503).json({ error: "Webhook do Asaas não configurado" });
       }
