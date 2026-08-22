@@ -12,6 +12,8 @@ import { createClient } from "@supabase/supabase-js";
 import fs from "fs";
 import dotenv from "dotenv";
 import crypto from "crypto";
+import { CAROUSEL_STRATEGIST_PROMPT } from "./src/prompts/carouselStrategist";
+import * as asaas from "./asaas";
 
 dotenv.config();
 
@@ -82,6 +84,107 @@ async function startServer() {
     res.json({ status: "ok", time: new Date().toISOString() });
   });
 
+  app.post("/api/carousels/generate", async (req, res) => {
+    try {
+      const {
+        topic,
+        audience,
+        tone,
+        count = 7,
+        objective = "atrair e gerar autoridade",
+        imageStrategy = "mixed",
+      } = req.body || {};
+      if (!String(topic || "").trim())
+        return res.status(400).json({ error: "Informe o tema do carrossel." });
+      const slideCount = Math.min(10, Math.max(5, Number(count) || 7));
+      const brief = `Crie um carrossel com EXATAMENTE ${slideCount} slides.\nTEMA: ${String(topic).slice(0, 1200)}\nPÚBLICO: ${String(audience || "empreendedores e donos de negócios").slice(0, 500)}\nTOM: ${String(tone || "direto e estratégico").slice(0, 200)}\nOBJETIVO: ${String(objective).slice(0, 300)}\nESTRATÉGIA DE IMAGENS: ${String(imageStrategy).slice(0, 100)}\nPERFIL/CTA: @agencialeadium\nNÃO use o case Porto Outlet a menos que o tema solicite explicitamente um case. Nunca associe os R$70 mil a automação de atendimento: o dado disponível é da reinauguração combinando tráfego pago, influenciadores e Google Meu Negócio.`;
+      const openai = getOpenAi();
+      const gemini = getGemini();
+      let raw = "";
+      let provider = "";
+      if (openai) {
+        const carouselModel = process.env.OPENAI_CAROUSEL_MODEL || "gpt-4.1";
+        const response = await openai.chat.completions.create({
+          model: carouselModel,
+          messages: [
+            { role: "system", content: CAROUSEL_STRATEGIST_PROMPT },
+            { role: "user", content: brief },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.62,
+        });
+        raw = response.choices[0]?.message?.content || "";
+        const editorialPrompt = `Você é a EDITORA-CHEFE da Leadium. Reescreva integralmente o rascunho abaixo antes da publicação.
+
+REPROVE E SUBSTITUA:
+- frases que serviriam para qualquer agência ou nicho;
+- "automação é a solução", "não fique para trás", "resultados reais", "veja o que outros conseguiram", "otimize processos", "aumente suas vendas" sem mecanismo concreto;
+- provas, resultados, percentuais ou comportamento de terceiros não fornecidos no brief;
+- slides que apenas parafraseiam o anterior;
+- explicações abstratas sem uma cena operacional reconhecível;
+- CTA genérico de "entre em contato".
+
+EXIJA NA NOVA VERSÃO:
+1. Pelo menos uma cena concreta do cotidiano desse público.
+2. Uma explicação clara do vazamento: anúncio gera conversa -> demora/ausência de triagem e follow-up -> lead esfria -> verba compra demanda que a operação não captura.
+3. Distinção entre chatbot genérico e infraestrutura comercial conectada.
+4. Títulos com tensão e especificidade, sem sensacionalismo.
+5. Exatamente ${slideCount} slides e JSON idêntico ao schema recebido.
+6. Direção visual variada: ao menos 3 slides com imageMode card/background, alternando zonas de foto e texto. Os demais podem ser tipográficos.
+7. imagePrompt fotográfico específico em inglês para todos os slides com imagem.
+8. NÃO use o case Porto Outlet quando ele não tiver sido solicitado no tema. NÃO invente caso substituto.
+9. NÃO trate "IA no WhatsApp" como mecanismo suficiente. Explique triagem imediata, resposta contextual, registro da oportunidade, encaminhamento humano e follow-up; automação sem desenho comercial é apenas velocidade sem conversão.
+
+BRIEF ORIGINAL:
+${brief}
+
+RASCUNHO A SER REPROVADO E REFEITO:
+${raw}
+
+Responda somente com o JSON final revisado.`;
+        const editorial = await openai.chat.completions.create({
+          model: carouselModel,
+          messages: [
+            { role: "system", content: CAROUSEL_STRATEGIST_PROMPT },
+            { role: "user", content: editorialPrompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.42,
+        });
+        raw = editorial.choices[0]?.message?.content || raw;
+        provider = "openai";
+      } else if (gemini) {
+        const response = await gemini.models.generateContent({
+          model: process.env.GEMINI_CAROUSEL_MODEL || "gemini-2.5-flash",
+          contents: brief,
+          config: {
+            systemInstruction: CAROUSEL_STRATEGIST_PROMPT,
+            temperature: 0.72,
+            responseMimeType: "application/json",
+          },
+        });
+        raw = response.text || "";
+        provider = "gemini";
+      } else return res.status(503).json({ error: "AI_NOT_CONFIGURED" });
+      const parsed = JSON.parse(
+        raw
+          .replace(/^```json\s*/i, "")
+          .replace(/```\s*$/, "")
+          .trim(),
+      );
+      if (!Array.isArray(parsed.slides) || parsed.slides.length !== slideCount)
+        throw new Error(
+          "A IA retornou uma estrutura incompleta. Tente novamente.",
+        );
+      res.json({ ...parsed, provider });
+    } catch (error: any) {
+      console.error("Carousel strategist error:", error);
+      res.status(500).json({
+        error: error?.message || "Não foi possível gerar o carrossel.",
+      });
+    }
+  });
+
   // Initialize Supabase Client if env secrets exist
   let supabaseClient: any = null;
   const supabaseUrl = process.env.SUPABASE_URL || "";
@@ -123,6 +226,7 @@ async function startServer() {
     reimbursements: false,
     chat_messages: false,
     prospecting_leads: false,
+    asaas_events: false,
   };
 
   const tables = {
@@ -139,6 +243,7 @@ async function startServer() {
     reimbursements: "leadium_reimbursements",
     chat_messages: "leadium_chat_messages",
     prospecting_leads: "leadium_prospecting_leads",
+    asaas_events: "leadium_asaas_webhook_events",
   };
 
   if (isProduction && rawSupabaseKey && !supabaseKey) {
@@ -262,6 +367,22 @@ async function startServer() {
         tablesReady.client_implementations = true;
         console.log(
           "Supabase check: leadium_client_implementations table is ready.",
+        );
+      }
+
+      const { error: asaasEventsErr } = await supabaseClient
+        .from(tables.asaas_events)
+        .select("id")
+        .limit(1);
+      if (!asaasEventsErr) {
+        tablesReady.asaas_events = true;
+        console.log(
+          "Supabase check: leadium_asaas_webhook_events table is ready.",
+        );
+      } else {
+        console.warn(
+          "Supabase info: leadium_asaas_webhook_events table not ready:",
+          asaasEventsErr.message,
         );
       }
 
@@ -612,6 +733,7 @@ async function startServer() {
               avatarUrl: t.avatar_url || "",
               notes,
               clientId: t.client_id || undefined,
+              asaasChargeId: t.asaas_charge_id || undefined,
               isRecurring,
               frequency,
               nextOccurrenceDate,
@@ -791,6 +913,8 @@ async function startServer() {
             start_date: c.start_date || "",
             notes: c.notes || "",
             nextPaymentDate: c.next_payment_date || c.nextPaymentDate || "",
+            cpf_cnpj: c.cpf_cnpj || "",
+            asaas_customer_id: c.asaas_customer_id || "",
           }));
         } else if (error) {
           console.warn(
@@ -1019,6 +1143,7 @@ async function startServer() {
             account: t.account || "",
             notes: notesValue,
             client_id: t.clientId || null,
+            asaas_charge_id: t.asaasChargeId || null,
           };
           if (tables.transactions === "leadium_transactions") {
             row.avatar_url = t.avatarUrl || null;
@@ -1180,6 +1305,7 @@ async function startServer() {
               start_date: c.start_date ? c.start_date : null,
               notes: c.notes || "",
               next_payment_date: dbDate,
+              cpf_cnpj: c.cpf_cnpj || null,
             };
           });
 
@@ -1683,6 +1809,342 @@ async function startServer() {
       writeLocalDbData(local);
       res.json({ success: true, payments });
     } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ASAAS INTEGRATION — cobrança de clientes via gateway de pagamentos
+  async function getClientById(clientId: string): Promise<any | null> {
+    if (supabaseClient && tablesReady.clients) {
+      const { data, error } = await supabaseClient
+        .from(tables.clients)
+        .select("*")
+        .eq("id", clientId)
+        .maybeSingle();
+      if (!error && data) return data;
+    }
+    const local = fetchLocalDbData();
+    const rows = Array.isArray(local.clients) ? local.clients : [];
+    return rows.find((row: any) => row.id === clientId) || null;
+  }
+
+  async function setClientAsaasCustomerId(
+    clientId: string,
+    asaasCustomerId: string,
+  ) {
+    if (supabaseClient && tablesReady.clients) {
+      await supabaseClient
+        .from(tables.clients)
+        .update({ asaas_customer_id: asaasCustomerId })
+        .eq("id", clientId);
+    }
+    const local = fetchLocalDbData();
+    const rows = Array.isArray(local.clients) ? local.clients : [];
+    const index = rows.findIndex((row: any) => row.id === clientId);
+    if (index >= 0) {
+      rows[index] = { ...rows[index], asaas_customer_id: asaasCustomerId };
+      local.clients = rows;
+      writeLocalDbData(local);
+    }
+  }
+
+  async function ensureAsaasCustomer(client: any): Promise<string> {
+    if (client.asaas_customer_id) return client.asaas_customer_id;
+    const cpfCnpj = String(client.cpf_cnpj || "").replace(/\D/g, "");
+    if (!cpfCnpj) {
+      throw new Error(
+        "Cliente sem CPF/CNPJ cadastrado — obrigatório pra gerar cobrança no Asaas",
+      );
+    }
+    const customer = await asaas.createCustomer({
+      name: client.name,
+      cpfCnpj,
+      email: client.email || undefined,
+      phone: client.phone || undefined,
+      externalReference: client.id,
+    });
+    await setClientAsaasCustomerId(client.id, customer.id);
+    return customer.id;
+  }
+
+  async function upsertClientPaymentRow(row: any) {
+    if (supabaseClient && tablesReady.client_payments) {
+      const { data, error } = await supabaseClient
+        .from(tables.client_payments)
+        .upsert(row, { onConflict: "id" })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
+    const local = fetchLocalDbData();
+    const rows = Array.isArray(local.clientPayments) ? local.clientPayments : [];
+    const index = rows.findIndex((r: any) => r.id === row.id);
+    if (index >= 0) rows[index] = { ...rows[index], ...row };
+    else rows.push(row);
+    local.clientPayments = rows;
+    writeLocalDbData(local);
+    return row;
+  }
+
+  async function findClientPaymentByChargeId(
+    chargeId: string,
+  ): Promise<any | null> {
+    if (supabaseClient && tablesReady.client_payments) {
+      const { data, error } = await supabaseClient
+        .from(tables.client_payments)
+        .select("*")
+        .eq("asaas_charge_id", chargeId)
+        .maybeSingle();
+      if (!error && data) return data;
+      return null;
+    }
+    const local = fetchLocalDbData();
+    const rows = Array.isArray(local.clientPayments) ? local.clientPayments : [];
+    return rows.find((row: any) => row.asaas_charge_id === chargeId) || null;
+  }
+
+  function mapAsaasStatus(status: string): string {
+    if (["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(status))
+      return "paid";
+    if (status === "OVERDUE") return "overdue";
+    if (["DELETED", "REFUNDED", "REFUND_REQUESTED"].includes(status))
+      return "cancelled";
+    return "pending";
+  }
+
+  app.post("/api/asaas/charges", async (req, res) => {
+    try {
+      const {
+        client_id,
+        amount,
+        due_date,
+        description,
+        billing_type,
+        payment_type,
+      } = req.body || {};
+      if (!client_id || !amount || !due_date) {
+        return res
+          .status(400)
+          .json({ error: "client_id, amount e due_date são obrigatórios" });
+      }
+      const client = await getClientById(client_id);
+      if (!client) return res.status(404).json({ error: "Cliente não encontrado" });
+
+      const customerId = await ensureAsaasCustomer(client);
+      const payment = await asaas.createPayment({
+        customer: customerId,
+        value: Number(amount),
+        dueDate: due_date,
+        description: description || `Cobrança — ${client.name}`,
+        billingType: billing_type || "UNDEFINED",
+        externalReference: client.id,
+      });
+
+      const row = {
+        id: crypto.randomUUID(),
+        client_id: client.id,
+        implementation_id: null,
+        payment_type: payment_type || "implementation",
+        installment_number: 1,
+        total_installments: 1,
+        amount: Number(amount),
+        due_date,
+        paid_at: null,
+        status: "pending",
+        transaction_id: null,
+        notes: description || "",
+        asaas_charge_id: payment.id,
+        billing_type: payment.billingType,
+        invoice_url: payment.invoiceUrl,
+        updated_at: new Date().toISOString(),
+      };
+      const saved = await upsertClientPaymentRow(row);
+      res
+        .status(201)
+        .json({ success: true, payment: saved, invoiceUrl: payment.invoiceUrl });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/asaas/subscriptions", async (req, res) => {
+    try {
+      if (process.env.ASAAS_SUBSCRIPTIONS_ENABLED !== "true") {
+        return res.status(403).json({
+          error:
+            "Assinaturas recorrentes estão desativadas por enquanto. Habilite ASAAS_SUBSCRIPTIONS_ENABLED=true no .env quando quiser começar a cobrar clientes de verdade.",
+        });
+      }
+      const {
+        client_id,
+        amount,
+        next_due_date,
+        description,
+        billing_type,
+        cycle,
+      } = req.body || {};
+      if (!client_id || !amount || !next_due_date) {
+        return res
+          .status(400)
+          .json({ error: "client_id, amount e next_due_date são obrigatórios" });
+      }
+      const client = await getClientById(client_id);
+      if (!client) return res.status(404).json({ error: "Cliente não encontrado" });
+
+      const customerId = await ensureAsaasCustomer(client);
+      const subscription = await asaas.createSubscription({
+        customer: customerId,
+        value: Number(amount),
+        nextDueDate: next_due_date,
+        cycle: cycle || "MONTHLY",
+        description: description || `Mensalidade — ${client.name}`,
+        billingType: billing_type || "UNDEFINED",
+        externalReference: client.id,
+      });
+
+      res.status(201).json({ success: true, subscription });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/webhooks/asaas", async (req, res) => {
+    try {
+      const configuredToken = process.env.ASAAS_WEBHOOK_TOKEN;
+      if (!configuredToken) {
+        return res.status(503).json({ error: "Webhook do Asaas não configurado" });
+      }
+      const receivedToken = req.header("asaas-access-token") || "";
+      const expected = Buffer.from(configuredToken);
+      const received = Buffer.from(receivedToken);
+      if (
+        expected.length !== received.length ||
+        !crypto.timingSafeEqual(expected, received)
+      ) {
+        return res.status(401).json({ error: "Token de webhook inválido" });
+      }
+
+      const body = req.body || {};
+      const eventId = String(body.id || "");
+      const eventType = String(body.event || "");
+      const paymentId = body.payment?.id ? String(body.payment.id) : "";
+
+      if (eventId && supabaseClient && tablesReady.asaas_events) {
+        const { error: insertError } = await supabaseClient
+          .from(tables.asaas_events)
+          .insert({
+            asaas_event_id: eventId,
+            event_type: eventType,
+            payment_id: paymentId || null,
+            raw_payload: body,
+          });
+        if (insertError) {
+          if (insertError.code === "23505") {
+            // evento já processado antes (retry do Asaas) — idempotência
+            return res.status(200).json({ success: true, duplicate: true });
+          }
+          console.warn(
+            "[Asaas Webhook] Falha ao gravar log do evento:",
+            insertError.message,
+          );
+        }
+      }
+
+      if (!paymentId) {
+        return res.status(200).json({ success: true, ignored: true });
+      }
+
+      const relevantEvents = [
+        "PAYMENT_CREATED",
+        "PAYMENT_CONFIRMED",
+        "PAYMENT_RECEIVED",
+        "PAYMENT_OVERDUE",
+        "PAYMENT_DELETED",
+        "PAYMENT_REFUNDED",
+      ];
+      if (!relevantEvents.includes(eventType)) {
+        return res.status(200).json({ success: true, ignored: true });
+      }
+
+      const payment = await asaas.getPayment(paymentId);
+      const newStatus = mapAsaasStatus(payment.status);
+
+      let paymentRow = await findClientPaymentByChargeId(paymentId);
+      if (!paymentRow && eventType === "PAYMENT_CREATED" && payment.externalReference) {
+        paymentRow = {
+          id: crypto.randomUUID(),
+          client_id: payment.externalReference,
+          implementation_id: null,
+          payment_type: "recurring",
+          installment_number: 1,
+          total_installments: 1,
+          notes: payment.description || "",
+        };
+      }
+
+      if (paymentRow) {
+        const updatedRow = {
+          ...paymentRow,
+          id: paymentRow.id,
+          client_id: paymentRow.client_id,
+          amount: Number(payment.value),
+          due_date: payment.dueDate,
+          paid_at:
+            newStatus === "paid"
+              ? paymentRow.paid_at || new Date().toISOString().slice(0, 10)
+              : paymentRow.paid_at || null,
+          status: newStatus,
+          asaas_charge_id: payment.id,
+          asaas_subscription_id:
+            payment.subscription || paymentRow.asaas_subscription_id || null,
+          billing_type: payment.billingType,
+          invoice_url: payment.invoiceUrl,
+          updated_at: new Date().toISOString(),
+        };
+        await upsertClientPaymentRow(updatedRow);
+
+        if (newStatus === "paid") {
+          const existingTxs = await loadTransactions();
+          const alreadyLogged = existingTxs.some(
+            (tx: any) => tx.asaasChargeId === payment.id,
+          );
+          if (!alreadyLogged) {
+            const client = await getClientById(paymentRow.client_id);
+            const newTx = {
+              id: crypto.randomUUID(),
+              date: new Date().toISOString(),
+              description: `Recebimento Asaas — ${client?.name || "Cliente"}`,
+              type: "income",
+              amount: Number(payment.value),
+              category: "Recebimento Cliente",
+              account: "Asaas",
+              notes: payment.description || "",
+              clientId: paymentRow.client_id,
+              asaasChargeId: payment.id,
+            };
+            await saveTransactions([...existingTxs, newTx]);
+            await upsertClientPaymentRow({
+              ...updatedRow,
+              transaction_id: newTx.id,
+            });
+            publishCrmEvent("crm-notification", {
+              title: "Pagamento recebido via Asaas",
+              detail: `${client?.name || "Cliente"} · ${Number(
+                payment.value,
+              ).toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}`,
+              kind: "created",
+            });
+          }
+        }
+      }
+
+      res.status(200).json({ success: true });
+    } catch (err: any) {
+      console.error("[Asaas Webhook] Erro:", err.message || err);
       res.status(500).json({ error: err.message });
     }
   });

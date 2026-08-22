@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Client, Transaction } from '../types';
 import { formatSystemDate, newestDateFirst } from '../utils/date';
+import ClientPaymentsPanel from './ClientPaymentsPanel';
 import {
   Plus, Users, Search, Edit2, CheckCircle2, XCircle, ChevronDown, ChevronRight,
   Activity, Mail, Phone, Briefcase, Calendar, FileText, Check, Link,
@@ -184,6 +185,7 @@ export default function ClientsView({
     notes: '',
     nextPaymentDate: '',
     logo: '',
+    cpf_cnpj: '',
     hasImplementation: false,
     implementationStatus: 'pending',
     implementationFee: '',
@@ -239,6 +241,7 @@ export default function ClientsView({
       notes: '',
       nextPaymentDate: '',
       logo: '',
+      cpf_cnpj: '',
       hasImplementation: false,
       implementationStatus: 'pending',
       implementationFee: '',
@@ -280,7 +283,8 @@ export default function ClientsView({
       start_date: formData.start_date,
       notes: formData.notes.trim(),
       nextPaymentDate: formData.nextPaymentDate,
-      logo: formData.logo
+      logo: formData.logo,
+      cpf_cnpj: formData.cpf_cnpj.trim()
     };
 
     let savedClientId = editingId;
@@ -466,6 +470,7 @@ export default function ClientsView({
       notes: cachedMeta.notes,
       nextPaymentDate: dateVal,
       logo: cachedMeta.logo,
+      cpf_cnpj: c.cpf_cnpj || '',
       hasImplementation: Boolean(implementation),
       implementationStatus: implementation?.status || 'pending',
       implementationFee: implementation?.fee?.toString() || '',
@@ -930,6 +935,8 @@ export default function ClientsView({
               </div>
             )}
           </div>
+
+          <ClientPaymentsPanel client={c} isDark={isDark} />
         </div>
       </div>
     );
@@ -1248,6 +1255,19 @@ export default function ClientsView({
                 placeholder="Ex: (11) 99999-9999"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                className={`w-full px-3 py-2 rounded-lg text-sm border focus:ring-1 focus:ring-zinc-500 outline-none ${
+                  isDark ? 'bg-[#161616] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'
+                }`}
+              />
+            </div>
+
+            <div>
+              <label className={`block text-[9px] uppercase font-bold tracking-wider mb-1 opacity-70 ${isDark ? 'text-white' : 'text-gray-900'}`}>CPF/CNPJ (necessário pra gerar cobrança Asaas)</label>
+              <input
+                type="text"
+                placeholder="Ex: 12.345.678/0001-90"
+                value={formData.cpf_cnpj}
+                onChange={(e) => setFormData({ ...formData, cpf_cnpj: e.target.value })}
                 className={`w-full px-3 py-2 rounded-lg text-sm border focus:ring-1 focus:ring-zinc-500 outline-none ${
                   isDark ? 'bg-[#161616] border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'
                 }`}

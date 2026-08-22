@@ -39,6 +39,8 @@ export interface Client {
   notes?: string;
   nextPaymentDate?: string;
   logo?: string;
+  cpf_cnpj?: string;
+  asaas_customer_id?: string;
 }
 
 export interface Reimbursement {
@@ -55,7 +57,7 @@ export interface Reimbursement {
   notes?: string;
 }
 
-export type ActiveTab = 'dashboard' | 'budgeting' | 'transactions' | 'clients' | 'prospecting' | 'settings' | 'help' | 'expenses' | 'reimbursements';
+export type ActiveTab = 'dashboard' | 'budgeting' | 'transactions' | 'clients' | 'prospecting' | 'carousels' | 'settings' | 'help' | 'expenses' | 'reimbursements';
 
 export interface BudgetFilters {
   account: string;
