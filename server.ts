@@ -2168,6 +2168,67 @@ Responda somente com o JSON final revisado.`;
         }
       }
 
+      const transfer = body.transfer || null;
+      if (transfer) {
+        const relevantTransferEvents = [
+          "TRANSFER_DONE",
+          "TRANSFER_FAILED",
+          "TRANSFER_CANCELLED",
+        ];
+        if (!relevantTransferEvents.includes(eventType)) {
+          return res.status(200).json({ success: true, ignored: true });
+        }
+
+        const recipient =
+          transfer.bankAccount?.ownerName ||
+          (transfer.bankAccount?.pixAddressKey
+            ? `Pix ${transfer.bankAccount.pixAddressKey}`
+            : null);
+
+        if (eventType === "TRANSFER_DONE") {
+          const existingTxs = await loadTransactions();
+          const alreadyLogged = existingTxs.some(
+            (tx: any) => tx.asaasChargeId === transfer.id,
+          );
+          if (!alreadyLogged) {
+            const newTx = {
+              id: crypto.randomUUID(),
+              date: new Date().toISOString(),
+              description:
+                transfer.description ||
+                (recipient
+                  ? `Transferência para ${recipient}`
+                  : "Transferência Asaas"),
+              type: "expense",
+              amount: Number(transfer.value),
+              category: "Transferência Asaas",
+              account: "Asaas",
+              notes: transfer.description || "",
+              asaasChargeId: transfer.id,
+            };
+            await saveTransactions([...existingTxs, newTx]);
+            publishCrmEvent("crm-notification", {
+              title: "Transferência via Asaas concluída",
+              detail: `${recipient || "Destino"} · ${Number(
+                transfer.value,
+              ).toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}`,
+              kind: "created",
+            });
+          }
+        } else if (eventType === "TRANSFER_FAILED") {
+          publishCrmEvent("crm-notification", {
+            title: "Transferência via Asaas falhou",
+            detail: transfer.failReason || recipient || "Verifique o painel Asaas",
+            kind: "deleted",
+          });
+        }
+
+        return res.status(200).json({ success: true });
+      }
+
       if (!paymentId) {
         return res.status(200).json({ success: true, ignored: true });
       }
@@ -2256,6 +2317,39 @@ Responda somente com o JSON final revisado.`;
               kind: "created",
             });
           }
+        }
+      } else if (
+        eventType === "PAYMENT_CONFIRMED" ||
+        eventType === "PAYMENT_RECEIVED"
+      ) {
+        // Recebimento no Asaas sem cobrança correspondente no CRM (ex: link de
+        // pagamento avulso criado direto no painel Asaas) — lança mesmo assim
+        // como receita avulsa, sem vincular a um cliente.
+        const existingTxs = await loadTransactions();
+        const alreadyLogged = existingTxs.some(
+          (tx: any) => tx.asaasChargeId === payment.id,
+        );
+        if (!alreadyLogged) {
+          const newTx = {
+            id: crypto.randomUUID(),
+            date: new Date().toISOString(),
+            description: payment.description || "Recebimento Asaas avulso",
+            type: "income",
+            amount: Number(payment.value),
+            category: "Outros",
+            account: "Asaas",
+            notes: payment.description || "",
+            asaasChargeId: payment.id,
+          };
+          await saveTransactions([...existingTxs, newTx]);
+          publishCrmEvent("crm-notification", {
+            title: "Recebimento avulso via Asaas",
+            detail: `${Number(payment.value).toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })}`,
+            kind: "created",
+          });
         }
       }
 
