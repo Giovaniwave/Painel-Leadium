@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { CreditCard, Repeat, ExternalLink, Loader2 } from 'lucide-react';
+import { CreditCard, Repeat, ExternalLink, Loader2, Mail, X } from 'lucide-react';
 import type { Client } from '../types';
 
 interface ClientPaymentRow {
@@ -19,6 +19,7 @@ interface ClientPaymentRow {
   status: 'pending' | 'paid' | 'overdue' | 'cancelled';
   invoice_url?: string | null;
   billing_type?: string | null;
+  asaas_subscription_id?: string | null;
   notes?: string;
 }
 
@@ -41,17 +42,32 @@ const STATUS_CLASS: Record<string, string> = {
   cancelled: 'bg-gray-500/10 text-gray-500',
 };
 
+function nextDateForDayOfMonth(day: number): string {
+  const now = new Date();
+  const clampedDay = Math.min(28, Math.max(1, day));
+  const month = clampedDay <= now.getDate() ? now.getMonth() + 1 : now.getMonth();
+  const date = new Date(now.getFullYear(), month, clampedDay);
+  return date.toISOString().substring(0, 10);
+}
+
 export default function ClientPaymentsPanel({ client, isDark }: ClientPaymentsPanelProps) {
   const [payments, setPayments] = useState<ClientPaymentRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [formMode, setFormMode] = useState<'none' | 'charge' | 'subscription'>('none');
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState(new Date().toISOString().substring(0, 10));
+  const [subscriptionDay, setSubscriptionDay] = useState(new Date().getDate());
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState('');
+  const [successNote, setSuccessNote] = useState('');
 
   const hasCpfCnpj = Boolean(client.cpf_cnpj && client.cpf_cnpj.trim());
+
+  const activeSubscription = payments.find(
+    (p) => p.payment_type === 'recurring' && p.asaas_subscription_id && p.status !== 'cancelled',
+  );
 
   const loadPayments = async () => {
     setLoading(true);
@@ -74,12 +90,15 @@ export default function ClientPaymentsPanel({ client, isDark }: ClientPaymentsPa
     setFormMode(mode);
     setAmount(client.contract_value ? String(client.contract_value) : '');
     setDueDate(new Date().toISOString().substring(0, 10));
+    setSubscriptionDay(new Date().getDate());
     setDescription(mode === 'subscription' ? `Mensalidade — ${client.name}` : `Cobrança — ${client.name}`);
     setError('');
+    setSuccessNote('');
   };
 
   const submit = async () => {
-    if (!amount || Number(amount) <= 0 || !dueDate) {
+    const effectiveDueDate = formMode === 'subscription' ? nextDateForDayOfMonth(subscriptionDay) : dueDate;
+    if (!amount || Number(amount) <= 0 || !effectiveDueDate) {
       setError('Informe um valor e uma data válidos.');
       return;
     }
@@ -89,8 +108,8 @@ export default function ClientPaymentsPanel({ client, isDark }: ClientPaymentsPa
       const endpoint = formMode === 'subscription' ? '/api/asaas/subscriptions' : '/api/asaas/charges';
       const body =
         formMode === 'subscription'
-          ? { client_id: client.id, amount: Number(amount), next_due_date: dueDate, description }
-          : { client_id: client.id, amount: Number(amount), due_date: dueDate, description };
+          ? { client_id: client.id, amount: Number(amount), next_due_date: effectiveDueDate, description }
+          : { client_id: client.id, amount: Number(amount), due_date: effectiveDueDate, description };
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -99,11 +118,32 @@ export default function ClientPaymentsPanel({ client, isDark }: ClientPaymentsPa
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Falha ao gerar cobrança no Asaas');
       setFormMode('none');
+      if (formMode === 'charge' && client.email) {
+        setSuccessNote(`E-mail enviado automaticamente pra ${client.email}`);
+      }
       await loadPayments();
     } catch (err: any) {
       setError(err.message || 'Falha ao gerar cobrança no Asaas');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const cancelSubscription = async () => {
+    if (!activeSubscription?.asaas_subscription_id) return;
+    if (!window.confirm('Cancelar a assinatura recorrente desse cliente no Asaas?')) return;
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/asaas/subscriptions/${activeSubscription.asaas_subscription_id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha ao cancelar assinatura');
+      await loadPayments();
+    } catch (err: any) {
+      setError(err.message || 'Falha ao cancelar assinatura');
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -121,17 +161,19 @@ export default function ClientPaymentsPanel({ client, isDark }: ClientPaymentsPa
               isDark ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-900 text-white keep-white hover:bg-gray-700'
             }`}
           >
-            Gerar cobrança
+            Enviar Cobrança
           </button>
-          <button
-            onClick={() => openForm('subscription')}
-            className={`text-[10px] uppercase font-bold tracking-wider px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors ${
-              isDark ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-            }`}
-          >
-            <Repeat className="w-3 h-3" />
-            Gerar assinatura
-          </button>
+          {!activeSubscription && (
+            <button
+              onClick={() => openForm('subscription')}
+              className={`text-[10px] uppercase font-bold tracking-wider px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors ${
+                isDark ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+              }`}
+            >
+              <Repeat className="w-3 h-3" />
+              Gerar assinatura
+            </button>
+          )}
         </div>
       </div>
 
@@ -139,6 +181,34 @@ export default function ClientPaymentsPanel({ client, isDark }: ClientPaymentsPa
         <p className="text-[10px] italic text-amber-500 pb-2">
           Cadastre o CPF/CNPJ na ficha do cliente antes de gerar a primeira cobrança — o Asaas exige esse dado.
         </p>
+      )}
+
+      {successNote && (
+        <div className="mb-2 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-[10px] bg-emerald-500/10 text-emerald-500">
+          <span className="flex items-center gap-1.5">
+            <Mail className="w-3 h-3" />
+            {successNote}
+          </span>
+          <button onClick={() => setSuccessNote('')} className="opacity-70 hover:opacity-100">
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
+      {activeSubscription && (
+        <div className={`mb-3 flex items-center justify-between gap-2 p-2.5 rounded-lg border text-xs ${isDark ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-emerald-50 border-emerald-200'}`}>
+          <span className={isDark ? 'text-emerald-400' : 'text-emerald-700'}>
+            <Repeat className="w-3 h-3 inline mr-1.5 -mt-0.5" />
+            Assinatura ativa — R$ {Number(activeSubscription.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês
+          </span>
+          <button
+            onClick={cancelSubscription}
+            disabled={cancelling}
+            className="text-[10px] uppercase font-bold tracking-wider text-red-500 hover:underline disabled:opacity-50"
+          >
+            {cancelling ? 'Cancelando...' : 'Cancelar assinatura'}
+          </button>
+        </div>
       )}
 
       {formMode !== 'none' && (
@@ -155,15 +225,35 @@ export default function ClientPaymentsPanel({ client, isDark }: ClientPaymentsPa
                 isDark ? 'bg-black/50 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'
               }`}
             />
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className={`px-2.5 py-1.5 rounded text-xs border outline-none font-mono ${
-                isDark ? 'bg-black/50 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'
-              }`}
-            />
+            {formMode === 'subscription' ? (
+              <input
+                type="number"
+                min="1"
+                max="28"
+                placeholder="Dia do vencimento"
+                value={subscriptionDay}
+                onChange={(e) => setSubscriptionDay(Number(e.target.value))}
+                title="Dia do mês em que a cobrança será gerada (1–28)"
+                className={`px-2.5 py-1.5 rounded text-xs border outline-none font-mono ${
+                  isDark ? 'bg-black/50 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'
+                }`}
+              />
+            ) : (
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className={`px-2.5 py-1.5 rounded text-xs border outline-none font-mono ${
+                  isDark ? 'bg-black/50 border-white/10 text-white' : 'bg-white border-gray-300 text-gray-900'
+                }`}
+              />
+            )}
           </div>
+          {formMode === 'subscription' && (
+            <p className="text-[10px] text-gray-500">
+              Próxima cobrança: {nextDateForDayOfMonth(subscriptionDay).split('-').reverse().join('/')} — repete todo mês nesse dia.
+            </p>
+          )}
           <input
             type="text"
             placeholder="Descrição da cobrança"
@@ -182,7 +272,7 @@ export default function ClientPaymentsPanel({ client, isDark }: ClientPaymentsPa
                 isDark ? 'bg-white text-black hover:bg-neutral-200' : 'bg-black text-white keep-white hover:bg-gray-800'
               }`}
             >
-              {submitting ? 'Gerando...' : formMode === 'subscription' ? 'Criar assinatura' : 'Criar cobrança'}
+              {submitting ? 'Enviando...' : formMode === 'subscription' ? 'Criar assinatura' : 'Enviar cobrança'}
             </button>
             <button
               onClick={() => setFormMode('none')}
@@ -208,6 +298,7 @@ export default function ClientPaymentsPanel({ client, isDark }: ClientPaymentsPa
                 <span className={`font-mono ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                   R$ {Number(p.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   {p.total_installments > 1 ? ` (${p.installment_number}/${p.total_installments})` : ''}
+                  {p.payment_type === 'recurring' ? ' · assinatura' : ''}
                 </span>
                 <span className="text-[10px] text-gray-500">
                   Vencimento: {p.due_date ? new Date(p.due_date).toLocaleDateString('pt-BR') : '--'}

@@ -137,3 +137,11 @@ export async function createSubscription(params: {
 export async function getPayment(id: string): Promise<AsaasPayment> {
   return asaasFetch(`/payments/${id}`);
 }
+
+export async function getSubscription(id: string): Promise<AsaasSubscription> {
+  return asaasFetch(`/subscriptions/${id}`);
+}
+
+export async function cancelSubscription(id: string): Promise<{ deleted: boolean; id: string }> {
+  return asaasFetch(`/subscriptions/${id}`, { method: "DELETE" });
+}

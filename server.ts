@@ -2009,6 +2009,72 @@ Responda somente com o JSON final revisado.`;
     }
   });
 
+  app.delete("/api/asaas/subscriptions/:id", async (req, res) => {
+    try {
+      await asaas.cancelSubscription(req.params.id);
+
+      if (supabaseClient && tablesReady.client_payments) {
+        const { error } = await supabaseClient
+          .from(tables.client_payments)
+          .update({ status: "cancelled", updated_at: new Date().toISOString() })
+          .eq("asaas_subscription_id", req.params.id)
+          .eq("status", "pending");
+        if (error) throw error;
+      } else {
+        const local = fetchLocalDbData();
+        const rows = Array.isArray(local.clientPayments) ? local.clientPayments : [];
+        local.clientPayments = rows.map((row: any) =>
+          row.asaas_subscription_id === req.params.id && row.status === "pending"
+            ? { ...row, status: "cancelled", updated_at: new Date().toISOString() }
+            : row,
+        );
+        writeLocalDbData(local);
+      }
+
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/asaas/summary", async (req, res) => {
+    try {
+      let rows: any[] = [];
+      if (supabaseClient && tablesReady.client_payments) {
+        const { data, error } = await supabaseClient
+          .from(tables.client_payments)
+          .select("status, amount")
+          .not("asaas_charge_id", "is", null);
+        if (error) throw error;
+        rows = data || [];
+      } else {
+        const local = fetchLocalDbData();
+        rows = (Array.isArray(local.clientPayments) ? local.clientPayments : []).filter(
+          (row: any) => row.asaas_charge_id,
+        );
+      }
+
+      const summary = rows.reduce(
+        (acc, row) => {
+          const amount = Number(row.amount) || 0;
+          if (row.status === "pending") {
+            acc.pendingCount += 1;
+            acc.pendingTotal += amount;
+          } else if (row.status === "overdue") {
+            acc.overdueCount += 1;
+            acc.overdueTotal += amount;
+          }
+          return acc;
+        },
+        { pendingCount: 0, pendingTotal: 0, overdueCount: 0, overdueTotal: 0 },
+      );
+
+      res.json(summary);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/webhooks/asaas", async (req, res) => {
     try {
       const configuredToken = asaas.cleanEnvValue(process.env.ASAAS_WEBHOOK_TOKEN);

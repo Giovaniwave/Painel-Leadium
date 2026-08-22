@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   TrendingUp, 
@@ -21,7 +21,9 @@ import {
   Download,
   Target,
   Eye,
-  EyeOff
+  EyeOff,
+  CreditCard,
+  AlertTriangle
 } from 'lucide-react';
 import { Transaction, BudgetGoal } from '../types';
 import AnimatedCounter from './AnimatedCounter';
@@ -385,6 +387,36 @@ export default function DashboardView({
     setEditingValue('');
   };
 
+  const [asaasSummary, setAsaasSummary] = useState({
+    pendingCount: 0,
+    pendingTotal: 0,
+    overdueCount: 0,
+    overdueTotal: 0
+  });
+
+  useEffect(() => {
+    fetch('/api/asaas/summary')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setAsaasSummary(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const asaasReceivedThisMonth = useMemo(() => {
+    const now = new Date();
+    return transactions
+      .filter((t) => {
+        if (t.account !== 'Asaas' || t.type !== 'income') return false;
+        const d = new Date(t.date);
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      })
+      .reduce((acc, t) => acc + t.amount, 0);
+  }, [transactions]);
+
+  const asaasOpenCount = asaasSummary.pendingCount + asaasSummary.overdueCount;
+  const asaasOpenTotal = asaasSummary.pendingTotal + asaasSummary.overdueTotal;
+
   const kpiCards: Array<{
     key: string;
     order: string;
@@ -717,6 +749,52 @@ export default function DashboardView({
             </div>
           );
         })}
+      </div>
+
+      {/* Resumo Asaas */}
+      <div className="dashboard-kpis-asaas grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div
+          className="metric-card-interactive glass-container p-5 border-l-2 text-left"
+          style={{
+            '--card-highlight': theme === 'light' ? '#111111' : '#FFFFFF',
+            '--card-glow': theme === 'light' ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.1)'
+          } as React.CSSProperties}
+        >
+          <div className={`flex justify-between items-start mb-3 ${theme === 'light' ? 'text-gray-500' : 'text-[#999999]'}`}>
+            <span className="text-[9px] uppercase font-bold tracking-[0.2em]">Recebido via Asaas (mês)</span>
+            <CreditCard className={`w-4 h-4 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400/80'}`} />
+          </div>
+          <h3 className={`text-3xl font-serif italic font-light ${theme === 'light' ? 'text-gray-950' : 'text-white'}`}>
+            {formatCurrency(asaasReceivedThisMonth)}
+          </h3>
+          <p className={`text-[9px] uppercase tracking-wider mt-2 flex items-center gap-1 font-mono ${theme === 'light' ? 'text-gray-500' : 'text-zinc-500'}`}>
+            <ArrowUpRight className={`w-3 h-3 ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400/80'}`} />
+            <span>Cobranças confirmadas neste mês</span>
+          </p>
+        </div>
+
+        <div
+          className="metric-card-interactive glass-container p-5 border-l-2 text-left"
+          style={{
+            '--card-highlight': theme === 'light' ? '#111111' : '#FFFFFF',
+            '--card-glow': theme === 'light' ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.1)'
+          } as React.CSSProperties}
+        >
+          <div className={`flex justify-between items-start mb-3 ${theme === 'light' ? 'text-gray-500' : 'text-[#999999]'}`}>
+            <span className="text-[9px] uppercase font-bold tracking-[0.2em]">Cobranças Asaas em aberto</span>
+            <CreditCard className={`w-4 h-4 ${asaasSummary.overdueCount > 0 ? 'text-rose-500' : (theme === 'light' ? 'text-gray-900/50' : 'text-white/60')}`} />
+          </div>
+          <h3 className={`text-3xl font-serif italic font-light ${theme === 'light' ? 'text-gray-950' : 'text-white'}`}>
+            {formatCurrency(asaasOpenTotal)}
+          </h3>
+          <p className={`text-[9px] uppercase tracking-wider mt-2 flex items-center gap-1 font-mono ${asaasSummary.overdueCount > 0 ? 'text-rose-500' : (theme === 'light' ? 'text-gray-500' : 'text-zinc-500')}`}>
+            {asaasSummary.overdueCount > 0 ? <AlertTriangle className="w-3 h-3" /> : <Activity className="w-3 h-3" />}
+            <span>
+              {asaasOpenCount} cobrança{asaasOpenCount !== 1 ? 's' : ''} pendente{asaasOpenCount !== 1 ? 's' : ''}
+              {asaasSummary.overdueCount > 0 ? ` · ${asaasSummary.overdueCount} vencida${asaasSummary.overdueCount !== 1 ? 's' : ''}` : ''}
+            </span>
+          </p>
+        </div>
       </div>
 
       <section className={`recent-transactions rounded-2xl border overflow-hidden ${theme === 'dark' ? 'bg-[#111114] border-white/10' : 'bg-white border-black/10'}`}>
