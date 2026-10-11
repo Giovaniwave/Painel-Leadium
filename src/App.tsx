@@ -18,7 +18,6 @@ import AddTransactionModal from './components/AddTransactionModal';
 import FinanceAssistant from './components/FinanceAssistant';
 import LoginView from './components/LoginView';
 import MobileNav from './components/MobileNav';
-import CarouselsView from './components/CarouselsView';
 
 import { ActiveTab, Transaction, BudgetGoal, Client } from './types';
 import { INITIAL_TRANSACTIONS } from './data/seedData';
@@ -670,7 +669,6 @@ export default function App() {
       case 'reimbursements': return 'Reembolso';
       case 'clients': return 'Gestão de Clientes';
       case 'prospecting': return 'Prospecção Comercial';
-      case 'carousels': return 'Estúdio de Carrosséis';
       case 'settings': return 'Configurações do Sistema';
       default: return 'Gestão Leadium';
     }
@@ -685,7 +683,6 @@ export default function App() {
       case 'reimbursements': return 'Solicitações e pagamentos de reembolso';
       case 'clients': return 'Carteira de clientes ativos e histórico';
       case 'prospecting': return 'Pipeline, agenda e inteligência comercial';
-      case 'carousels': return 'Crie, personalize e exporte conteúdo pronto para publicar';
       case 'settings': return 'Preferências e configurações da conta';
       default: return '';
     }
@@ -805,9 +802,6 @@ export default function App() {
             )}
             {activeTab === 'prospecting' && (
               <ProspectingView theme={theme} searchQuery={searchQuery} />
-            )}
-            {activeTab === 'carousels' && (
-              <CarouselsView theme={theme} />
             )}
             {activeTab === 'expenses' && (
               <ExpensesView theme={theme} />
