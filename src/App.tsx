@@ -18,6 +18,7 @@ import AddTransactionModal from './components/AddTransactionModal';
 import FinanceAssistant from './components/FinanceAssistant';
 import LoginView from './components/LoginView';
 import MobileNav from './components/MobileNav';
+import CarouselsView from './components/CarouselsView';
 
 import { ActiveTab, Transaction, BudgetGoal, Client } from './types';
 import { INITIAL_TRANSACTIONS } from './data/seedData';
@@ -106,10 +107,16 @@ export default function App() {
         let success = false;
         try {
           if (item.store === 'transactions') {
+            // item.data is either a plain array (add/update — nothing to
+            // delete) or { transactions, deletedIds } (a queued deletion),
+            // depending on which handler queued it.
+            const payload = Array.isArray(item.data)
+              ? { transactions: item.data }
+              : item.data;
             const res = await fetch('/api/transactions', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ transactions: item.data })
+              body: JSON.stringify(payload)
             });
             if (res.ok) success = true;
           } else if (item.store === 'budgetGoals') {
@@ -535,7 +542,7 @@ export default function App() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ transactions: updated })
+        body: JSON.stringify({ transactions: updated, deletedIds: [id] })
       });
       if (!res.ok) {
         throw new Error('Server returned non-ok status');
@@ -543,7 +550,7 @@ export default function App() {
     } catch (err) {
       console.warn('Could not sync deleted transaction, queuing sync:', err);
       try {
-        await OfflineDb.queueSync('transactions', updated);
+        await OfflineDb.queueSync('transactions', { transactions: updated, deletedIds: [id] });
       } catch (queueErr) {
         console.error('Failed to queue transactions sync:', queueErr);
       }
@@ -636,7 +643,7 @@ export default function App() {
       await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactions: [] })
+        body: JSON.stringify({ transactions: [], wipeAll: true })
       });
       await fetch('/api/budget-goals', {
         method: 'POST',
@@ -663,6 +670,7 @@ export default function App() {
       case 'reimbursements': return 'Reembolso';
       case 'clients': return 'Gestão de Clientes';
       case 'prospecting': return 'Prospecção Comercial';
+      case 'carousels': return 'Estúdio de Carrosséis';
       case 'settings': return 'Configurações do Sistema';
       default: return 'Gestão Leadium';
     }
@@ -677,6 +685,7 @@ export default function App() {
       case 'reimbursements': return 'Solicitações e pagamentos de reembolso';
       case 'clients': return 'Carteira de clientes ativos e histórico';
       case 'prospecting': return 'Pipeline, agenda e inteligência comercial';
+      case 'carousels': return 'Crie, personalize e exporte conteúdo pronto para publicar';
       case 'settings': return 'Preferências e configurações da conta';
       default: return '';
     }
@@ -796,6 +805,9 @@ export default function App() {
             )}
             {activeTab === 'prospecting' && (
               <ProspectingView theme={theme} searchQuery={searchQuery} />
+            )}
+            {activeTab === 'carousels' && (
+              <CarouselsView theme={theme} />
             )}
             {activeTab === 'expenses' && (
               <ExpensesView theme={theme} />

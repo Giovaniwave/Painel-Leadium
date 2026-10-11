@@ -1109,14 +1109,44 @@ Responda somente com o JSON final revisado.`;
     return `${clean.slice(0, 8)}-${clean.slice(8, 12)}-4${clean.slice(13, 16)}-a${clean.slice(17, 20)}-${clean.slice(20, 32)}`;
   }
 
-  async function saveTransactions(txList: any[]) {
+  // Por padrão, só faz upsert (cria/atualiza) e nunca apaga nada — exclusões
+  // precisam ser pedidas explicitamente via `deletedIds`, ou `wipeAll` pra
+  // zerar a tabela de propósito (reset de dados). Isso existe porque o
+  // webhook da Asaas grava direto no banco enquanto o CRM pode estar aberto
+  // no navegador com uma lista desatualizada em memória: se qualquer ação do
+  // usuário reenviasse a lista completa e tudo que não estivesse nela fosse
+  // apagado, um lançamento automático recém-criado pelo webhook (sem o
+  // navegador saber que ele existe) seria apagado silenciosamente no próximo
+  // save vindo da tela. Já aconteceu com um recebimento Pix de R$2.500 que
+  // o webhook registrou corretamente e some minutos depois.
+  async function saveTransactions(
+    txList: any[],
+    options: { deletedIds?: string[]; wipeAll?: boolean } = {},
+  ) {
+    const { deletedIds = [], wipeAll = false } = options;
+    const normalizedDeletedIds = deletedIds.map((id) => parseOrGenerateUUID(id));
+    const deleteSet = new Set(normalizedDeletedIds);
+
     const local = fetchLocalDbData();
     // Update local IDs to match converted ones if they weren't UUIDs
     const updatedTxList = txList.map((t: any) => ({
       ...t,
       id: parseOrGenerateUUID(t.id),
     }));
-    local.transactions = updatedTxList;
+    if (wipeAll) {
+      local.transactions = updatedTxList;
+    } else {
+      const incomingIds = new Set(updatedTxList.map((t: any) => t.id));
+      const existingLocal = Array.isArray(local.transactions)
+        ? local.transactions
+        : [];
+      local.transactions = [
+        ...existingLocal.filter(
+          (t: any) => !incomingIds.has(t.id) && !deleteSet.has(t.id),
+        ),
+        ...updatedTxList,
+      ];
+    }
     writeLocalDbData(local);
 
     if (supabaseClient && tablesReady.transactions) {
@@ -1151,10 +1181,12 @@ Responda somente com o JSON final revisado.`;
           return row;
         });
 
-        // Grava (upsert) primeiro e só remove o que ficou de fora da lista
-        // depois que a gravação for confirmada. Nunca apaga antes de garantir
-        // que os dados novos entraram — evita perder a tabela inteira se um
-        // registro do lote violar alguma regra do banco.
+        // Grava (upsert) sempre. Só apaga quando pedido explicitamente:
+        // `wipeAll` zera a tabela de propósito (reset de dados), e
+        // `deletedIds` remove só os registros que o chamador sabe, de fato,
+        // que foram removidos. Fora isso, nada é apagado — uma lista
+        // desatualizada nunca apaga registros que ela simplesmente não
+        // conhece (ex: um lançamento que o webhook da Asaas gravou).
         if (formatted.length > 0) {
           const { error: upsertError } = await supabaseClient
             .from(tables.transactions)
@@ -1166,26 +1198,41 @@ Responda somente com o JSON final revisado.`;
             );
             throw new Error(upsertError.message);
           }
+        }
 
-          const idList = formatted.map((r: any) => `"${r.id}"`).join(",");
-          const { error: deleteError } = await supabaseClient
-            .from(tables.transactions)
-            .delete()
-            .not("id", "in", `(${idList})`);
-          if (deleteError) {
-            console.warn(
-              "[Supabase Sync Logger] Batch deletion issue during sync:",
-              deleteError.message,
-            );
+        if (wipeAll) {
+          if (formatted.length > 0) {
+            const idList = formatted.map((r: any) => `"${r.id}"`).join(",");
+            const { error: deleteError } = await supabaseClient
+              .from(tables.transactions)
+              .delete()
+              .not("id", "in", `(${idList})`);
+            if (deleteError) {
+              console.warn(
+                "[Supabase Sync Logger] Batch deletion issue during sync:",
+                deleteError.message,
+              );
+            }
+          } else {
+            const { error: deleteError } = await supabaseClient
+              .from(tables.transactions)
+              .delete()
+              .neq("type", "non_existent_type_value");
+            if (deleteError) {
+              console.warn(
+                "[Supabase Sync Logger] Batch deletion issue during sync:",
+                deleteError.message,
+              );
+            }
           }
-        } else {
+        } else if (normalizedDeletedIds.length > 0) {
           const { error: deleteError } = await supabaseClient
             .from(tables.transactions)
             .delete()
-            .neq("type", "non_existent_type_value");
+            .in("id", normalizedDeletedIds);
           if (deleteError) {
             console.warn(
-              "[Supabase Sync Logger] Batch deletion issue during sync:",
+              "[Supabase Sync Logger] Targeted deletion issue during sync:",
               deleteError.message,
             );
           }
@@ -1593,7 +1640,7 @@ Responda somente com o JSON final revisado.`;
 
   app.post("/api/transactions", async (req, res) => {
     try {
-      const { transactions } = req.body;
+      const { transactions, deletedIds, wipeAll } = req.body;
       if (!Array.isArray(transactions)) {
         return res.status(400).json({ error: "transactions must be an array" });
       }
@@ -1602,7 +1649,10 @@ Responda somente com o JSON final revisado.`;
       const added = transactions.filter(
         (item: any) => !previousIds.has(String(item.id)),
       );
-      await saveTransactions(transactions);
+      await saveTransactions(transactions, {
+        deletedIds: Array.isArray(deletedIds) ? deletedIds : [],
+        wipeAll: wipeAll === true,
+      });
       added.forEach((item: any) =>
         publishCrmEvent("crm-notification", {
           title:
@@ -1877,6 +1927,26 @@ Responda somente com o JSON final revisado.`;
     const local = fetchLocalDbData();
     const rows = Array.isArray(local.clients) ? local.clients : [];
     return rows.find((row: any) => row.id === clientId) || null;
+  }
+
+  async function getClientByAsaasCustomerId(
+    asaasCustomerId: string,
+  ): Promise<any | null> {
+    if (!asaasCustomerId) return null;
+    if (supabaseClient && tablesReady.clients) {
+      const { data, error } = await supabaseClient
+        .from(tables.clients)
+        .select("*")
+        .eq("asaas_customer_id", asaasCustomerId)
+        .maybeSingle();
+      if (!error && data) return data;
+    }
+    const local = fetchLocalDbData();
+    const rows = Array.isArray(local.clients) ? local.clients : [];
+    return (
+      rows.find((row: any) => row.asaas_customer_id === asaasCustomerId) ||
+      null
+    );
   }
 
   async function setClientAsaasCustomerId(
@@ -2322,29 +2392,43 @@ Responda somente com o JSON final revisado.`;
         eventType === "PAYMENT_CONFIRMED" ||
         eventType === "PAYMENT_RECEIVED"
       ) {
-        // Recebimento no Asaas sem cobrança correspondente no CRM (ex: link de
-        // pagamento avulso criado direto no painel Asaas) — lança mesmo assim
-        // como receita avulsa, sem vincular a um cliente.
+        // Recebimento no Asaas sem cobrança correspondente no CRM (ex: Pix
+        // recebido direto na chave da conta, ou link de pagamento avulso
+        // criado direto no painel Asaas) — lança mesmo assim. Antes de cair
+        // em "Outros" sem vínculo, tenta identificar o cliente pelo
+        // `customer` do Asaas: se o pagador já é um cliente cadastrado,
+        // credita como "Recebimento Cliente" pra não ficar escondido longe
+        // da tela de cobranças do cliente.
         const existingTxs = await loadTransactions();
         const alreadyLogged = existingTxs.some(
           (tx: any) => tx.asaasChargeId === payment.id,
         );
         if (!alreadyLogged) {
+          const matchedClient = await getClientByAsaasCustomerId(
+            payment.customer,
+          );
           const newTx = {
             id: crypto.randomUUID(),
             date: new Date().toISOString(),
-            description: payment.description || "Recebimento Asaas avulso",
+            description: matchedClient
+              ? `Recebimento Asaas — ${matchedClient.name}`
+              : payment.description || "Recebimento Asaas avulso",
             type: "income",
             amount: Number(payment.value),
-            category: "Outros",
+            category: matchedClient ? "Recebimento Cliente" : "Outros",
             account: "Asaas",
             notes: payment.description || "",
+            clientId: matchedClient ? matchedClient.id : undefined,
             asaasChargeId: payment.id,
           };
           await saveTransactions([...existingTxs, newTx]);
           publishCrmEvent("crm-notification", {
-            title: "Recebimento avulso via Asaas",
-            detail: `${Number(payment.value).toLocaleString("pt-BR", {
+            title: matchedClient
+              ? "Pagamento recebido via Asaas (sem cobrança no CRM)"
+              : "Recebimento avulso via Asaas",
+            detail: `${matchedClient ? matchedClient.name + " · " : ""}${Number(
+              payment.value,
+            ).toLocaleString("pt-BR", {
               style: "currency",
               currency: "BRL",
             })}`,
@@ -2484,7 +2568,9 @@ Responda somente com o JSON final revisado.`;
         (transaction: any) => String(transaction.id) !== String(transactionId),
       );
       if (remainingTransactions.length !== currentTransactions.length) {
-        await saveTransactions(remainingTransactions);
+        await saveTransactions(remainingTransactions, {
+          deletedIds: [transactionId],
+        });
       }
 
       res.json({ success: true, expenses: local.generalExpenses });
@@ -4343,9 +4429,10 @@ Se a despesa for do próprio negócio (não de um cliente específico), use clie
           } else if (toolName === "deleteTransaction") {
             let txs = await loadTransactions();
             const initialLen = txs.length;
+            const deletedId = parseOrGenerateUUID(toolArgs.id);
             txs = txs.filter((t: any) => t.id !== toolArgs.id);
             if (txs.length < initialLen) {
-              await saveTransactions(txs);
+              await saveTransactions(txs, { deletedIds: [deletedId] });
               textResponse = `Feito! A transação foi excluída com sucesso.`;
             } else {
               textResponse = `Não encontrei nenhuma transação com esse ID para excluir.`;
